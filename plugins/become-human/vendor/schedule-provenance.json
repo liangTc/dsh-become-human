@@ -1,0 +1,24 @@
+{
+  "package": "@deepseek-ai/dsh-schedule",
+  "version": "0.2.0-rc.2",
+  "license": "MIT",
+  "repository": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+  "source": "lib/types/domain.js",
+  "sourceSha256": "420afa6a229e00b6ebbb808912567d42ac45b168fe9bb998d28ad057e46ee206",
+  "bundleSha256": "1f699bef7f48b54de8e51fe19937371ae21b449c8526f9d6c32416286ef27e4b",
+  "exports": [
+    "createAfterScheduleRecord",
+    "createAtScheduleRecord",
+    "createEveryScheduleRecord",
+    "createDailyScheduleRecord",
+    "createWeeklyScheduleRecord",
+    "createCronScheduleRecord",
+    "resolveRecurringOccurrence",
+    "isRecurringScheduleRecord",
+    "decodeScheduleRecord"
+  ],
+  "dependencies": {
+    "@js-temporal/polyfill": "0.5.1"
+  },
+  "scope": "Official pure calendar/cron rules; Human owns isolated durable tasks and delivery."
+}

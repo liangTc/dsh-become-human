@@ -1,0 +1,32 @@
+name: Build beta bundle
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install declared dependencies
+        run: npm install --prefix plugins/become-human-web
+      - name: Build IM and Human bundle
+        run: npm run build
+      - name: Prepare installable package
+        run: npm run release:package
+      - name: Export public source only
+        run: npm run release:source
+      - uses: actions/upload-artifact@v4
+        with:
+          name: become-human-beta
+          path: dist/packages/*
+          if-no-files-found: error

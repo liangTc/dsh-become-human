@@ -1,0 +1,30 @@
+{
+  "verifiedDate": "2026-10-21",
+  "method": "License texts compared with official upstream pages; formatting may differ.",
+  "files": [
+    {
+      "file": "OPENCLAW-WEIXIN-MIT.txt",
+      "source": "https://raw.githubusercontent.com/Tencent/openclaw-weixin/cef0bfc390393f716903e16d50408118047f87e0/LICENSE",
+      "sha256": "e3bcbd09ebe3d15833165ab3c8ec96faa4e084de129feae882a92c95f3e6b4c5",
+      "bytes": 1297
+    },
+    {
+      "file": "DINGTALK-CONNECTOR-MIT.txt",
+      "source": "https://raw.githubusercontent.com/DingTalk-Real-AI/dingtalk-openclaw-connector/main/LICENSE",
+      "sha256": "1ac7dc187e28d6fff17d8296b0e7072231310363edb422f0d27f182fcb3ad3a2",
+      "bytes": 1075
+    },
+    {
+      "file": "SIMPLE-ICONS-CC0.txt",
+      "source": "https://raw.githubusercontent.com/simple-icons/simple-icons/develop/LICENSE.md",
+      "sha256": "476de83715c0e65eeca740698186c1568b38619a01e9a42caede42f100348714",
+      "bytes": 6574
+    },
+    {
+      "file": "PROXY-AGENTS-MIT.txt",
+      "source": "https://raw.githubusercontent.com/TooTallNate/proxy-agents/main/packages/agent-base/LICENSE",
+      "sha256": "71368fd0f5b4129191e9afcd1e1ef2dc89a9090d3e4d80bbab92dafd032b3bef",
+      "bytes": 1102
+    }
+  ]
+}

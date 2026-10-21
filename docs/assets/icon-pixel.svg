@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-labelledby="title desc" shape-rendering="crispEdges">
+  <title id="title">Become Human · 像素人格核心</title>
+  <desc id="desc">冷蓝色像素人物侧影与碎片化数据，表达持续成长的自主 Agent。项目原创图标。</desc>
+  <rect width="128" height="128" fill="#050b16"/>
+  <path d="M8 32V8H32M96 8H120V32M8 96V120H32M96 120H120V96" fill="none" stroke="#3786b8" stroke-width="4"/>
+  <path d="M48 20H80V28H88V52H96V60H88V76H80V84H72V92H96V100H104V112H24V100H32V92H48V80H40V72H32V40H40V28H48Z" fill="#bfe9ff"/>
+  <path d="M48 20H64V84H56V92H48V80H40V72H32V40H40V28H48Z" fill="#3786b8"/>
+  <path d="M48 36H56V44H48ZM40 52H48V60H40ZM48 68H56V76H48ZM32 84H40V92H32Z" fill="#69d8ff"/>
+  <path d="M72 44H80V48H72ZM72 68H84V72H72Z" fill="#102840"/>
+  <path d="M56 92H72V100H80V112H48V100H56Z" fill="#102840"/>
+  <path d="M16 52H24V60H16ZM24 68H28V72H24ZM16 84H24V88H16ZM96 28H104V32H96ZM104 44H112V52H104Z" fill="#69d8ff"/>
+  <rect x="100" y="72" width="12" height="4" fill="#3786b8"/>
+</svg>

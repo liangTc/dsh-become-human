@@ -1,0 +1,2832 @@
+{
+  "format": 1,
+  "version": "0.7.0-beta.1",
+  "status": "beta-work-in-progress",
+  "files": [
+    {
+      "path": ".editorconfig",
+      "bytes": 171,
+      "sha256": "ab41c8b0021f6fb3af6e6463d465b97359de52ad673bdb0289b846e7e8be15ab"
+    },
+    {
+      "path": ".gitattributes",
+      "bytes": 210,
+      "sha256": "77c6662c34141182f52ba33b9416646a07e3d122220885b59d0981c1e3d56f64"
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/bug_report.yml",
+      "bytes": 690,
+      "sha256": "1d444383e1ccfc765c4eaa29e3838902f1c4525554b4adf86c0ded887921c5cf"
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/feature_request.yml",
+      "bytes": 323,
+      "sha256": "30c5c383dc532c2ac396124f8bdb53b881a51234031a626384c2257849cad67e"
+    },
+    {
+      "path": ".github/PULL_REQUEST_TEMPLATE.md",
+      "bytes": 493,
+      "sha256": "02fdcdeebbb12b8fe47d872a08dac77cdc82a13b85044da0f74cfb63dfe71c7b"
+    },
+    {
+      "path": ".github/workflows/build.yml",
+      "bytes": 775,
+      "sha256": "a1c3f825c68f57de00f3bc11e4c34a05fb16cbc6d6e2bffd1f3e7aca3a5dc5f7"
+    },
+    {
+      "path": ".gitignore",
+      "bytes": 1266,
+      "sha256": "fe5dea55bf4b0b092cef98c8f4babe4fece8aff8b3245c9fb705e208a01655df"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "bytes": 2115,
+      "sha256": "3096b6e24e5d219b897fec22fc53d5e795bdfe7e1a93e9ece9a52546e2e5fb26"
+    },
+    {
+      "path": "CONTRIBUTING.md",
+      "bytes": 4005,
+      "sha256": "ffd1cceff75f0e9f9510a2c955e8c9d8248dcde522dba253c0f302cdfb70ab9c"
+    },
+    {
+      "path": "LICENSE",
+      "bytes": 11358,
+      "sha256": "c98ecc8ef79e7a1a14a0767e3321b681dd25f9307625724f2b299f5e75e99520"
+    },
+    {
+      "path": "NOTICE",
+      "bytes": 992,
+      "sha256": "2f4e81e198cce026cb398ec8f66494519751742757603f2b2cc69c2d3ca74de9"
+    },
+    {
+      "path": "README.en.md",
+      "bytes": 8956,
+      "sha256": "754c8f1ef675834c94ac2c255cde002f43bffab403c46365dc813d847ea07586"
+    },
+    {
+      "path": "README.md",
+      "bytes": 8568,
+      "sha256": "6d138080f099f60a32d1eeca0ce99f26613b3855d593758e152525ab75798e93"
+    },
+    {
+      "path": "SECURITY.md",
+      "bytes": 2924,
+      "sha256": "e4ae57b6d21f8d72f62ffb23e7def9de7e777426a797fa7f34b8da7e5291ecc4"
+    },
+    {
+      "path": "THIRD_PARTY_NOTICES.md",
+      "bytes": 6221,
+      "sha256": "39583d240cce6c625b2742de14effb029b90a37b5deb57a038dd5a9b98f718ca"
+    },
+    {
+      "path": "docs/ARCHITECTURE.md",
+      "bytes": 6825,
+      "sha256": "907d718d238ef2fa2c425dace2101f44063d9b96bf5154ddd380f205b5074da5"
+    },
+    {
+      "path": "docs/CONFIGURATION.md",
+      "bytes": 7193,
+      "sha256": "96606663193f357607b91cfc4456a6121ee0c55ad184d05ceaa2cc9fbb5c2f7b"
+    },
+    {
+      "path": "docs/INSTALLATION.md",
+      "bytes": 8000,
+      "sha256": "4db88ce1abf81839f06e283e086c38cd3d3b577a860b3f2561d9d73040423d35"
+    },
+    {
+      "path": "docs/PLUGIN_SUBMISSION.md",
+      "bytes": 6961,
+      "sha256": "77c116a3dc12a2f2b0330abc1f4dec6c47f936b0579a51d98e995ed92a609171"
+    },
+    {
+      "path": "docs/USAGE.md",
+      "bytes": 6754,
+      "sha256": "982a5a84e64e8f732c46736e1e2971bb5a2ccd1215762b3bd973356e1247e12a"
+    },
+    {
+      "path": "docs/assets/ASSETS.md",
+      "bytes": 3721,
+      "sha256": "bfe79939566ef4ec9382320e72afdd445483e5affaad6497c43c378671917849"
+    },
+    {
+      "path": "docs/assets/architecture-pixel.svg",
+      "bytes": 10434,
+      "sha256": "4bbba55503b060502d293fb75888786ee9801899116d92e24a47983f2ae58ff0"
+    },
+    {
+      "path": "docs/assets/banner-pixel.png",
+      "bytes": 2041498,
+      "sha256": "6600a85b775dddd84c0c0eb9189bfa3998415d6c64f171ee06095900d2ff180b"
+    },
+    {
+      "path": "docs/assets/capabilities-pixel.svg",
+      "bytes": 9399,
+      "sha256": "114edcc45b3f0fdc6392e63cc1632a7a19d7d67de6c143eebc98b8b9cd351a6e"
+    },
+    {
+      "path": "docs/assets/icon-pixel.svg",
+      "bytes": 1114,
+      "sha256": "5c5cccf21a2895207a43df1783fc4c69b7a69c10ed5c79f9febefd9b4aacf42a"
+    },
+    {
+      "path": "package.json",
+      "bytes": 555,
+      "sha256": "72e1d695f9b81324e558c09eaf1245313ad1b36d5402d017e3295a7d9c0d5676"
+    },
+    {
+      "path": "plugins/become-human-web/LICENSE",
+      "bytes": 11358,
+      "sha256": "c98ecc8ef79e7a1a14a0767e3321b681dd25f9307625724f2b299f5e75e99520"
+    },
+    {
+      "path": "plugins/become-human-web/NOTICE",
+      "bytes": 992,
+      "sha256": "2f4e81e198cce026cb398ec8f66494519751742757603f2b2cc69c2d3ca74de9"
+    },
+    {
+      "path": "plugins/become-human-web/README.md",
+      "bytes": 3291,
+      "sha256": "58857518624f3689ca0ad0279c1576fe4ccf87a35217cb9fceaae35a2da0b666"
+    },
+    {
+      "path": "plugins/become-human-web/THIRD_PARTY_NOTICES.md",
+      "bytes": 5968,
+      "sha256": "32f792c7e69d2216adb417307449714fcffbaefdf773e5b5df806a42eb01a71a"
+    },
+    {
+      "path": "plugins/become-human-web/browser-capabilities.mjs",
+      "bytes": 21875,
+      "sha256": "6e36e9fde078591fe6090e94df9e1cfad61d8d6d2bf5506100cbbf4c240c1db1"
+    },
+    {
+      "path": "plugins/become-human-web/build-schedule.mjs",
+      "bytes": 3428,
+      "sha256": "11f8d54e5110b714a72a21d88b55acee705e333d48b8b873f2777f94942ea9aa"
+    },
+    {
+      "path": "plugins/become-human-web/build.mjs",
+      "bytes": 3872,
+      "sha256": "b034378b75a822bbccbc0ee1993bfb1c8f1e201f765c80b187fc971735e1410f"
+    },
+    {
+      "path": "plugins/become-human-web/cordis.patch.yml",
+      "bytes": 74,
+      "sha256": "48c8a75b0d87279dcc6da5ee600000782457edfe5ce7da918c329f58798f6d58"
+    },
+    {
+      "path": "plugins/become-human-web/dsh-im-adapter.mjs",
+      "bytes": 1231,
+      "sha256": "7777df5ff3ea9d603d6bc62e83067ff38f4282c689a5d5014ea0dd0ee7d3ca52"
+    },
+    {
+      "path": "plugins/become-human-web/host-capabilities.mjs",
+      "bytes": 13034,
+      "sha256": "d2c3e17e84ab0730d27c5365babe760f536d497043536a535817a73c19aa7be2"
+    },
+    {
+      "path": "plugins/become-human-web/im-build.mjs",
+      "bytes": 5719,
+      "sha256": "b957c12c8ba74b52e89df09a7b2b8a8635833b3d4179a27b348f4e87b93bdfc2"
+    },
+    {
+      "path": "plugins/become-human-web/im-catalog.mjs",
+      "bytes": 1042,
+      "sha256": "bcd57bb0053248f38c3d68b02781d165ed2af605e93748318109d66ba77d6b6f"
+    },
+    {
+      "path": "plugins/become-human-web/im-ingress.mjs",
+      "bytes": 14114,
+      "sha256": "9b33c7fbabf684c9a0c8538a22581988156ee850de69e67a3ec8d2baaf989106"
+    },
+    {
+      "path": "plugins/become-human-web/im/BUILD-MANIFEST.json",
+      "bytes": 60495,
+      "sha256": "e7d6f0182da4f7cb649ab70ba07f620e7e11fce1fb000ec534d3194edc062a1b"
+    },
+    {
+      "path": "plugins/become-human-web/im/LICENSE",
+      "bytes": 1064,
+      "sha256": "2e1c6321c5df1830b8758dd6d1cc1c70c41f561129581f1986b408255f67d588"
+    },
+    {
+      "path": "plugins/become-human-web/im/MIGRATION.json",
+      "bytes": 18330,
+      "sha256": "923eb17114bda37680067d005e7d7fe90d179a3b3b3234cae5c9afe3fe5e97d4"
+    },
+    {
+      "path": "plugins/become-human-web/im/THIRD_PARTY_NOTICES.md",
+      "bytes": 10082,
+      "sha256": "dbf966108a4d6219689cb71be5f8a429156c2ba8cafd731c858b33b585e5e561"
+    },
+    {
+      "path": "plugins/become-human-web/im/assets/dingtalk-menu-template.json",
+      "bytes": 52964,
+      "sha256": "71cccccbc6ada0c2fb482cfc43afc88df3da3625ef21d356077864793ec1179e"
+    },
+    {
+      "path": "plugins/become-human-web/im/assets/logo-icon.png",
+      "bytes": 7445,
+      "sha256": "d69e2047aa9f29d577a365bf64e618596b785251610a78cccd882f262099bce5"
+    },
+    {
+      "path": "plugins/become-human-web/im/assets/logo-plugin-message-link-gradient.webp",
+      "bytes": 234296,
+      "sha256": "b29149c589f6e5ee1a8f3b23ac382e230d65acfe9fc6db8d8b9cd6f3245e5cbe"
+    },
+    {
+      "path": "plugins/become-human-web/im/licenses/BUNDLED-DEPENDENCIES.json",
+      "bytes": 18061,
+      "sha256": "0d246e77a48e2a7c58c3a5f9e340e99173848f3cb682c91db85213cdb50b5a6d"
+    },
+    {
+      "path": "plugins/become-human-web/im/licenses/BUNDLED-DEPENDENCIES.txt",
+      "bytes": 78498,
+      "sha256": "79f0b477e1563103a7c6a7fbb81b0972f4896fdfb0c81f5f58c8322e3266fb35"
+    },
+    {
+      "path": "plugins/become-human-web/im/licenses/DINGTALK-CONNECTOR-MIT.txt",
+      "bytes": 1075,
+      "sha256": "1ac7dc187e28d6fff17d8296b0e7072231310363edb422f0d27f182fcb3ad3a2"
+    },
+    {
+      "path": "plugins/become-human-web/im/licenses/INDEX.md",
+      "bytes": 1121,
+      "sha256": "abf329d2fdc16a3e6b4b1368890d0c8e58410bce16d8d68a9c12cb8c38d45ad6"
+    },
+    {
+      "path": "plugins/become-human-web/im/licenses/OPENCLAW-WEIXIN-MIT.txt",
+      "bytes": 1297,
+      "sha256": "e3bcbd09ebe3d15833165ab3c8ec96faa4e084de129feae882a92c95f3e6b4c5"
+    },
+    {
+      "path": "plugins/become-human-web/im/licenses/PROXY-AGENTS-MIT.txt",
+      "bytes": 1102,
+      "sha256": "71368fd0f5b4129191e9afcd1e1ef2dc89a9090d3e4d80bbab92dafd032b3bef"
+    },
+    {
+      "path": "plugins/become-human-web/im/licenses/SIMPLE-ICONS-CC0.txt",
+      "bytes": 6574,
+      "sha256": "476de83715c0e65eeca740698186c1568b38619a01e9a42caede42f100348714"
+    },
+    {
+      "path": "plugins/become-human-web/im/licenses/SOURCES.json",
+      "bytes": 1218,
+      "sha256": "ffb14f9ce7106958541a9a95b40fe101660971de60f5a6abc46e04feb2b328d2"
+    },
+    {
+      "path": "plugins/become-human-web/im/locale/en.json",
+      "bytes": 174,
+      "sha256": "d568e3a3d1514d56704a512f120f2433ca2ab467f452851a379899c2e83428c3"
+    },
+    {
+      "path": "plugins/become-human-web/im/locale/zh.json",
+      "bytes": 182,
+      "sha256": "3d7077944a78eb8e287bcebf5007d4bb0dab80c10d871644068cfcb176fa7d11"
+    },
+    {
+      "path": "plugins/become-human-web/im/package.json",
+      "bytes": 3165,
+      "sha256": "9e1a1fbf4f51cf86aa8c1150051f0b16e23cad66471c5577ad35d498c23a010e"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/access-policy-settings.js",
+      "bytes": 15281,
+      "sha256": "6fb13603064b138c6a23d9faa142cd87ceb61ce2575b081c46823d67a1b9e051"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/agent-preset.js",
+      "bytes": 4213,
+      "sha256": "ff95ae2957ed9ccf319218d47b93a4a8404b3d1001bba1926b3e7e6986ec257e"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/bot-alias.js",
+      "bytes": 7664,
+      "sha256": "6750aa040555a3c2353cfc13dee09629b916cd276501b1c0c2cba51527dfed1c"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/bot-general-settings.js",
+      "bytes": 5607,
+      "sha256": "e9aadcacba74a784c5b8f7d5763919645fd2ba5f9f0e1949d9fc49a250d1d5fa"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/bot-settings-tabs.js",
+      "bytes": 4364,
+      "sha256": "3d7599e59856a504a8d5e8f1ecabc6cbec6ff9df1b091ce9935ccdb053c11639"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/build.mjs",
+      "bytes": 1203,
+      "sha256": "35e0151738ddedef6a55a7d314e60f50ca89d9f18d1f6862e69396e3f5a2754f"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channel-card-meta.js",
+      "bytes": 4293,
+      "sha256": "ec6a39ffbdf687f6d0d1f3f42a50e00c27c6dcb104c94ffa295fbb56999ecaea"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channel-logos.js",
+      "bytes": 10743,
+      "sha256": "b6f47b7904b55db4c70e6db55d3c103f9a14f04a19538d351b1a025501a90f77"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/dingtalk/api.js",
+      "bytes": 10736,
+      "sha256": "5f4d4e213a1cb9de08c98fac3d23d3728948cc28440b297d9fdfa046b01360fb"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/dingtalk/index.js",
+      "bytes": 40575,
+      "sha256": "6b708f5a9daba48dedd18c636dc78240e8fb3ab1a1f281d3033974b27309c459"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/dingtalk/styles.js",
+      "bytes": 11538,
+      "sha256": "62ecb05ba5f3c49938c081af4710c0c83623ed245305c568147ac662ef0ff235"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/discord/api.js",
+      "bytes": 447,
+      "sha256": "37f1edaa0782d05c6821d57cfa1b07cbd04e401d9017b3d76cabccee34876731"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/discord/index.js",
+      "bytes": 923,
+      "sha256": "e71e3b7059d429480d4bad130c0d7c9512f6c02ad1d83f54af0c3ae517641b33"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/discord/styles.js",
+      "bytes": 737,
+      "sha256": "5cc276a32ed528f8052b8371a6689242a15cc519975867a9beaa73805afc4787"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/email/api.js",
+      "bytes": 2326,
+      "sha256": "f1c226f3abdd1be410c7ddb4429ff5d49f6c41428bb27f6733eed23e257dd683"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/email/index.js",
+      "bytes": 32226,
+      "sha256": "ea8301b2dcbc6a77c8194dbf880599cf20f704610c2f73a7f620175d157758f2"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/email/styles.js",
+      "bytes": 3228,
+      "sha256": "a5ad3572d41502a254f245d7795b761fcedc4ece8f6c180b486bfabef44efbc1"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/feishu/api.js",
+      "bytes": 15999,
+      "sha256": "df11dafc367674d4cea3b3e60f4f42db48bda71d9414ab5ce6532d8cd7dbefc8"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/feishu/group-settings.js",
+      "bytes": 22500,
+      "sha256": "8e90e1940d9a5240a40c3f1fc630cae8c2a0485e662365323140c8380c7b1d60"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/feishu/index.js",
+      "bytes": 65566,
+      "sha256": "37c81d0e04068a0c2a6f01e12f7ed9477d6506b0e84c2b0457e6ec324befe0b0"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/feishu/slash-panel-settings.js",
+      "bytes": 12439,
+      "sha256": "78bf49b71990a1f3bdaaf7faa93f96da96cef656e51691cee8843414dd7cfec9"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/feishu/styles.js",
+      "bytes": 23275,
+      "sha256": "32ffaa5689e2ed009f45a0228e14b9b70088408957d323342a0698f04bc9fbb3"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/feishu/voice-editor.js",
+      "bytes": 5004,
+      "sha256": "8120b3a054e4c3a02c2c2d3188e6a1c65c26e725d3f234bbe0881e8572e4f1eb"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/feishu/voice-settings.js",
+      "bytes": 2559,
+      "sha256": "b5647ed24e9429381a99826ab9f6a5bd593c6c7e441b906354a0dd895aeb1c39"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/imessage/api.js",
+      "bytes": 517,
+      "sha256": "242016ad622c4e755c65188407c98315eeaf925f7b0fa8b46647825d3e17341b"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/imessage/index.js",
+      "bytes": 4080,
+      "sha256": "914d851ee104179b8a3da4053d9404b967bd0583d1aa1d338b7e811e3a1ba157"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/imessage/styles.js",
+      "bytes": 1216,
+      "sha256": "5f734681664cce01ca571bfa42036bcfcdd9f8b494f2236c49519fee4c2a861b"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/matrix/api.js",
+      "bytes": 441,
+      "sha256": "0adcb685cd06e8de36cdb7869137d3950ba44e0b1157a256c3a928bb07b5a23f"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/matrix/index.js",
+      "bytes": 6106,
+      "sha256": "cd8bc348725beec28e001d6998e437c40258ff9226b24cc74f0169237b096b11"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/matrix/styles.js",
+      "bytes": 2163,
+      "sha256": "b760d51f63e87f0de27bf17ab859c7a76eb8e315e89ee12062b9a8fc45bcd651"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/office/api.js",
+      "bytes": 2065,
+      "sha256": "61b29372886968c62d3a55b65baaf46a8e29d3871478da72a1b171eb9e8c6bf9"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/office/index.js",
+      "bytes": 9553,
+      "sha256": "75d7da9f23f6d9e3aceeed70443b13841639b9b9f95c685495578d0970c71e49"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/office/styles.js",
+      "bytes": 5518,
+      "sha256": "5d1c58f72a46eb60a1d70654e6edf993169e93720276bb3591b7e35b18de8d4b"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/qq/api.js",
+      "bytes": 7732,
+      "sha256": "c0fa9674f0e0eef57a3220fd588d688a5505063709065d5f1d8c1ad94a463e0b"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/qq/index.js",
+      "bytes": 26720,
+      "sha256": "f9afb2a6c256aaf236028a0345e06d070e81bde9e824023fc9d220819b42439a"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/qq/styles.js",
+      "bytes": 740,
+      "sha256": "0024b8c6babc9e7bb5acbff8fa97b7698065bdb372b1ea60cfcc3a7b886aae1e"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/shared/collapsible-account.js",
+      "bytes": 3539,
+      "sha256": "58fdb93c06668a92b7be5eecd79b56bdfce1a5c3d10243552ab79038545a0c5c"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/shared/token-api.js",
+      "bytes": 5540,
+      "sha256": "e2892e196769b8e1f24aaa85d187d06a4e16876f0a469de185cb6b82aa1677d3"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/shared/token-channel.js",
+      "bytes": 21451,
+      "sha256": "f9732d99e3b120209b02122bd5fa370a4e4aa061b635f48cf77f8ae7d5a46e52"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/slack/api.js",
+      "bytes": 441,
+      "sha256": "b4fe6d5a0bb456f1383f3e64abf2c7dca12e9bf6a06ae348e6f280b5c8854828"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/slack/index.js",
+      "bytes": 5113,
+      "sha256": "f29fb31a37ba718658c8102d122651fd0ece0522b51a2701c1ddbc7a23765494"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/slack/styles.js",
+      "bytes": 2075,
+      "sha256": "56655c04b0f0366fa215e65752805811b79fef704214703644f5c80b8d19e730"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/telegram/api.js",
+      "bytes": 452,
+      "sha256": "d6d82a70cb89eb8dd2c69b7b8dfc502e7183fe76102fe208ff2e3d61eb7c5975"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/telegram/index.js",
+      "bytes": 1052,
+      "sha256": "2a2c0076046abe22b296f07d763cf09c8a9a00bb4da27893978e82137b8da078"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/telegram/styles.js",
+      "bytes": 2330,
+      "sha256": "18d0baff247f81094e49a50297c8f5cb3f3e53df680d7ac569e96e4a7bead686"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/telegram/thinking-traces.js",
+      "bytes": 1172,
+      "sha256": "e639c73404a36db635841c1b7d86767adc1ea392e32bc85079dce80a6d5e87c7"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/wecom-app/api.js",
+      "bytes": 5846,
+      "sha256": "1807de7bdb60a98e41384dad5f87c56b9a6727f3e8de93f63fcbff7e84c6823c"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/wecom-app/index.js",
+      "bytes": 28133,
+      "sha256": "9ef121871406667955884245a27172e993b92ee25b54c6ba7134fafbe8d49780"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/wecom-app/styles.js",
+      "bytes": 1515,
+      "sha256": "5fda2371e3623243cd183cb9156b0cf9c273413573f4b683c01ccfa5ab6d3d79"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/wecom/api.js",
+      "bytes": 7326,
+      "sha256": "d56186ec9a2dc9c6d47cd237360cae3679df33f099dfb1c846fc4dfaa72e725f"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/wecom/index.js",
+      "bytes": 28506,
+      "sha256": "cb9174ad29ea6ee5ad83eea219c7243de58811f71a040326287553b7d4ee5ef5"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/wecom/styles.js",
+      "bytes": 825,
+      "sha256": "d594eb2c0324f3e7f197839f9c8baea901b359263e435e9651f0b93d4237414a"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/weixin/api.js",
+      "bytes": 8642,
+      "sha256": "7273a36cb209935b3fce0e96bfbae8c77dda345c124fcf0a5a18df68a0c88da5"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/weixin/connection-error.js",
+      "bytes": 164,
+      "sha256": "cd71fabda8257fbad0a7ee0e9ff4a0f98f4a8fbc46eb10ca70c49aed37264e37"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/weixin/index.js",
+      "bytes": 35070,
+      "sha256": "bbb290be28c1c2a8ae6f21a78d5846b85965c3ce73f9a92d35fd631532d56049"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/channels/weixin/styles.js",
+      "bytes": 10058,
+      "sha256": "0e99f9b4c3cfbd2d4b297b65fe48030d94d0178d8ceeb12312da7555b59d53a7"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/connection-error.js",
+      "bytes": 7992,
+      "sha256": "670bc82a5dfe5574f6876df24ef1d1bad2f35e32525c4d401db2b5e2bdc635a8"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/context-enhancement.js",
+      "bytes": 18740,
+      "sha256": "4952c026bf55b2254d4d0b40ae443d3049209990a6a81e1a334a3a839397fa46"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/credential-binding.js",
+      "bytes": 3637,
+      "sha256": "4f415dda1508fe1f81882731a3c8c314a56229ffaf9772688b26f7484e7b80d9"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/delivery-settings.js",
+      "bytes": 34248,
+      "sha256": "7622a14c1b0b205d5e86be26831c7a7ef927ca4813d617f1da0ece434b4cc5d9"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/global-settings.js",
+      "bytes": 17709,
+      "sha256": "3497106a92a7b6002df3f17f17924ff4bb02001ee8b57c85bef7b36109f827b9"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/i18n.js",
+      "bytes": 121524,
+      "sha256": "e420ed54b939c8dc5ffca4315b7a6305780295dfe262991c595a65faf18e17ef"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/index.js",
+      "bytes": 24577,
+      "sha256": "baca74ac3442e0cc09bd483a293a6ebda98858b6b1f46478010ad446dcbf6c1c"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/interface-language.js",
+      "bytes": 3658,
+      "sha256": "816ad08bc0631f75f22bf6150def1e10d2246d5dd5e0eacb765a478db5c13d63"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/last-message-error.js",
+      "bytes": 796,
+      "sha256": "cc30d72a6494f4cdbd5cb4c7e7bcd917c9bbaff4c75db319585b779ee13b3826"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/lifecycle.js",
+      "bytes": 2338,
+      "sha256": "95546fc713e0bf68e2b875db1e64a5190cd718c7641dee482946cada0e23d851"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/loopback-recovery.js",
+      "bytes": 2444,
+      "sha256": "74e18d2f966b19a3eae019432d511bd1b08c916823d8b38bd40645594347470d"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/model-setting.js",
+      "bytes": 8725,
+      "sha256": "9fd365774cfe8906ce296d5c85bbc9d3684649a9a5e91f41744cf1472c35eda1"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/panel-error-boundary.js",
+      "bytes": 612,
+      "sha256": "9448d28a5d4b5383c465d5c88ff46f5e9bc7603b8d7adb3cc7869e54c245bd17"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/plugin-page.js",
+      "bytes": 2222,
+      "sha256": "784293cbf0690874d4f663901cc97f6fbedb009eba6ed9c65465345dc6178ff0"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/session-channel-logos.js",
+      "bytes": 8884,
+      "sha256": "df10e72eb69985b9dee3062a7b0ab2535b4a26a03e9a8ab0bcf3113d8422db11"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/styles.js",
+      "bytes": 112718,
+      "sha256": "6d3da2637d22f1412fb8f39fded6d7144a568fe79de16be37ef8e9b2f8176cdd"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/update-panel.js",
+      "bytes": 24382,
+      "sha256": "d12c773965b312af99556d1ac4ab73cd5b3ebc910383867a99867485ca20a490"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/workspace-directory-picker.js",
+      "bytes": 11152,
+      "sha256": "584a59f39cd6e32dc84559a30c319cffdf766c4f961d36a62d92667596226639"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/workspace-editor.js",
+      "bytes": 2327,
+      "sha256": "08512484edd9206a865b0543936428a451d5179d1261a2fccc2cc5c421902c16"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/client/workspace-snapshot-fence.js",
+      "bytes": 955,
+      "sha256": "0f1a1dd626cdcb2be4061d8ca3b8778bdc4d4c4380a34c3fb360ec7d4ff51c72"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/build.mjs",
+      "bytes": 1578,
+      "sha256": "9059c073d76db3594a9af245bbbbea532737079abbbf54159a378b6264588d5c"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/dingtalk/connection-supervisor.mjs",
+      "bytes": 3743,
+      "sha256": "ccb49036e847e7861dbb1e2f334b96a4be6091205aa7e66af12be3f4660f58c3"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/dingtalk/index.mjs",
+      "bytes": 1440,
+      "sha256": "a6b150772ae73ed8c5b76382bea62b6b4e993672c3db93e1c0f67489e1d0a317"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/dingtalk/production.mjs",
+      "bytes": 8481,
+      "sha256": "df7e8399c067cc7c8f021f6c143d6de8027bb493b6d0969ea8d3fe717affada7"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/dingtalk/rpc.mjs",
+      "bytes": 15442,
+      "sha256": "b3289fdada2d1001c2481a03b31910c8ecec834c125ec1f4124801cdde284451"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/discord/index.mjs",
+      "bytes": 1294,
+      "sha256": "9fe9b6fde5dfd81cdccfff946bf58a52c6f9b623a64589ed178376dcffc4d80d"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/discord/production.mjs",
+      "bytes": 878,
+      "sha256": "74ae5a04bf4f007deabfc681e05d77a2b105de96cb9c44a1a41367d9f362d92d"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/discord/rpc.mjs",
+      "bytes": 622,
+      "sha256": "87a37377fc346e6050ae898e99b2b2645c01ce0937d3ce066abb99058724d76c"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/email/availability.mjs",
+      "bytes": 2146,
+      "sha256": "56a20121cf76b72a303eb82714ca567f431b342a1e7099050aeb1c21f6e192bc"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/email/index.mjs",
+      "bytes": 1775,
+      "sha256": "9f37f36c9dd8be339b81ca3288a3991516c36b8e01aed990ef61eeda117e6f95"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/email/production.mjs",
+      "bytes": 2838,
+      "sha256": "fa4d630253e96de0a4d8a99724e799625c4c1a7927b699e864ae230a4fd542f9"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/email/rpc.mjs",
+      "bytes": 6961,
+      "sha256": "896376cfbf405508a452309cb686c9af169b8d9b9e16333ceef7b280ec85244f"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/feishu/connection-supervisor.mjs",
+      "bytes": 4789,
+      "sha256": "4e2b24c4362286b57bf49c28d06566a32184f238c727cece35c693caf3976c46"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/feishu/controller.mjs",
+      "bytes": 5486,
+      "sha256": "b0d61922f06479691f2b8856b424ee184774698517487e911b177ec8a48651ed"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/feishu/credential-store.mjs",
+      "bytes": 3032,
+      "sha256": "c182bffb57c493a0b88bf17e6182f4a43197735969633739723a26779a32b49f"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/feishu/index.mjs",
+      "bytes": 2574,
+      "sha256": "2b200d739173b2790dbc999f187e8488d0251006bd8d6fe9592a9115cd740c20"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/feishu/production.mjs",
+      "bytes": 14376,
+      "sha256": "b07e216542f89e2cadd801721acbe1bb45f5d56e02e051a09f9edcc7fe61df7f"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/feishu/rpc.mjs",
+      "bytes": 41664,
+      "sha256": "b013ddcde77185abe6c0c64d8baf18bd9c008ae9e1a9d634b36aa24be88a11c8"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/imessage/index.mjs",
+      "bytes": 1089,
+      "sha256": "112004b87013bb956957032d6ee56bfcf658c2a1dd88c12a927fb4ecab5a8884"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/imessage/production.mjs",
+      "bytes": 862,
+      "sha256": "3003d740e6cb96f2b264b6d52990f3676d0ccb99fde537f82f6fc4798d1d5122"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/imessage/rpc.mjs",
+      "bytes": 3167,
+      "sha256": "5ee592bd6910f5418d8cab20fa92145d64856481784a7f4710bdbb8ee75a15d7"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/matrix/index.mjs",
+      "bytes": 1264,
+      "sha256": "33388cca26bf3c48b10a67bbf2007a55c42ff5d21a1fa4236acaaab45c70f3bc"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/matrix/production.mjs",
+      "bytes": 10669,
+      "sha256": "23032ec8dcd94f33f09e07ead0c55cded8e810fe66ef3fe4dd943d9c57c1494f"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/matrix/rpc.mjs",
+      "bytes": 10847,
+      "sha256": "62f7d5837f5b7853ec2593f9c268e75ef17745f2ebea31e533b7f92346902f06"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/office/index.mjs",
+      "bytes": 704,
+      "sha256": "db844dfab7d525e2225b3ba7885fec0c133a3186c426baa080c9fdff20eb0554"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/office/production.mjs",
+      "bytes": 2100,
+      "sha256": "e5f7af695c96fc94ec25bd5a6fa281a9b7146d034c24f2ba4b6d903b6dbfed37"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/office/rpc.mjs",
+      "bytes": 3238,
+      "sha256": "12730978cab08ff5337088587eaf328622dd61651701ae8f0f53af46071d68f7"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/qq/connection-supervisor.mjs",
+      "bytes": 3673,
+      "sha256": "e14238fb7f1ce2152840d2940eb375968aed70e78d8c5475a5892e18d9deb6e2"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/qq/index.mjs",
+      "bytes": 1311,
+      "sha256": "e8cbfc0af995f2175160ccfaf46e8d5e64764d212eeb4166f3395027ab3185c5"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/qq/production.mjs",
+      "bytes": 8112,
+      "sha256": "1f547c5ac7cf57eb546251cccf6eaf533c0410371aa43127cce90112f34191c0"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/qq/rpc.mjs",
+      "bytes": 12638,
+      "sha256": "77f7d43c7c86e96a2aa5c39235fc81acd3ebc3b2038aad4294666821d7015d63"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/shared/access-policy-production.mjs",
+      "bytes": 5570,
+      "sha256": "e1c15111c25edddf50ab15cbf65977af004ec43cd9bae074c88de4eafdd67138"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/shared/access-policy-rpc.mjs",
+      "bytes": 627,
+      "sha256": "2a959f08118490ad112a56262d0b07ba90dbce7802b692719e892ac64f593a92"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/shared/agent-preset-rpc.mjs",
+      "bytes": 891,
+      "sha256": "c2de615c9d351458e463e8b2eb8f6cdd33e695b8ce68cf745bcf5cf1f8ae96f3"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/shared/bot-alias-rpc.mjs",
+      "bytes": 540,
+      "sha256": "8d1f760e0d2e8887768d92d232a0317f771fe58e4762c20317cdce0a98da0544"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/shared/connection-supervisor.mjs",
+      "bytes": 3913,
+      "sha256": "189b01b220de8168c3fae828803d026892d1385454e96725b187f775f77a578d"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/shared/context-enhancement-rpc.mjs",
+      "bytes": 675,
+      "sha256": "d6c96023ecdfaa97ebd5b3ad1cdb02736ce0cd85b5401813154a144f9d626159"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/shared/model-setting-rpc.mjs",
+      "bytes": 751,
+      "sha256": "0f2ed8c0bf216f9d99223aad06c36f5e5e4fdb0c173f6432705514cedfb5b7a9"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/shared/production.mjs",
+      "bytes": 11189,
+      "sha256": "524c90d94d054ff3746e786438fe01d79dbfdae5fbd2f5dfd23dc7a3c3c4e460"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/shared/rpc.mjs",
+      "bytes": 11330,
+      "sha256": "aa47b0d6c9d7cb965006fe91fe079a6190372f3ec61b589cb285912c1fb722f5"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/shared/startup-error.mjs",
+      "bytes": 2602,
+      "sha256": "fa18f1ee75025fcf0261c068550e1ad072328bc50c50b28e7b7e2c9266e7ad7e"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/shared/startup.mjs",
+      "bytes": 3760,
+      "sha256": "0f3dfb0d05dae32855a80bdcbc8e17971c41198d69024ea845598fa8804c7b03"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/shared/thinking-traces-rpc.mjs",
+      "bytes": 505,
+      "sha256": "4992f23965edb9c043ff5498994e6f47e63d0b2c2949f7fcbfc0850e9d1967f0"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/shared/workspace-rpc.mjs",
+      "bytes": 1046,
+      "sha256": "66c5e274080a5e03831134ea24bd225eea166963ccbc67af399d0276702972e4"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/slack/index.mjs",
+      "bytes": 1244,
+      "sha256": "02a8859e01bf46fb258c48cd206909a7fc3524479b516317a33f165d2f68fedc"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/slack/production.mjs",
+      "bytes": 7768,
+      "sha256": "880e60bf1e44132d137fb9c2699d8ef53a8395ec6c358b6140469926d55ed30e"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/slack/rpc.mjs",
+      "bytes": 10723,
+      "sha256": "cc02bf0ac09b95381d47a255a3a2ad3a7228a4eb3cdb59764651648861e90e0e"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/telegram/index.mjs",
+      "bytes": 1314,
+      "sha256": "9bc0bff7748b9200b15aed686149b3355651f716fe3564c845eeedb6fb3de9be"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/telegram/production.mjs",
+      "bytes": 997,
+      "sha256": "39a4682a44bb21f3b84bd5a943f1cc5b7633c4842f8f93ab0b8119d98d442882"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/telegram/rpc.mjs",
+      "bytes": 771,
+      "sha256": "4a53d057d6744f51f1a3521eab411f1a2787528912d7c8d0b7dea461723fa10f"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/wecom-app/index.mjs",
+      "bytes": 1357,
+      "sha256": "c37f299557629acd77456a98fc9c17da632b7523d8575d230ac464b80c1f0d58"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/wecom-app/production.mjs",
+      "bytes": 10257,
+      "sha256": "34c44155c5490449e62552f66dc755313b5973e19c5ebf3e4b6d9d14520e1414"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/wecom-app/rpc.mjs",
+      "bytes": 13033,
+      "sha256": "210ced9a43747ec5539951d75da73788996df58702de40f3da16a0f27ee6e6a3"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/wecom/connection-supervisor.mjs",
+      "bytes": 3679,
+      "sha256": "bb99976c81fe4d143946fe932872317d263a45383d0eaf3eb38d0dfd8c1c946b"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/wecom/index.mjs",
+      "bytes": 1382,
+      "sha256": "c5d2427481d9cbf1c84289810d92468529af144d2d1b7ec1859958ffaff3cacd"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/wecom/production.mjs",
+      "bytes": 8279,
+      "sha256": "8c57019c377429a1438eaec9d41578ae167612d3102a5467925a8f5f738ec981"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/wecom/rpc.mjs",
+      "bytes": 12899,
+      "sha256": "388767bed8c3e0506d80bea2985f1ee3b0b80b5014025e72cf7978d80b4fae5d"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/weixin/connection-supervisor.mjs",
+      "bytes": 4321,
+      "sha256": "fff2fcd7681254730ba3772317a95d67c511354316315a20e76dcbd74b251bf4"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/weixin/index.mjs",
+      "bytes": 2049,
+      "sha256": "de78d3caa303ecb6155303bd8f79ca7a03ac87dcf8713b00dddec39fce494e97"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/weixin/production.mjs",
+      "bytes": 11250,
+      "sha256": "01584d3d4e601878166bda50edd9b6ada11ebb17ae840161bb04712023a01b5e"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/channels/weixin/rpc.mjs",
+      "bytes": 13001,
+      "sha256": "ef08d7e035c67d5a37eb8216f3dc3637ac7b5dc24465d873122c2ce59424c8a6"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/delivery-adapter.mjs",
+      "bytes": 17213,
+      "sha256": "c2eb9c53a23c332193ef8b9188eaa9158614bd285b088c1defe6506a69014e84"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/delivery-http.mjs",
+      "bytes": 3923,
+      "sha256": "4901b58f5eaa764c7c5e815f2871fc0626e45a6c82239c0bc031539d4faebc02"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/delivery-rpc.mjs",
+      "bytes": 6644,
+      "sha256": "0179a93be35bad5ae8ac61ef515130721f9b0531eebcb41ddbe0e713f9085be3"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/delivery-service.mjs",
+      "bytes": 21882,
+      "sha256": "1e1fdd1884ae31be663a22acce563990370ee9b930a7ee6c1d62a42d0f114a33"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/delivery-suggestions.mjs",
+      "bytes": 6575,
+      "sha256": "076ee63d603275b4849b5dc63dd61556d8d3d2467f6e7763c7cb3230b1a8903b"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/harness-command-executor.mjs",
+      "bytes": 1913,
+      "sha256": "7b755c41d595ee1d1ffcbeae07ce2b0c0febfb75ef9251ba47d02adb1fc4b5b3"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/harness-connection.mjs",
+      "bytes": 912,
+      "sha256": "066a1fddfac670c4f565af7a10dc226eff0c2466b030c0f786c54b949d2696f6"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/harness-session-coordinator.mjs",
+      "bytes": 6772,
+      "sha256": "e9bd69f4e646d3157706fdbf2bb4e1608f4c3ff2146b5637542813f68d176f8e"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/host-language-rpc.mjs",
+      "bytes": 2829,
+      "sha256": "082e3416ed356991bdfc8ee37e601f3a360b709785356a5089644b46475dc2f8"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/host-language.mjs",
+      "bytes": 5782,
+      "sha256": "252c4dbf5063598d709681e502f17bdbe6fcc77675c7b1edae57287432c93844"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/image-input-rpc.mjs",
+      "bytes": 1274,
+      "sha256": "e8b91d0dd9e2669ce379c4f278a2dc8f61ddbcf67221af6fca50473272afc843"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/inbound-ttl-rpc.mjs",
+      "bytes": 3864,
+      "sha256": "0514dbed9fb254cdcb2560e3e549f23be1cca888a4cce92a8e3ca70db457d6c3"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/inbound-ttl-runtime.mjs",
+      "bytes": 3434,
+      "sha256": "6f0806b1549c8bb7c3cf161b77c7df7bebfb058c5321ba5a17515bc2a527f4de"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/inbound-ttl-service.mjs",
+      "bytes": 5879,
+      "sha256": "936b0627eec60f1a9aee8583a9f60365e51ccc5df9052e304da3d919c5e275e9"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/index.mjs",
+      "bytes": 9888,
+      "sha256": "4371b4357ea753d9797d6e1bf6d3e7e2fe8728ece9e129ef81fbd4ca03d1d9b1"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/injected-context.mjs",
+      "bytes": 4819,
+      "sha256": "0c0b8d38efe3ee52506ed84eed322ef530775f496dfd1ceb628135d754b9ab8b"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/lark-sdk-handshake-patch.mjs",
+      "bytes": 7309,
+      "sha256": "a948d9e814a169fa94374c63e15e63313b45bf85c0ffb03f3d36eab127cd214e"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/modern-harness-api.mjs",
+      "bytes": 35504,
+      "sha256": "2809af29d8c1d4f42edebe81e230356b790f5db658d83b659e397604f3ad7c7e"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/native-account-proof.mjs",
+      "bytes": 1718,
+      "sha256": "1e0864277ba849bf6cddb4631f8388868d9c571378bd142fabb46e41e8d61cb8"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/rpc-authority.mjs",
+      "bytes": 528,
+      "sha256": "d8f8db133c9aa3d43f9f7854558c8a9659cc5c1404c1e47159e5c1224c3b6c91"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/scoped-credentials.mjs",
+      "bytes": 616,
+      "sha256": "a2c39a514eacc533639dc018781e8bc4e903cff8e71e3fd04be2d510ff3b0c7b"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/session-sync-coordinator.mjs",
+      "bytes": 8623,
+      "sha256": "2524b8bff448dc25548ed46c0148fcdacbd7e6361f365eaeef9c6ef7668f7f6e"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/session-title-prefix.mjs",
+      "bytes": 5475,
+      "sha256": "5144e84c2d535a8db57f64e29b6337cd3d42f8f6d074afa3e0555b08be319b0e"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/single-entry.mjs",
+      "bytes": 958,
+      "sha256": "f2bf356ecf95bb14c136f32151ceccb2918f7399fa6d2fb030e344e732e44219"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/update-rpc.mjs",
+      "bytes": 2624,
+      "sha256": "677cbc28b9e1b73308bf8ac7439e95f6ebcd243ede0f03363af5051b41cecc3f"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/update-runtime.mjs",
+      "bytes": 15037,
+      "sha256": "69ba3c5622efa668026df2f87bde16b591f54e8d120d9f306411d32d07016bf0"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/host/update-service.mjs",
+      "bytes": 16796,
+      "sha256": "1bf60512cf726f4f6d930e1bf6291db9887cebcda2ae6a386fb04b32acf8aad2"
+    },
+    {
+      "path": "plugins/become-human-web/im/plugin-src/management-rpc.mjs",
+      "bytes": 4164,
+      "sha256": "68b89c125d81a5ca68cfcfa36200c1a4401771ce3ea08c0065bfb8ae34a2cade"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/dingtalk/config-store.mjs",
+      "bytes": 9895,
+      "sha256": "5fdc2b4013f4ccad8cb3d3282f712691b9fee4046ff255c08427d0b141a90e7d"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/dingtalk/connection-error.mjs",
+      "bytes": 11721,
+      "sha256": "c28322c028ffafea073f2953da94b9a7f091d8b152bfab13b5f08296b891a756"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/dingtalk/device-auth.mjs",
+      "bytes": 7809,
+      "sha256": "543d5c89cd67ed8b7fd327cdd44effc7a9ebe8687d42cef43693c74d47496578"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/dingtalk/dingtalk-api.mjs",
+      "bytes": 43056,
+      "sha256": "f00f30b414886a3d6beb4305a02a6ee354f21f0161a861124eab724dc85e8bb6"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/dingtalk/dingtalk-bridge.mjs",
+      "bytes": 74780,
+      "sha256": "0cef718b614ae97d04a120f853c646abbe8c6f7e66a72e2c4839c06df94b69b2"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/dingtalk/dingtalk-card-stream.mjs",
+      "bytes": 7751,
+      "sha256": "f9e0d786ae357127211f1a4dff798fd3bae37a79647d2827e07f9f2e271445c4"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/dingtalk/dingtalk-controller.mjs",
+      "bytes": 34934,
+      "sha256": "ab433074a446b37c70858edf7f32c4775864a4aed976ee1abd2111f07090569c"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/dingtalk/dingtalk-menu.mjs",
+      "bytes": 4702,
+      "sha256": "f6d5afb0aebca4f7f390e67c9bb6bc19cb92268b61f243af67285721be82cfb2"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/dingtalk/dingtalk-runtime.mjs",
+      "bytes": 18046,
+      "sha256": "c8ec899b750048a264e6516ada2a4d54fc9490553ea4e550e8db10ae87be3c5c"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/dingtalk/harness-client.mjs",
+      "bytes": 397,
+      "sha256": "07d444c89e51c393050dba2ea000f7654bda31a1b043cd9ad5f896002186f64d"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/dingtalk/state-store.mjs",
+      "bytes": 11430,
+      "sha256": "f04b61ef7d0ec006f28d17b1f7c61b6590af396bb0f4607b8e854febb6665ec8"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/discord/config-store.mjs",
+      "bytes": 1380,
+      "sha256": "4b47b5d851ded4fe471bc0b1206fee024e2cbae3f6af69cc50cb01d8f1dd2304"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/discord/discord-api.mjs",
+      "bytes": 13194,
+      "sha256": "bffbee911b2571a81e9679ac46a80882699ec346ce026cf0d911b3dc461d68df"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/discord/discord-bridge.mjs",
+      "bytes": 529,
+      "sha256": "6235e9aa73fc2d0f648c9ba6b2c1cc18272cc767224fd31641abaac14f242002"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/discord/discord-controller.mjs",
+      "bytes": 1897,
+      "sha256": "84bcf251327487a803f906b08d219d01ae96adfc772e2e40146781d30884502f"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/discord/discord-runtime.mjs",
+      "bytes": 36247,
+      "sha256": "c67631acfadf06587a039dfec45a691f48cbedf9824b163272d15e3c9fdcd97d"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/discord/harness-client.mjs",
+      "bytes": 252,
+      "sha256": "8210ba7d570f5d98a16d5e823d6192ab27a567ebc37489f5d9412bb4edc906a0"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/discord/state-store.mjs",
+      "bytes": 147,
+      "sha256": "41661e1be7feaa0fe659f8e16ae4fe2ad9bb4be8a45e6f99c49456e529eaea27"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/email/config-store.mjs",
+      "bytes": 7189,
+      "sha256": "5b6cb7b03dc84f4ea5357d5e475464212d82b619c46ff3404b5626544e02e180"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/email/email-api.mjs",
+      "bytes": 634,
+      "sha256": "6eb522c7a849988cc33285eca0f989b4f0f53704108c972c486d2add560f5048"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/email/email-bridge.mjs",
+      "bytes": 581,
+      "sha256": "3c4e05080772aaa796882c4b469d6f433db6557acefb5b35dfc4e4f6b3b94ff7"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/email/email-controller.mjs",
+      "bytes": 36470,
+      "sha256": "bd111e8c62567b7deff43aaa5fa48c983695511c8aa72bbe8666c84b8a001355"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/email/email-runtime.mjs",
+      "bytes": 28788,
+      "sha256": "c28a14254f28b455ac59ce6d166fcacdfaaa61f65ed1e1c174da7ab0b0ca6a59"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/email/harness-client.mjs",
+      "bytes": 223,
+      "sha256": "f154bfd8b07a7df8b0a9b416f5cc214217060c16a3b6865d896a075dc2c0a979"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/email/mail-format.mjs",
+      "bytes": 3321,
+      "sha256": "24072a75235fc7aa6b14f9d1359b9483b130a0b42d29eb41dc52de9b74d657c8"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/email/state-store.mjs",
+      "bytes": 6849,
+      "sha256": "ec517249f9e894ad51020aa965733ec85cdb4a9ad3249cb5c1a8d57979912aea"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/email/transport.mjs",
+      "bytes": 2547,
+      "sha256": "a5a813d34e07ce20081d3fdac11c61e51272aceb5f4f7f8f843beef91e19b752"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/email/transports/agent-mail.mjs",
+      "bytes": 24315,
+      "sha256": "eaa78443f0f7719f2216417518e741d2a52f361d9ad11cc032d24a19be1b34f7"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/email/transports/agently-cli.mjs",
+      "bytes": 10032,
+      "sha256": "c9382cd47166f668c3c2e19271f8bc0d8e7b67d3a1afa41a430dc42a7f138ab8"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/email/transports/imap-smtp.mjs",
+      "bytes": 6406,
+      "sha256": "8d67b15ae265a99716a7314b8cec5c6a543f9741b0594954c33518c64660fcd8"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/feishu/bridge.mjs",
+      "bytes": 274939,
+      "sha256": "544b494edef803b468fb55ba7b7f5f96b383f2a2fdc6771734aca51777b10b1d"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/feishu/config.mjs",
+      "bytes": 2368,
+      "sha256": "f6e776c92e58d67b8143104d06f7c24493a6bbb317f455628428276389a7a69c"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/feishu/external-consumer.mjs",
+      "bytes": 5414,
+      "sha256": "3b74646d7f74fad9aea283c79fc6347952dc7d190925d4c09ecf22d00863de33"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/feishu/feishu-app.mjs",
+      "bytes": 1930,
+      "sha256": "6dabe5120372429d70f68cf4696458c1533a8239884150d6e57e5adedf4f0d6d"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/feishu/feishu-cards.mjs",
+      "bytes": 56077,
+      "sha256": "600cfeb94ac51aa081c4c03c3858a19e119c221b4fa644fb2743ef87954eafb1"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/feishu/feishu-channel.mjs",
+      "bytes": 24552,
+      "sha256": "2166b9e4c33c720c4e673f745d3c8602cd70bdb70d0e5502fcc8984e5b25c4c6"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/feishu/feishu-runtime.mjs",
+      "bytes": 37485,
+      "sha256": "3f8ae3e8ff873dff4d02c061d5b23a4a7b3698d846118826eb396ebe3502ae5b"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/feishu/group-message-permission-manager.mjs",
+      "bytes": 2237,
+      "sha256": "1e79fdca464aa932499ca3905877e63a4c17016e14d706f7f21e2474fb3fc1ef"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/feishu/group-response-mode.mjs",
+      "bytes": 451,
+      "sha256": "1936b31bf5dd8c6c9e5bea12db87f739abea118a1b2ff0080f062216ebf83496"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/feishu/harness-client.mjs",
+      "bytes": 393,
+      "sha256": "492e0092b24cbafbd628a99e55301240e2b96e98260baefae982fd7cfd4da2cc"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/feishu/history-reader.mjs",
+      "bytes": 5536,
+      "sha256": "790761bb8c17697f113783ff678dedc6e285f90c9a531085b75a21452e8590ee"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/feishu/live-cot.mjs",
+      "bytes": 7688,
+      "sha256": "b806f7c2632cd42a4e3c818c9763b4bc921a4fdcdff30b6966dfdaf593032977"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/feishu/message-utils.mjs",
+      "bytes": 22181,
+      "sha256": "072e1145d7da2856d91b1397e19a9b3d9581cb40588cf21c0b79aaf62aa91af4"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/feishu/multi-bot-controller.mjs",
+      "bytes": 63942,
+      "sha256": "ce8ae47c728143bc01de53d4da53c0d5b58dff9a4c0be74205a835758fa27d59"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/feishu/nearby-history.mjs",
+      "bytes": 3933,
+      "sha256": "23bb5af117d8741efb498363f2023609b5ba0225e173e1e0d4f00917941581dd"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/feishu/plugin-config-store.mjs",
+      "bytes": 8300,
+      "sha256": "fb19a1c9c858dd8deee1d5084d1c32ad3c67898634231b811c7320e8dc8d2715"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/feishu/plugin-controller.mjs",
+      "bytes": 7860,
+      "sha256": "62654f3efe1b0d6a8f504e866dbfb8b2b9ebe1202522cc2de02ce93270fbee75"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/feishu/registration-manager.mjs",
+      "bytes": 10289,
+      "sha256": "6a152ac427e4d7b7e7d9577b2518b77d5072fb2ef24238e9db995ec88d49eef8"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/feishu/repair-manager.mjs",
+      "bytes": 4645,
+      "sha256": "cef9aa56b1de3be057228f0a6523c1d9fbf77160003094b028270aae7495cc4e"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/feishu/resource-download.mjs",
+      "bytes": 4695,
+      "sha256": "df4a9361428f1c65aa508dc8ba3b200c28ea48a287f932b38fdc66f63cebd3ea"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/feishu/slash-command-panel.mjs",
+      "bytes": 9550,
+      "sha256": "379ad682d8c72dde6c3306e96228b15433aa30445d84b8393307c277f35b6828"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/feishu/slash-command-registry.mjs",
+      "bytes": 18514,
+      "sha256": "f04e4ab720683addc8330517f68ce008aa5d7a97031035f0f4ca91a010fc8d51"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/feishu/state-store.mjs",
+      "bytes": 7055,
+      "sha256": "4dd8eb5f5fd20698ea966471c83afeb7972de435ca3710449fec59402f8db6a4"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/feishu/step-push-mode.mjs",
+      "bytes": 1696,
+      "sha256": "34b2ccdcefba58e4c2f2c9f97efb99599ff993f7952178fc5dff42c72ed0c16d"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/feishu/voice-config.mjs",
+      "bytes": 1748,
+      "sha256": "eec2cfe0d110fbcd4637016a8fe335eb1a359f17001868d95003bd99a413558f"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/feishu/voice.mjs",
+      "bytes": 6242,
+      "sha256": "774f5552d3dfe010a82a861472624a6e7fc65e4ec2f543354ef196b2166f6f5c"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/imessage/config-store.mjs",
+      "bytes": 617,
+      "sha256": "2356b799025af28f058979014c3cff3677c88dff956f8ab68f4f5bd7b3c8c86c"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/imessage/controller.mjs",
+      "bytes": 1185,
+      "sha256": "6d96541ac153df05a33138458a93074349c809bb49cf2d0bca60de25d63a3022"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/imessage/harness-client.mjs",
+      "bytes": 232,
+      "sha256": "8552ceed36174023eca89a04dc89f7bd2fe20630dbab5272d0969f1c7a0984fc"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/imessage/imessage-api.mjs",
+      "bytes": 7812,
+      "sha256": "cb447cf7ee383ed65d5f6191d8c4818f282ceaf80dbe4cb085a645953e61b214"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/imessage/imessage-bridge.mjs",
+      "bytes": 539,
+      "sha256": "aab0b742276c9a5b1b10943ac2036a293830518814b056e7f6dc9309ac3ef5e3"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/imessage/runtime.mjs",
+      "bytes": 6362,
+      "sha256": "b8035ab69694c7e55812f1998c577bc721b15cd30fc9662bb51cebfe5f6fa662"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/imessage/state-store.mjs",
+      "bytes": 148,
+      "sha256": "ad85c9b7db0b8ee554f1e990e9b71194f37f4e430df3ba2b6cc021cc7d258c5f"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/matrix/matrix-api.mjs",
+      "bytes": 29555,
+      "sha256": "9994d25a6738a19a5121ed58fb46a879bca86ae7e81e3c61b4b5f371a16505f6"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/matrix/matrix-bridge.mjs",
+      "bytes": 537,
+      "sha256": "d7e5fa846a7b25a5df46bb93f5d23f9123270268fa5f1d93c20403f74e2dc81f"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/matrix/matrix-config-store.mjs",
+      "bytes": 18370,
+      "sha256": "f76257c6cd3685fa845c1bf551c3e70fb857db47a15076b552dafadc2f25ad04"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/matrix/matrix-controller.mjs",
+      "bytes": 16275,
+      "sha256": "dd9836c997a803a1cff5130e701642ad2fb3c6d4a902b2944ec58b3c910a5002"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/matrix/matrix-crypto-store.mjs",
+      "bytes": 10921,
+      "sha256": "dc35aec5553f9d9daa9ce626d22e0efb9dc2dc201d7ce4b30dd15fd36571c38a"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/matrix/matrix-crypto.mjs",
+      "bytes": 39120,
+      "sha256": "942193070a649e7b8282793629438329a80b7f3d2f5ebbce36d315f6ba3436c2"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/matrix/matrix-harness-client.mjs",
+      "bytes": 249,
+      "sha256": "59035580e30714e92289dbda459afc4447c4485b811dc4f9db3580e6c8701f94"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/matrix/matrix-normalize.mjs",
+      "bytes": 18269,
+      "sha256": "6f5ea310db09b09e9beaed9bc0b47dee7604e9badbc45330c6e0c979eee7e371"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/matrix/matrix-rich-text.mjs",
+      "bytes": 11872,
+      "sha256": "bcf91643727601e75cdff0ca2a3062923cd623cb622d6d96461406cd6a7ab997"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/matrix/matrix-room-history.mjs",
+      "bytes": 25218,
+      "sha256": "f04a2e1fc049cd36f2015f6aebc1b6cd1c0abcc004ecd84971c8592a41ad0b45"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/matrix/matrix-runtime.mjs",
+      "bytes": 73423,
+      "sha256": "b366ea88d71ef8210f5e46edee317af64549eae1044500035d650613b76bc9aa"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/office/config-store.mjs",
+      "bytes": 3830,
+      "sha256": "f02829d63b0efd61d0e65a042b413c47a64b58202954df8a60806ab71e93f8b4"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/office/office-controller.mjs",
+      "bytes": 7536,
+      "sha256": "7da3cc7efe873bcdc71980b7376112bd423804e9715ca875927f78885fbb4802"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/office/office-job-executor.mjs",
+      "bytes": 14176,
+      "sha256": "d6c4522db2c67f9623efeda07bb4720f2d49068e6632c3d6afe8ccbbf62cd413"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/office/office-runtime.mjs",
+      "bytes": 6133,
+      "sha256": "077dfd836f57a93e9d667241b1295a1603efe94d235d017375146d52b223b053"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/office/office-transport.mjs",
+      "bytes": 6593,
+      "sha256": "a35206c2abddd139fe5b21921a548426c4020162c762385a6ac410eb4310e8fd"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/office/protocol.mjs",
+      "bytes": 1610,
+      "sha256": "5af621404cec5ec2c9cd9e3162b63f71a96740dfd77a6f06b6fc3d256a9cdd18"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/qq/config-store.mjs",
+      "bytes": 5555,
+      "sha256": "77189bb732b3048a0bc191822e13aba1a612f40669854c89bc92273b31a9951d"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/qq/harness-client.mjs",
+      "bytes": 237,
+      "sha256": "8c925a7782f3946e2fe481dc8c309bf682bc148a9723d0efbd6da098ba4e1cf8"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/qq/markdown-reply.mjs",
+      "bytes": 4102,
+      "sha256": "b3a63a980ebf74d663d3a273005671d29209d2cea93930e7f8742c585144332c"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/qq/qq-bridge.mjs",
+      "bytes": 61980,
+      "sha256": "98abd6b0a7773192b21d048addec3d91b1107f7aa95c199797d55bcb869131f4"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/qq/qq-controller.mjs",
+      "bytes": 22717,
+      "sha256": "fd403eb07900d0361566f1b331270101c666db69130d059f4af30ce98d40ae71"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/qq/qq-mention.mjs",
+      "bytes": 1711,
+      "sha256": "9ae767a97a8f54e2cfbcbebcc09a7ac8005edb44bac93830bad37716875372f4"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/qq/qq-menu.mjs",
+      "bytes": 12532,
+      "sha256": "81b20cd71380de84a95a086f72653f795474d54bfee9432920324d17583ac3e0"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/qq/qq-runtime.mjs",
+      "bytes": 11708,
+      "sha256": "89da8710f884def42e5a1d9f390a5ee2787c25ffab136441e5db1511647eb998"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/qq/qr-auth.mjs",
+      "bytes": 2090,
+      "sha256": "98e0b5bb27ed613c82880b0833f3b857b6144f1f3e5708e2061f8b6fac6223b8"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/qq/state-error.mjs",
+      "bytes": 678,
+      "sha256": "94dfd4e3bb8ba4f34791c7d5ce287118399a963aa5a0463082a5b8063d0194ce"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/qq/state-store.mjs",
+      "bytes": 4691,
+      "sha256": "5145fdbfc083b52c16889591a6ff84d5e7b0dcbf50a3210f9468a39be7f56dbd"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/access-policy.mjs",
+      "bytes": 7755,
+      "sha256": "fc38a9d4e28ffe53a8a140761b07ee641215a8b684463f5b8a16f2f90af3dbb1"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/agent-preset.mjs",
+      "bytes": 2368,
+      "sha256": "35e73704363f3fe74ba1f01b263a49b95b298a96b70a0286318f2aa4991f8951"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/batch-input.mjs",
+      "bytes": 8255,
+      "sha256": "c78d5c117d368ae98a0fb5f6517457e72e23400a143d12c295d3b2fc9aefba18"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/bot-alias.mjs",
+      "bytes": 877,
+      "sha256": "cca2d05d6781346299db40e95fabe1fac9c187d8cf90255f42280f1602176029"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/bot-workspace-store.mjs",
+      "bytes": 100690,
+      "sha256": "b5e2cbd67af3ca07fea3781a30c00803d37323b072e2ded434a7ac2545049e01"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/busy-message-dispatcher.mjs",
+      "bytes": 4098,
+      "sha256": "6788cf29f01b0236c9cee8268dbd28bd063318d19a6b50816f7f45ca1976e702"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/clear-command.mjs",
+      "bytes": 3893,
+      "sha256": "761baa987493b2591df71221915b1611b50e2c79e8f91e0d217933cad61df4d0"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/command-catalog.mjs",
+      "bytes": 5143,
+      "sha256": "6d6e6c12a283ceeebcf09fa9e1b632e42d10dab7741f9041715fee72c0d1becb"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/command-list-snapshots.mjs",
+      "bytes": 1173,
+      "sha256": "dfdbd987f10a688183ab335cc18876e0e6d580fd84e5bf09f998bc92bc7908a2"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/command-permission.mjs",
+      "bytes": 1294,
+      "sha256": "bbb397444a85f748b594341d1c2ebd032533181f945cb5e052f822513cbe9cc2"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/compact-command.mjs",
+      "bytes": 4951,
+      "sha256": "6e5ae480d856191e2b1449970aacb93a2bdeacc316ad6f1ad11cb61defc14d23"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/config-read-error.mjs",
+      "bytes": 783,
+      "sha256": "496c9a7cac95ff1540d63b43127a5e5fec4a60c4b922f40a55e4c168593c6cae"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/connection-error.mjs",
+      "bytes": 15271,
+      "sha256": "73f1d34502865fb5754885170f1b048d843bdbb2400f67f4c27e614db5935da2"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/connection-test.mjs",
+      "bytes": 2089,
+      "sha256": "d304882f43eeb01d4ec4310721a2f98e7b1411d190b7e7813810ac3bade464ac"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/context-enhancement.mjs",
+      "bytes": 16617,
+      "sha256": "65df5a08f70752bdceb8c51fc5953ba5f0e7710e51178104cc65c1c6e2526b06"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/control-command.mjs",
+      "bytes": 4811,
+      "sha256": "33f650f41c8541191e6530af627f5c6ba4209ec42c389c86e344f56deefc291d"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/conversation-state-store.mjs",
+      "bytes": 5252,
+      "sha256": "e82c398884c0ee9eca61254f957bbd84ebdbd9a47e3a077d9b1189d98341f240"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/conversation/ambient-provider.mjs",
+      "bytes": 5516,
+      "sha256": "e1d95f65d0be979fe384f01c294f0a81d26fbc92e36212cb6d4d4e108d31e36c"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/conversation/context-builder.mjs",
+      "bytes": 5743,
+      "sha256": "1a8a5d16d3049f8487a5cb18137314a07459cad928a19d208c68dcaa6460e7d4"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/conversation/reply-context.mjs",
+      "bytes": 3532,
+      "sha256": "642f7a9935df71768371609025dc13c5abb8884151179e5faa36f62ef8518256"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/conversation/root-context.mjs",
+      "bytes": 4135,
+      "sha256": "1042073be7b9e121ae83cd6030d4184f299e3f72476a068b91d1e809afac5bd3"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/conversation/route.mjs",
+      "bytes": 3341,
+      "sha256": "d13761c212c331bacafd6e3bc6c9554eb881fa46b6fd0b7f29cd533ca848240f"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/conversation/semantic-message.mjs",
+      "bytes": 3354,
+      "sha256": "5ff74c4710d952568bae4d5c4cd855cb4f3e13a032e154d2459e0bd709080b18"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/conversation/trigger-policy.mjs",
+      "bytes": 3852,
+      "sha256": "eb302051ee7523f8a25ce47b42041e7f4905345b933a9c22f9204c76f1333d52"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/default-workspace.mjs",
+      "bytes": 1111,
+      "sha256": "d0a9ab55f6ffd7f3784676bb12ee613f9ed019ca8146f33cd34dfa0e9e3cdf65"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/deferred-delivery-coordinator.mjs",
+      "bytes": 11547,
+      "sha256": "5aa9dcfee6213a749225b3fd357f432c189b39f9e5955948ae1d8c85d28188a6"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/deferred-delivery.mjs",
+      "bytes": 6876,
+      "sha256": "f14fe7ae8d036dc71380b5f36ec812a899690692000ec38b5be82c851bd84c42"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/deferred-state.mjs",
+      "bytes": 2242,
+      "sha256": "7086a0cc9a6a34ac25fcc647524e172d792ebe50fcb1c84a44b299299dabfa7c"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/diagnostic-details.mjs",
+      "bytes": 8703,
+      "sha256": "428c0caa87e7e312e5bc7f50f809dcf3a82c2380b1f07f254e815b84785247e7"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/editable-message-stream.mjs",
+      "bytes": 3009,
+      "sha256": "06daf2327eb0d15f03823506bdf339839c0ca25cf8305c775e68325032395dc1"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/file-download.mjs",
+      "bytes": 2126,
+      "sha256": "ed46e88f509339932c6abc7587541d138bffb438df09c601a3242d265dadb4a3"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/harness-approval.mjs",
+      "bytes": 26034,
+      "sha256": "53c44911dd90831d6532cfe6dce3d1a0cb2ee0236fc985246028955e14b9f5ff"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/harness-client.mjs",
+      "bytes": 93267,
+      "sha256": "6256a9148949f9cbecf3469b9356b87dbb46ccf01359dac5ba4e436bae04c8bc"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/harness-mux.mjs",
+      "bytes": 4773,
+      "sha256": "27cb8be669bf7460c61ffa3d2b212dff95f2cbd817ab81d79afe9ea08a99127e"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/harness-question.mjs",
+      "bytes": 3816,
+      "sha256": "cfb276a19863401a8b31bff99229e08db80b962fe0d20498461c597ef602da36"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/harness-session-binding.mjs",
+      "bytes": 4512,
+      "sha256": "aca53d88a5034643eda726e2fe2b3c4de47a3ae81103c93bce314303a7a08a16"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/history-command.mjs",
+      "bytes": 8956,
+      "sha256": "e4861b6f5db7c64037db6e4e7df4b56eddb30a79b92a4add641942efa3c6b720"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/i18n-en.mjs",
+      "bytes": 1335,
+      "sha256": "3ba898d5f0e255d401530ebb92610d65c78b6a4359a7e44ef8cbc273ef6e0455"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/i18n-en/diagnostics.mjs",
+      "bytes": 7266,
+      "sha256": "2fb96c324458db41691ca9ce815d0905b7ebc928b5a9290bd66f741c08a03558"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/i18n-en/dingtalk.mjs",
+      "bytes": 9697,
+      "sha256": "c25a3b90c56d1b08f666710237386a6c58747b129990d35af5fdd21643f2978d"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/i18n-en/discord.mjs",
+      "bytes": 800,
+      "sha256": "38aaaedc60f7e6faa12e36a2e441a10fd3ba9bbd8733cbe918b7ca42f9b928c9"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/i18n-en/email.mjs",
+      "bytes": 1718,
+      "sha256": "8f48f1c7edd63b6334e15f5201c65d81cb791ec559dd66ad954f4125a3551a50"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/i18n-en/feishu.mjs",
+      "bytes": 35916,
+      "sha256": "b754d5553034e9e3cf1c6d4071d53535ddadbd6df0c29c8515adfad534da1f48"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/i18n-en/image-input.mjs",
+      "bytes": 2632,
+      "sha256": "5200f8c46c54c446fc1e8a5ad7ace0f19a096cf90b556b555a08052657137075"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/i18n-en/matrix.mjs",
+      "bytes": 7536,
+      "sha256": "46b899cfd30b9f7a20a915f89626987e842eb79ecb2209248b5632602383dd2d"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/i18n-en/office.mjs",
+      "bytes": 2103,
+      "sha256": "24b00bb5fa55ab672194135158a06c9f58614dd4e871b7d8649965b279a26e24"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/i18n-en/permission.mjs",
+      "bytes": 3868,
+      "sha256": "e005611f25d3ddcf7f46a470a797c906aeeeb624d7951b540c1451921a5dbcf0"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/i18n-en/qq.mjs",
+      "bytes": 7057,
+      "sha256": "0079768cf988117dbb791a1f07738709a43461d358623e9230b193614894be6c"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/i18n-en/shared-a.mjs",
+      "bytes": 23801,
+      "sha256": "2e6e4462832061a8e88b8a96f19c9e0bcbdf1e69ae9b8a2e72c9c95c67cac7a3"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/i18n-en/shared-b.mjs",
+      "bytes": 22384,
+      "sha256": "ac09cc6002b788142b6fe9fedef40c4ced1bb01274abaf6cea4638cfe119603e"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/i18n-en/shared-c.mjs",
+      "bytes": 16061,
+      "sha256": "9a0c4344f08c40f01ea86e62294a366f3dca3b484365d5b91f9004f1dd05b7bd"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/i18n-en/slack.mjs",
+      "bytes": 1934,
+      "sha256": "f683eafd5735f06ddc8742020d84d87a9a16d8b7256741161c2e84e56110ac6d"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/i18n-en/telegram.mjs",
+      "bytes": 1761,
+      "sha256": "373355085e7b46da1e79e9ad2943fda25e49fd4ea22d53c28e3b5ffb97ae53af"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/i18n-en/wecom-app.mjs",
+      "bytes": 3758,
+      "sha256": "c978af27420a7b1a57a5e8a422fcb37cf4baa4b997dd32d1d63bdcdac31888f7"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/i18n-en/wecom.mjs",
+      "bytes": 6087,
+      "sha256": "52f21d383ef4f54ffaaf9617a17ee9d64bbec13c8947bca5df7275fc95a6d6c4"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/i18n-en/weixin.mjs",
+      "bytes": 12072,
+      "sha256": "50d35d0193c0f89bd94f1643d1aa4c2c7d86faf3f5d1211b9ded3fda3ed0e124"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/i18n.mjs",
+      "bytes": 3010,
+      "sha256": "b8626c29fb0fb29e9467afb2543073aae32e93ec5362d3f76c3c9835742d3887"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/im-source-guidance.mjs",
+      "bytes": 2521,
+      "sha256": "2a0d64e8e42d10e09627af7a7286b0e69bfc6f1581d101a3d77a6ebc1a9d2acd"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/image-input-policy.mjs",
+      "bytes": 1380,
+      "sha256": "0ff25bb26fecfcf22d1e888b9a6780d79cd8d948467173768ba29b28f13f56c3"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/image-input-settings-store.mjs",
+      "bytes": 2280,
+      "sha256": "f2add15d92b6c1fff372f95555e47464ec1acd93ba00dd631aa943d638e212e8"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/image-input.mjs",
+      "bytes": 6477,
+      "sha256": "1745d202bf2a5eb2a6345d17bd74041f9925cc50799e2a38535bbd8dcdf50a28"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/image-prompt.mjs",
+      "bytes": 12894,
+      "sha256": "272e8b5583d7d6e9778fed81684256ccfb5d43df637ca8004654a99860dfcb79"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/inbound-access.mjs",
+      "bytes": 1663,
+      "sha256": "8eacfa01393759fb0b98ec2cba446b3868647dbc7e23a99de9b7d4444d5fe8f5"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/inbound-file.mjs",
+      "bytes": 11041,
+      "sha256": "e85534a745ce2d9b1d9103c5f6e23347937643d2f73e383609b60da3edd657c3"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/inbound-ttl-store.mjs",
+      "bytes": 3749,
+      "sha256": "3663c4e618484d912d8f88b1fdba04f809b08056e053c6b2f5a5a28239bfcf8d"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/inbound-ttl.mjs",
+      "bytes": 803,
+      "sha256": "c60ab58b10145e0cd51ce220dd32b93050babcf34188401f32a6a624c2aadb46"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/injected-context.mjs",
+      "bytes": 16760,
+      "sha256": "fe855788254cc67d32e0670f7c4a75bc7c7f97070ff38d427ddb2f4a01411fab"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/interface-language-store.mjs",
+      "bytes": 4335,
+      "sha256": "39337ecd227626c838669184ba994c6e0403e4e5de7fb683f26198906dc5ab6c"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/interface-language.mjs",
+      "bytes": 2359,
+      "sha256": "16f267e9d3fa6944f8d0e968bad976396d957c2daed3818d89decafd2af496d4"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/markdown-chunks.mjs",
+      "bytes": 10754,
+      "sha256": "85dba9202463c31e5783227874347b7dde1d27c906fde1221e433e6c88c0ad2a"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/message-failure.mjs",
+      "bytes": 14515,
+      "sha256": "cbc22eec59e06ccb87957ad75e8a2b0131812945df1763feff808f136b9d92fc"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/message-mode.mjs",
+      "bytes": 703,
+      "sha256": "bacdcda37437f38f8f66af0ef4c536de26cd5a5ae97bd3c06517c77a36fd58c7"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/model-command.mjs",
+      "bytes": 27516,
+      "sha256": "ad9fb37251e293ea2271c1e7eb43b8561ef049045da0215313414924cd828365"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/model-setting.mjs",
+      "bytes": 5530,
+      "sha256": "a0a4e0a6a5dd305dcdcaa8af4f7ea17ace2bb926053c14849c705fdb732d82a3"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/permission-command.mjs",
+      "bytes": 7955,
+      "sha256": "854bd070d47a0dc2d32662ba25c9804217401a842df65b7f5316447b195cf7e8"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/preset-command.mjs",
+      "bytes": 9665,
+      "sha256": "049e5030b3f4417471d972f37a320685faba01c3e3138d29009b60d34ff1a128"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/semantic/artifact-delivery.mjs",
+      "bytes": 5176,
+      "sha256": "47380cac624dfaad6a97f3b06b0796fc82c44900afdf68bdf26dc0437c856b76"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/semantic/artifact.mjs",
+      "bytes": 29961,
+      "sha256": "3d3478895f3bdbee11cfd310ccd24543f8b293dd600c15b24aa3a3ba2730cf57"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/semantic/delivery.mjs",
+      "bytes": 6036,
+      "sha256": "856cbb86248603d39025d4a77620fff8d68db3fa99b0695568b2ae8f861016fa"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/semantic/reply-reference.mjs",
+      "bytes": 5714,
+      "sha256": "4277d04b20dfcb2b825d89ac5aa407bea71dfd799cfaeaf9ecf5879a2d856bdb"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/session-binding-lock.mjs",
+      "bytes": 1189,
+      "sha256": "d637b2cfb7e17535289414dce3c6bdb41421f42fe6d05593b7375d9d659cf1eb"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/session-channel-labels.mjs",
+      "bytes": 1044,
+      "sha256": "b0783a37a36917c57cc04f8a19aeed54aa89e29256e8b64b327667b5e35df9e3"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/session-reply-recovery.mjs",
+      "bytes": 4277,
+      "sha256": "9a7b16292f78abb42c224781176fe783a1ff82408427a9f19620a528e23ac6f8"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/session-sync-registry.mjs",
+      "bytes": 732,
+      "sha256": "25e29ce7b12fa0016135a69ad59bef24b90fe2b05ba385f4499b9379dd429bb6"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/session-title.mjs",
+      "bytes": 2890,
+      "sha256": "4c8b1372c9c7929201527e9e9a55b04046487eb1b2b1419f7a815eae9a9e12b2"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/single-session-boundary.mjs",
+      "bytes": 275,
+      "sha256": "14acef6d7e4bfa5592b2dcd5a0e7824a4bdd408c098584badc2b90cfe58d5542"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/speaker-label.mjs",
+      "bytes": 2268,
+      "sha256": "e3c022ccf540fa548ab763a8517be504d26061855fad34bbcf6b4ec418f1949d"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/status-reaction.mjs",
+      "bytes": 3183,
+      "sha256": "a73e3f3b2625c5c93b4a8845c1a55e859127c3c96c2df051b35b14e06ac2b66c"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/text-harness-bridge.mjs",
+      "bytes": 81156,
+      "sha256": "7aea954dd377c2b8c7d0c06df247c14ffb48b5d2127569249e0a89703e5ff5c7"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/token-bot-controller.mjs",
+      "bytes": 17923,
+      "sha256": "649c1878ae8420635c1263e7dee3dbd2e2bfca2975baa4a3c5e4bd149723a230"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/token-config-store.mjs",
+      "bytes": 7088,
+      "sha256": "7592e40427b36bb537adfca15130ac8151bb05bf6deb88a1edd2f1fa5a8c3479"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/workspace-command.mjs",
+      "bytes": 24667,
+      "sha256": "f0418bb8cfe3066decb8cbb34f9a36979b3ad385c08cf7cb7d1fc02c322a6994"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/shared/workspace-session.mjs",
+      "bytes": 8702,
+      "sha256": "0d86800b6cf345cd861c5a426624b70c1261b2333192e5e4330102b92450f89c"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/slack/config-store.mjs",
+      "bytes": 6157,
+      "sha256": "4d843af881cdd8eb32d4a02a3795bf721485c497cb1ab18ada38321088696744"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/slack/harness-client.mjs",
+      "bytes": 246,
+      "sha256": "87ec552b0c03a020f58925d0a1ce8a4f25a376894704ae31d0d4e5825e8dd7ed"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/slack/manifest.mjs",
+      "bytes": 920,
+      "sha256": "56365517b6e5b45e54bc2d9db6f28185232e5608d93bf50d120a83c0f64a6858"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/slack/slack-api.mjs",
+      "bytes": 20468,
+      "sha256": "dee22607119c9fb16273d246af8092fbeaa802bc0aa0d4784e62998a5a15a6da"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/slack/slack-bridge.mjs",
+      "bytes": 547,
+      "sha256": "291772c1ca77d1c343f58c4f226f33043a7d20e091cca2b9a0f010a7be1496d6"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/slack/slack-controller.mjs",
+      "bytes": 15769,
+      "sha256": "bce32eefc2a55f047e2f33680a003eda45e130a44d6485b3839347fb0bb2687a"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/slack/slack-runtime.mjs",
+      "bytes": 27584,
+      "sha256": "0b8a1dbb03c2ff4c52c761baee1473979354c21fa82530579a8a10911b82c875"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/slack/state-store.mjs",
+      "bytes": 145,
+      "sha256": "a7666dda4e4c2fa7595d27706e0fafc6cba8ad27736a4b81de47dccebba52f7d"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/telegram/config-store.mjs",
+      "bytes": 3011,
+      "sha256": "d53105ffd6ac629ea36676321349830c11014e38885a9ffe29a9e70ad2f2ac58"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/telegram/harness-client.mjs",
+      "bytes": 255,
+      "sha256": "fdd4d4b2d71904ae1244552b40b636edfe0fce385b8dc041e8f43c6617246d29"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/telegram/state-store.mjs",
+      "bytes": 148,
+      "sha256": "647618252eef993fdd0d50fd62a2b7035ac23221dbd547861a5e8f81bbdf85b0"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/telegram/telegram-api.mjs",
+      "bytes": 17869,
+      "sha256": "f1601a746e487f5ee23134e19be69bcc8020a0c4498a7845552b704e071f9e7d"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/telegram/telegram-bridge.mjs",
+      "bytes": 3020,
+      "sha256": "6962feb1b42f919bc7c2c4fc95b8f18d4bdc64e958ba88e4e6408adb16b2d692"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/telegram/telegram-controller.mjs",
+      "bytes": 1539,
+      "sha256": "a60bc145d78e12efea90f6857bdeebf0695db660d49dc62d1305996bdb08ee03"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/telegram/telegram-http.mjs",
+      "bytes": 543,
+      "sha256": "34d6c0e76745b016df2cfbc4d6d594efdf6e56e07783da129383785c67b3cf53"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/telegram/telegram-rich-message.mjs",
+      "bytes": 5364,
+      "sha256": "c234411f3f1c244d646e627f04198fb9ec7abd90471eee987d67c12ab58a26cd"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/telegram/telegram-runtime.mjs",
+      "bytes": 54108,
+      "sha256": "cdb64743fdbc347fa63bfe93fca1202011be3a1a671e7aa76966f5d6ba1f65d7"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/wecom-app/callback-server.mjs",
+      "bytes": 16068,
+      "sha256": "e4d0e70fadd6b4a94b7b1c8c52a6b49ae4469a1540d5fd597767411c127ee0a5"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/wecom-app/config-store.mjs",
+      "bytes": 8987,
+      "sha256": "fff6fb082fa9b7030a72f008d420290ad303af984df8f98c782db78c134c04b6"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/wecom-app/harness-client.mjs",
+      "bytes": 256,
+      "sha256": "346ce72b1b802132e123f86566936182c37f30fc73e997b9610351dce177322c"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/wecom-app/state-store.mjs",
+      "bytes": 3281,
+      "sha256": "96a85a28918775e664880cdd0718940ff242b48a1bddb766c72e71dc2d63c1ee"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/wecom-app/wecom-app-api.mjs",
+      "bytes": 16947,
+      "sha256": "33a2d94f6c10a321d57f58d0fa503d924f811526b93cb8ddedcd5e29e93ef6d0"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/wecom-app/wecom-app-bridge.mjs",
+      "bytes": 43066,
+      "sha256": "833a63ac20ee40ddbd6feeed14060077247e4db71b903e3e0e7807b2afca59cf"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/wecom-app/wecom-app-controller.mjs",
+      "bytes": 20050,
+      "sha256": "08cecad82272ffe429a60e0ce839d3306a7a6d6e085f48e2f78be65dd281f48e"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/wecom-app/wecom-app-runtime.mjs",
+      "bytes": 7640,
+      "sha256": "d015c63736e98e21f50f26d84dc7eceaba99df819f13d7f7b9490f37d3bb9a27"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/wecom/config-store.mjs",
+      "bytes": 5712,
+      "sha256": "095d534c4151f40b32910e7ea0425d31b5c4fbd1e66089a459354be60f5dae5e"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/wecom/harness-client.mjs",
+      "bytes": 246,
+      "sha256": "d643edca270ea015bf8752e0d3ab6f0d016a31e04bfc1336a0c967c40dc3f0d4"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/wecom/qr-auth.mjs",
+      "bytes": 3286,
+      "sha256": "f7c001f558755113b7d76a9706d9c5f3886997c360510d2b7a21d6066793f77e"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/wecom/send-error.mjs",
+      "bytes": 1601,
+      "sha256": "ddff7e1753086c9751cb497527ebf5d2b05bbbaa6942cb7e144b97e07916beed"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/wecom/state-store.mjs",
+      "bytes": 3278,
+      "sha256": "5cd55686d1d28f63b84efe44299594399f77eb61110d2ff7cc59160630cbf75a"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/wecom/wecom-bridge.mjs",
+      "bytes": 75442,
+      "sha256": "02a95b1ec652815703d2dd759824ba0303f9537ac862c107b364a8e730f63380"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/wecom/wecom-cards.mjs",
+      "bytes": 4533,
+      "sha256": "f0a9f41639258aa7343d3f0ae3fb856b673b5f0efbc3caf8a03c31c27c9198cd"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/wecom/wecom-controller.mjs",
+      "bytes": 23813,
+      "sha256": "d34b918d5b5fd40de2a183e6a355fff3357e777d39a8d1f52b99b5715845a3ae"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/wecom/wecom-runtime.mjs",
+      "bytes": 10074,
+      "sha256": "71357cc8a567517abc7ee3713b5f44b01e1b99fadfff42931301d764c06c37d5"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/weixin/config-store.mjs",
+      "bytes": 7149,
+      "sha256": "3853eb8e43bea0a7c3a7944e4a41c3086a67866d1564e4287801a8b5281f0e55"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/weixin/connection-error.en.mjs",
+      "bytes": 14969,
+      "sha256": "1a13a418dc324b337bbb58a0be2704f96adb08e0cdbf5b27c45160ba80e95e12"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/weixin/connection-error.mjs",
+      "bytes": 11632,
+      "sha256": "b967fc1f75b3e71c67805cd311296d6d64ddf7b90aa8746496e1893cb0a2efd1"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/weixin/diagnostic-details.mjs",
+      "bytes": 136,
+      "sha256": "1267f3dad3bc84fcbf90fc89d1e9b26d93352b7727c5f0da6716a6f985650ee9"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/weixin/harness-client.mjs",
+      "bytes": 393,
+      "sha256": "e97d4e4ba41d9a037ab9cea767aa0bc2c7e01e8cfafb59090371b92c5c525ffc"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/weixin/state-store.mjs",
+      "bytes": 10184,
+      "sha256": "f217a1075545783944d9eb2b77f3fbda9bdefaefa4d75ff0131a24d391c6560f"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/weixin/weixin-api.mjs",
+      "bytes": 34151,
+      "sha256": "80f5bee84de0dfe88ab853e8b1d00959bd3decb8ff63fbb813401ca9c3a106fe"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/weixin/weixin-bridge.mjs",
+      "bytes": 58437,
+      "sha256": "0a6958560f63997c42d2c23da1674737f5f5da10a45b550aa79975bc2de8e587"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/weixin/weixin-controller.mjs",
+      "bytes": 26995,
+      "sha256": "68238b3532b36648715fb9a2868de22c5225ca952db8014ab26ce95ac7616469"
+    },
+    {
+      "path": "plugins/become-human-web/im/src/channels/weixin/weixin-runtime.mjs",
+      "bytes": 15131,
+      "sha256": "0e1c75e3cdd74baf4032f0bb6d5f73c9f3d3f1a311dc104426294da053bc3b71"
+    },
+    {
+      "path": "plugins/become-human-web/manage-service.ps1",
+      "bytes": 3155,
+      "sha256": "3323c1ebdbce358c1f19a646847327807c5a355810c4762368a858eab0b542bf"
+    },
+    {
+      "path": "plugins/become-human-web/manager.mjs",
+      "bytes": 13091,
+      "sha256": "b935b6b6da80709a91913a7883611b227a6626f841bc77d5eb0ebf88370b28f5"
+    },
+    {
+      "path": "plugins/become-human-web/native-actions.tsx",
+      "bytes": 10972,
+      "sha256": "8db8c0f1868a245f9ea8adf92ea7a1d9512c4d314bae5d41a23fd453a7515f49"
+    },
+    {
+      "path": "plugins/become-human-web/native-activity.css",
+      "bytes": 19008,
+      "sha256": "001305f7446fc6b0cc351c77dbc829b86e3fa78404188a37a8c44580c553b826"
+    },
+    {
+      "path": "plugins/become-human-web/native-activity.tsx",
+      "bytes": 4556,
+      "sha256": "2b0ffe82cbfae51c761aebb7b1c139bc14869553d02128edbf08a2fd73d939f4"
+    },
+    {
+      "path": "plugins/become-human-web/native-capability-settings.tsx",
+      "bytes": 8189,
+      "sha256": "41461966008ab6597562f6aa5dc0c08ffa00f48b8c8bc415c9de5fc47e847068"
+    },
+    {
+      "path": "plugins/become-human-web/native-client.tsx",
+      "bytes": 74315,
+      "sha256": "3c0f254346474a85ccc7a0c022e02c4ced981922aa0e82db06dc14ab5639b6e9"
+    },
+    {
+      "path": "plugins/become-human-web/native-context.tsx",
+      "bytes": 3662,
+      "sha256": "b51f803784ee466ab8e3270f323204e13e295e206aa94a42f21842d56d997eb6"
+    },
+    {
+      "path": "plugins/become-human-web/native-events.tsx",
+      "bytes": 13811,
+      "sha256": "b50578362ecc500c723ba73b24cbc41fa72e77fb6afef4b59475cbdc8165eefa"
+    },
+    {
+      "path": "plugins/become-human-web/native-goals.tsx",
+      "bytes": 19418,
+      "sha256": "36ff8c62f8c480a03b7f4d2d2d0fe08ba36941eb2810cd1170e5e9db626be8b8"
+    },
+    {
+      "path": "plugins/become-human-web/native-presets.tsx",
+      "bytes": 7099,
+      "sha256": "bf460aedaa7c4ff6c28a3bc5c620f6e9b5cbe804e2c3290498d15060f2729925"
+    },
+    {
+      "path": "plugins/become-human-web/native-role.tsx",
+      "bytes": 4241,
+      "sha256": "c2bb7dff8c3d06b25586f635f03aacdf3667d3cffd02f739da75e0494200fd74"
+    },
+    {
+      "path": "plugins/become-human-web/native-schedules.tsx",
+      "bytes": 9868,
+      "sha256": "6bc6cfff97c566eb71237b55b1ca387fa514ff16954edf3bcd8ae9e21ac7246c"
+    },
+    {
+      "path": "plugins/become-human-web/native-shell.tsx",
+      "bytes": 8883,
+      "sha256": "a5619d1bb57fc683f60a07676107de9a9e2c449b0845f6a4ee544fadf001a9a4"
+    },
+    {
+      "path": "plugins/become-human-web/native-social.tsx",
+      "bytes": 3132,
+      "sha256": "f5d47070c5fa9f002a7f0c27a56b35bc1fcd5180c2da656ea12b1a35c4060778"
+    },
+    {
+      "path": "plugins/become-human-web/native-support.tsx",
+      "bytes": 5867,
+      "sha256": "49a8bfa17d45637807fb451337d4ff7c7de04f175d01bfc033af0ec2e991aee3"
+    },
+    {
+      "path": "plugins/become-human-web/native-theme.css",
+      "bytes": 21749,
+      "sha256": "82a8cc36b04fc2a1fa81567a4caec087f58ebd5b040bb536e04b9415128fd1d5"
+    },
+    {
+      "path": "plugins/become-human-web/native-timeline.tsx",
+      "bytes": 10363,
+      "sha256": "cdd1642372df78df38ae2d54cfd32533ba121c5b433b06855614bd76630a9108"
+    },
+    {
+      "path": "plugins/become-human-web/native-tools.tsx",
+      "bytes": 17968,
+      "sha256": "952f260b73cdbcc477cc0c4f091cb2967a14d020bc9a4dee8ba8fdbd7ec584af"
+    },
+    {
+      "path": "plugins/become-human-web/native.css",
+      "bytes": 13778,
+      "sha256": "e2c7ff8de2e79f1b59c5ddc01a708e41c0219e342e9bd1765ff157e222fd5c4d"
+    },
+    {
+      "path": "plugins/become-human-web/offline-store.mjs",
+      "bytes": 9182,
+      "sha256": "ccdd55c1d8ffc7be3938cbccb24fe503556d535a16bb770958989fa5145f1018"
+    },
+    {
+      "path": "plugins/become-human-web/operations-log.mjs",
+      "bytes": 6403,
+      "sha256": "96c20bd053257583aee54f6c0988cb368bd47efe568366ee7cacb71da396c414"
+    },
+    {
+      "path": "plugins/become-human-web/package-lock.json",
+      "bytes": 458103,
+      "sha256": "2a6ec9a2c5ab362b0246ec7564e8962a2c76551469f2c845ddadb759bf3a166f"
+    },
+    {
+      "path": "plugins/become-human-web/package.json",
+      "bytes": 4533,
+      "sha256": "c75805e28ef00e2751b13c51495a458dc8ddffbdc9f6d729f3f38161ab053df9"
+    },
+    {
+      "path": "plugins/become-human-web/remote-client.js",
+      "bytes": 3062,
+      "sha256": "93949d8074956b4b70fd9c4a4f044f22c202e2e76f8ead89033ad2f6927ed4b7"
+    },
+    {
+      "path": "plugins/become-human-web/remote-panel.html",
+      "bytes": 1225,
+      "sha256": "09dcec75d9f4d60c3bf6684c67d35606e3f49d907e65ab787a17bf257838d1c4"
+    },
+    {
+      "path": "plugins/become-human-web/remote.mjs",
+      "bytes": 29047,
+      "sha256": "6604d28fcd887036d922ee7e58a105567861236e7f77eadee75a8c58e9caedf5"
+    },
+    {
+      "path": "plugins/become-human-web/service-host.mjs",
+      "bytes": 2607,
+      "sha256": "2103ee355333591d432007acc98bd166a72d62f35cbac06379879751f8f125fc"
+    },
+    {
+      "path": "plugins/become-human-web/service-run.ps1",
+      "bytes": 807,
+      "sha256": "19318a178101077ce6fa4e2d674198ded0f924ec08cf9840c13fd33c1a167acb"
+    },
+    {
+      "path": "plugins/become-human-web/service-stop.mjs",
+      "bytes": 3489,
+      "sha256": "241261192bdaddd8a91c88fe23e9c731a7aee705ff99281a85030e7d8665b28e"
+    },
+    {
+      "path": "plugins/become-human-web/supervisor.mjs",
+      "bytes": 16176,
+      "sha256": "988c0a1d0597bb8dd052717f59e0ab583c7643d93825e14cf98234499febc5fe"
+    },
+    {
+      "path": "plugins/become-human-web/telegram.mjs",
+      "bytes": 1830,
+      "sha256": "e344d35b10d434c64a5600b26dee168288827fe86840f4d21fd2638dc8d19e87"
+    },
+    {
+      "path": "plugins/become-human-web/worker.mjs",
+      "bytes": 1972,
+      "sha256": "8fc613bdeee942ff20889d64692388bb0d1fe6ddf00d3c2ec50ca50bfa4c07d1"
+    },
+    {
+      "path": "plugins/become-human/LICENSE",
+      "bytes": 11358,
+      "sha256": "c98ecc8ef79e7a1a14a0767e3321b681dd25f9307625724f2b299f5e75e99520"
+    },
+    {
+      "path": "plugins/become-human/NOTICE",
+      "bytes": 992,
+      "sha256": "2f4e81e198cce026cb398ec8f66494519751742757603f2b2cc69c2d3ca74de9"
+    },
+    {
+      "path": "plugins/become-human/README.md",
+      "bytes": 1421,
+      "sha256": "5cfa308a682a77f532d0a7f48f7f09211a4017e8d225222544c12992328bd601"
+    },
+    {
+      "path": "plugins/become-human/THIRD_PARTY_NOTICES.md",
+      "bytes": 6060,
+      "sha256": "0e986783501c90806eb0bb78327341399c1325780034b4f673f8faaf9c560a7a"
+    },
+    {
+      "path": "plugins/become-human/action-loop.mjs",
+      "bytes": 6348,
+      "sha256": "b0d7a58a61c224840917307aa9626e6cfacbcdd9268e35ecdb5fb10ac1f0f1a4"
+    },
+    {
+      "path": "plugins/become-human/actions-files.mjs",
+      "bytes": 4436,
+      "sha256": "dc3be5e57150de2579b106446db026cfbdf83a8be72520a4fb82d874e2004a07"
+    },
+    {
+      "path": "plugins/become-human/actions.mjs",
+      "bytes": 24853,
+      "sha256": "e70109e40466bd7df3e22465b31025f0e9308987d7b2e8685d33a3a6781985c2"
+    },
+    {
+      "path": "plugins/become-human/api.mjs",
+      "bytes": 298,
+      "sha256": "1fa3bb68b9933e73bbc75b79b0a0d0e786803dd423c2766ee0335f0d5ed1956b"
+    },
+    {
+      "path": "plugins/become-human/autonomy-store.mjs",
+      "bytes": 23671,
+      "sha256": "a9a65b767a2953fee655a017b1b41152d7c9f34ed6c42beaefa470779532af07"
+    },
+    {
+      "path": "plugins/become-human/autonomy.mjs",
+      "bytes": 61175,
+      "sha256": "b3a2546df34c83cec4967fc01c379caf6b7ebe7211d50a85fa38da00a734f9d4"
+    },
+    {
+      "path": "plugins/become-human/bundled-public-mcp.mjs",
+      "bytes": 7169,
+      "sha256": "98b41ef8c4a65ad3cacd90b6e8241905ddf4c52eacbffdb19631d043bf9c5b54"
+    },
+    {
+      "path": "plugins/become-human/capability-bridge.mjs",
+      "bytes": 7759,
+      "sha256": "6e98db25b297fc07256ec510844871da4e1e6e9d06455a1303c7b84853e0b342"
+    },
+    {
+      "path": "plugins/become-human/capability-dialogue.mjs",
+      "bytes": 9171,
+      "sha256": "f858c1138a92a079de237f492d069295e2f8179ca1737bbd0f9f60711b2fc6a5"
+    },
+    {
+      "path": "plugins/become-human/capability-mcp.mjs",
+      "bytes": 11594,
+      "sha256": "882427fea6f8fc4f1ef99485c8cf30b733f4cf36ecdea24f569142052c627766"
+    },
+    {
+      "path": "plugins/become-human/capability-parent.mjs",
+      "bytes": 1865,
+      "sha256": "4084c4831ac2b32eb9437590c4152002f478977c77eb8cf781137fd042954213"
+    },
+    {
+      "path": "plugins/become-human/capability-policy.mjs",
+      "bytes": 2467,
+      "sha256": "7c9ababc6701bcae1db87a72af40462ced3a025c791f5ca4b981ac2951c22662"
+    },
+    {
+      "path": "plugins/become-human/capability-report.mjs",
+      "bytes": 2849,
+      "sha256": "8e19cf5003335d7c225e4551d54bfed8fde8fe5e11de51c7211776c9fff4aff4"
+    },
+    {
+      "path": "plugins/become-human/capability-schema.mjs",
+      "bytes": 6078,
+      "sha256": "120a7f7627c40a7390079db67dbdd66e2366c77a3b6f30d6a16bb1f5625e32cf"
+    },
+    {
+      "path": "plugins/become-human/client.js",
+      "bytes": 22569,
+      "sha256": "a4323845df75010fc161a74d4fde6d8bfe7b7d4cf11164bc7e585c50550b6746"
+    },
+    {
+      "path": "plugins/become-human/context.mjs",
+      "bytes": 13144,
+      "sha256": "8b1ef4e6fd43c592f0047db7905ad0389cd9d8d81a5aa455e207e377c888621f"
+    },
+    {
+      "path": "plugins/become-human/conversation.mjs",
+      "bytes": 3478,
+      "sha256": "06c8ce61c165ebd532229e757ef99b020224f76ef7f28de4b644dda44caa4cc1"
+    },
+    {
+      "path": "plugins/become-human/cordis.patch.yml",
+      "bytes": 1592,
+      "sha256": "295e50b4fee08f17b4bccda2edb9a7514ceea4c04a48e5f6a07df84d478e76d3"
+    },
+    {
+      "path": "plugins/become-human/deletion.mjs",
+      "bytes": 9770,
+      "sha256": "9e93b4f63287c7f8d91d49cf3940857b243549aaecd8029be8e45ef71e7fe5d9"
+    },
+    {
+      "path": "plugins/become-human/domain.mjs",
+      "bytes": 28113,
+      "sha256": "1475f69cce6bbd9ccaf9fbf9f1ea1fe46339329785a45da6cd868ed2998131dc"
+    },
+    {
+      "path": "plugins/become-human/dpapi.mjs",
+      "bytes": 1336,
+      "sha256": "a3239a98cb5121e97b9cdd5bb533f78f3ea3b322134b308ddfdfb4699584f59c"
+    },
+    {
+      "path": "plugins/become-human/driver.mjs",
+      "bytes": 47902,
+      "sha256": "abb534b2b0282c24b071475e4ffe8fe47a06fa1bbf252f39cc7c35a58ccae0bb"
+    },
+    {
+      "path": "plugins/become-human/event-log.mjs",
+      "bytes": 4647,
+      "sha256": "63ca62ecf87d26c8579f80724c9a976e69f52d18483f7ff10634c522dce1fcf0"
+    },
+    {
+      "path": "plugins/become-human/expression.mjs",
+      "bytes": 2932,
+      "sha256": "058b67958a84bb4d8288f5f2059477f2058d6c6c743cf82485fd495527b7c52c"
+    },
+    {
+      "path": "plugins/become-human/goal-command.mjs",
+      "bytes": 12407,
+      "sha256": "2a7078ccb721ff3ff60e083000f73534dbbfa78b3f85523ca1131a3577633685"
+    },
+    {
+      "path": "plugins/become-human/goal-support.mjs",
+      "bytes": 5613,
+      "sha256": "cdb1eedc4e132e58050e13980069315e92441ef157a3a2fb6d62f04de239d186"
+    },
+    {
+      "path": "plugins/become-human/goals.mjs",
+      "bytes": 35888,
+      "sha256": "b04e5f96df47893edac37855631a915a0ca08b919c4d8d570fea38dcb5322398"
+    },
+    {
+      "path": "plugins/become-human/index.mjs",
+      "bytes": 31698,
+      "sha256": "657bedf3c071fe9fb853ec31eadc92e8456041d6a5580b97aa5295d1499d99e7"
+    },
+    {
+      "path": "plugins/become-human/knowledge-signals.mjs",
+      "bytes": 6152,
+      "sha256": "804d652b4ac00d47d192b463c1543929e9c6e32dde55465c61938de82ebb0fcb"
+    },
+    {
+      "path": "plugins/become-human/learning.mjs",
+      "bytes": 28917,
+      "sha256": "3dfdbcad80627c9fd0d48b86cf2ea14133d3f7591eccee50b9a62e3e0362df51"
+    },
+    {
+      "path": "plugins/become-human/management.mjs",
+      "bytes": 21466,
+      "sha256": "165d3491c81a0c68c4a206324f2cd224f3844e24eca6bafb6cb78d5f034283aa"
+    },
+    {
+      "path": "plugins/become-human/native-client.js",
+      "bytes": 518,
+      "sha256": "ffcf0c25d12bd7b6493ed0e264a799ea6280a440e635a853f91bbd9913236aaa"
+    },
+    {
+      "path": "plugins/become-human/owner-commands.mjs",
+      "bytes": 3164,
+      "sha256": "ffc191ae0e3ab8db4e796c74abacce48f5ed2db8f92e9b6fd25087c06635dec2"
+    },
+    {
+      "path": "plugins/become-human/owner-turns.mjs",
+      "bytes": 6833,
+      "sha256": "ac1be032627f1bd086e07a2a044168e7f6999b42782a453c0e524ea0aa874f19"
+    },
+    {
+      "path": "plugins/become-human/p0-contract.json",
+      "bytes": 2409,
+      "sha256": "99cb3e5aac511c4c7b066428490bc9abf75f0ac90f2c89c23fea8191c40ee8a0"
+    },
+    {
+      "path": "plugins/become-human/package.json",
+      "bytes": 2788,
+      "sha256": "fbc96d37f6d52e8ebb5b3c412c430ac313a2349c48c40f0fdfc08b98d119e327"
+    },
+    {
+      "path": "plugins/become-human/panel.html",
+      "bytes": 11506,
+      "sha256": "7450d6b3c399c96950261dde918f21881b8af139261911b9acade99e825072d5"
+    },
+    {
+      "path": "plugins/become-human/persona-profile.mjs",
+      "bytes": 932,
+      "sha256": "38484d28ab81ba6087db60de6311711160a37480f8e6c9fd8884349ea8289e13"
+    },
+    {
+      "path": "plugins/become-human/preferences.mjs",
+      "bytes": 2648,
+      "sha256": "93fa9da2db5449209a5f01c0e8e99cf451148d720f35a9c893093309a55f68f5"
+    },
+    {
+      "path": "plugins/become-human/presentation.mjs",
+      "bytes": 1293,
+      "sha256": "d815b620ea5e2bbab31d401b37b1b5a8c7a3bae72cb1fb6d009ff125a65c5c72"
+    },
+    {
+      "path": "plugins/become-human/preset-config.mjs",
+      "bytes": 6810,
+      "sha256": "fda1c714f4cbbb14aaf7c2d41bae6b52dc1efee90b3560ce37a52d5ab878b376"
+    },
+    {
+      "path": "plugins/become-human/presets/autonomy-budgets.json",
+      "bytes": 1580,
+      "sha256": "6cd35ccb393b70fc36b61cdfafd0426bc04693736842c1c377924c3c736e25ad"
+    },
+    {
+      "path": "plugins/become-human/presets/personas.json",
+      "bytes": 4740,
+      "sha256": "023ca8fa4960dae9334e6ed38d28b1c274b603d4219a200d89c7b85b0ae081a3"
+    },
+    {
+      "path": "plugins/become-human/product-support.mjs",
+      "bytes": 5093,
+      "sha256": "3d7d15c798f1ede65ab2034de2528cb49ee867d2bebbb5f694919c9723884a2f"
+    },
+    {
+      "path": "plugins/become-human/quota.mjs",
+      "bytes": 2169,
+      "sha256": "d89692a37c1dd35312de8ecf6fcff314617265b6f8e882d1634d2df011831912"
+    },
+    {
+      "path": "plugins/become-human/reminders.mjs",
+      "bytes": 17819,
+      "sha256": "17791c78559933e7db0a9a1ae4980041042f17cfe018028edcde25a47439aa75"
+    },
+    {
+      "path": "plugins/become-human/reply-parts.mjs",
+      "bytes": 3785,
+      "sha256": "58b5eb14297485f475a77f1c9fdcc4d166b84615f3eb8a86352354389efc37b0"
+    },
+    {
+      "path": "plugins/become-human/research.mjs",
+      "bytes": 8467,
+      "sha256": "b2d88f244519067de630aa2d8828be041d4bc32575ac165dd4a43d4949cfa601"
+    },
+    {
+      "path": "plugins/become-human/retirement.mjs",
+      "bytes": 9960,
+      "sha256": "a6fbbba24632cb0b82d23c6b1c11edbc5c2f9c82cbe44109f3d3c70e197bf450"
+    },
+    {
+      "path": "plugins/become-human/role-state.mjs",
+      "bytes": 8584,
+      "sha256": "32e9db16e99a86336c0b7dac4b37ee8ffb394e35ebac9e797407891b9d40278b"
+    },
+    {
+      "path": "plugins/become-human/safety.mjs",
+      "bytes": 13016,
+      "sha256": "3ea75c421ba94b97b5a8d16b1e895d7bdfb322db77d13d05b1c4462ce800558d"
+    },
+    {
+      "path": "plugins/become-human/schedule-intent.mjs",
+      "bytes": 12788,
+      "sha256": "3a20df24d89f2c7ac6df787752e70405007160d9682c549e6d3ff4133cdc7df2"
+    },
+    {
+      "path": "plugins/become-human/scheduled-tasks.mjs",
+      "bytes": 8684,
+      "sha256": "022cbf3def165bf2a64494ad21efd14219121a0af86204cd072864cc3ff85a06"
+    },
+    {
+      "path": "plugins/become-human/skill-store.mjs",
+      "bytes": 10901,
+      "sha256": "2d8d1daa0948fcc925063c9a5bbfd6d33e1bc0ccf3c87828ccfad2a0b62b9c32"
+    },
+    {
+      "path": "plugins/become-human/skills/humanizer/LICENSE",
+      "bytes": 1066,
+      "sha256": "4ac4810254ab36d45419141aeb8e69bf50652cfafe5b2dab947d06d44e5cbf96"
+    },
+    {
+      "path": "plugins/become-human/skills/humanizer/SKILL.md",
+      "bytes": 32348,
+      "sha256": "0612f1dfb1672b0ea9b97e139bf1f06cabe98d8b27424fe8ff01e1fb4cc99cad"
+    },
+    {
+      "path": "plugins/become-human/skills/humanizer/provenance.json",
+      "bytes": 909,
+      "sha256": "7db6e218cf7cdb8e933b7dc4383d6b4f6fb72abe471bfa2ba930802e5ade52c5"
+    },
+    {
+      "path": "plugins/become-human/skills/zhiqiu-expression/LICENSE",
+      "bytes": 1156,
+      "sha256": "ec08b182dc77d4eb015c5e3ad975df85ee8d4d5f90a1630a875955d8b1d8013c"
+    },
+    {
+      "path": "plugins/become-human/skills/zhiqiu-expression/SKILL.md",
+      "bytes": 3248,
+      "sha256": "02dba493dd2840e5fbeec7b1dcbf0cbbf421f692b725e435b72a1675f243c7d7"
+    },
+    {
+      "path": "plugins/become-human/social.mjs",
+      "bytes": 10129,
+      "sha256": "73f0fe5ea51248499a7801597da423002b1f412654af0ba554b20a85ef0e0239"
+    },
+    {
+      "path": "plugins/become-human/storage-maintenance.mjs",
+      "bytes": 571,
+      "sha256": "c2224aad802dc5bc69031728de547801df9201ab7550f14e951c098bef07e5f3"
+    },
+    {
+      "path": "plugins/become-human/timeline.mjs",
+      "bytes": 14787,
+      "sha256": "6ed11bd711fd8c8c8371a13dfda6349d042304bae05b6e03ea4d897662045936"
+    },
+    {
+      "path": "plugins/become-human/tool-executor.mjs",
+      "bytes": 18451,
+      "sha256": "f842733eef4aa1726992ff86d8f1b03632913e73307e7183f116f456bcab9e74"
+    },
+    {
+      "path": "plugins/become-human/topic-memory.mjs",
+      "bytes": 10820,
+      "sha256": "8a584eed700b4b4653b71a324fcb206cef70b2b68ce9a30be622ca8afb9ed20f"
+    },
+    {
+      "path": "plugins/become-human/upload-guard.mjs",
+      "bytes": 856,
+      "sha256": "78b2c90d1f6e084b922ddd164fe5cf2c8e35c45ab1b4ca52433f41fcaadbdf3c"
+    },
+    {
+      "path": "plugins/become-human/vendor/JSBI-LICENSE.txt",
+      "bytes": 10174,
+      "sha256": "9568a2b155e66ac3e0ba1fd80b52b827b9460e6cf6f233125e7cbca8e206ddc3"
+    },
+    {
+      "path": "plugins/become-human/vendor/SCHEDULE-LICENSE.txt",
+      "bytes": 1065,
+      "sha256": "ebb4f09972aee8608be255debaf78451a68e95c290f55c240dec2ecfa16ea6be"
+    },
+    {
+      "path": "plugins/become-human/vendor/SCHEDULE-NOTICE.txt",
+      "bytes": 280,
+      "sha256": "bab21448893a77392b2ef12f05db8c7effc0819a7aeebe1b50e3b18608d1f407"
+    },
+    {
+      "path": "plugins/become-human/vendor/TEMPORAL-LICENSE.txt",
+      "bytes": 750,
+      "sha256": "ffc4aee7f1279fc0494ff2b27f6829e6b4d16c20aa93aa008c3bd8d8af176387"
+    },
+    {
+      "path": "plugins/become-human/vendor/schedule-provenance.json",
+      "bytes": 842,
+      "sha256": "4814040e716d9f32e87b3b99c8c34b9777a642b8f46c3fbca458c44ad52345eb"
+    },
+    {
+      "path": "plugins/become-human/vendor/schedule-rules.mjs",
+      "bytes": 177858,
+      "sha256": "1f699bef7f48b54de8e51fe19937371ae21b449c8526f9d6c32416286ef27e4b"
+    },
+    {
+      "path": "plugins/become-human/zhiqiu-girlfriend.json",
+      "bytes": 9488,
+      "sha256": "6cb85ccdd5d0cdef7e7e4dcd15ead845340b3154b96007a611e0eeb46364bb62"
+    },
+    {
+      "path": "scripts/collect-third-party.mjs",
+      "bytes": 6479,
+      "sha256": "f6da17bbb85379c7af13ba60adb433e01595ad3d7f4e383de3d442ae2f3e5b28"
+    },
+    {
+      "path": "scripts/export-source.mjs",
+      "bytes": 1735,
+      "sha256": "d69df9c9935e69762f8b6441e06209cef46664041dee155c0d34850ea406eb67"
+    },
+    {
+      "path": "scripts/generate-market.mjs",
+      "bytes": 2559,
+      "sha256": "6cb32ab8bf80f4d2b8fdbbbb8898c0fc23e4734c96650ae939b4ebd8255ff6ff"
+    },
+    {
+      "path": "scripts/package-release.mjs",
+      "bytes": 2283,
+      "sha256": "cf714b2bb5dc8aa2658127422545e429e711fcbb366bf41dba53ceeee222876c"
+    },
+    {
+      "path": "scripts/release-files.mjs",
+      "bytes": 3103,
+      "sha256": "687026391cd17ea0f63dae724fedb63011bcad6fd68ca5ea06c5979024e56ccf"
+    },
+    {
+      "path": "scripts/set-repository.mjs",
+      "bytes": 1107,
+      "sha256": "249cfa3ce6f55900d0f59f283eb68948a9c0b0c9247da4c89b06105dbce96ae1"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+Become Human
+Copyright 2026 Become Human contributors
+
+The original Become Human code and documentation are licensed under the
+Apache License, Version 2.0. See LICENSE.
+
+Third-party code, skills, icons, and dependencies retain their own copyright
+notices and license terms. This notice does not relicense those materials.
+See THIRD_PARTY_NOTICES.md and the license files identified there.
+
+The IM integration is derived from dsh-im 4.39.0 by xmanrui (MIT).
+The Humanizer skill is by Siqi Chen (MIT).
+Calendar rules are adapted from @deepseek-ai/dsh-schedule 0.2.0-rc.2 by
+DeepSeek (MIT), with the Temporal polyfill (ISC) and JSBI (Apache-2.0).
+
+Become Human is an independent project. References to DeepSeek Harness,
+DSH, channel providers, product names, and logos identify compatibility or
+origin and do not imply sponsorship, affiliation, or endorsement. Third-party
+trademarks remain the property of their respective owners.
+
+This NOTICE is informational and does not modify any license.

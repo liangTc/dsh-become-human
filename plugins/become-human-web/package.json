@@ -1,0 +1,165 @@
+{
+  "name": "dsh-become-human-web",
+  "version": "0.7.0-beta.1",
+  "type": "module",
+  "description": "DSH Web manager with an isolated, single-session autonomous runtime",
+  "icon": "./docs/assets/icon-pixel.svg",
+  "main": "manager.mjs",
+  "exports": {
+    ".": "./manager.mjs",
+    "./autonomous": "./runtime/index.mjs",
+    "./storage": "./runtime/safety.mjs",
+    "./upload-guard": "./runtime/upload-guard.mjs",
+    "./package.json": "./package.json",
+    "./client": "./client.js"
+  },
+  "files": [
+    "manager.mjs",
+    "supervisor.mjs",
+    "worker.mjs",
+    "remote.mjs",
+    "remote-panel.html",
+    "remote-client.js",
+    "cordis.patch.yml",
+    "runtime",
+    "runtime-bundle",
+    "README.md",
+    "im-client.js",
+    "im-catalog.mjs",
+    "im-ingress.mjs",
+    "client.js",
+    "native-client.tsx",
+    "native.css",
+    "build.mjs",
+    "native-schedules.tsx",
+    "native-timeline.tsx",
+    "build-schedule.mjs",
+    "native-context.tsx",
+    "native-social.tsx",
+    "native-goals.tsx",
+    "native-actions.tsx",
+    "native-tools.tsx",
+    "native-support.tsx",
+    "native-role.tsx",
+    "operations-log.mjs",
+    "offline-store.mjs",
+    "service-host.mjs",
+    "service-stop.mjs",
+    "service-run.ps1",
+    "manage-service.ps1",
+    "native-shell.tsx",
+    "native-activity.tsx",
+    "native-events.tsx",
+    "native-theme.css",
+    "native-activity.css",
+    "native-presets.tsx",
+    "native-capability-settings.tsx",
+    "host-capabilities.mjs",
+    "browser-capabilities.mjs",
+    "LICENSE",
+    "NOTICE",
+    "THIRD_PARTY_NOTICES.md",
+    "im/lib/index.js",
+    "im/assets/logo-plugin-message-link-gradient.webp",
+    "im/assets/logo-icon.png",
+    "im/assets/dingtalk-menu-template.json",
+    "im/locale",
+    "im/package.json",
+    "im/MIGRATION.json",
+    "im/BUILD-MANIFEST.json",
+    "im/LICENSE",
+    "im/THIRD_PARTY_NOTICES.md",
+    "im/licenses",
+    "im-build.mjs",
+    "docs"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "compatibility": {
+      "dsh": "0.2.0-rc.2",
+      "profiles": [
+        "web"
+      ]
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar"
+      ],
+      "platform": "web"
+    }
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "node im-build.mjs && node ../../scripts/collect-third-party.mjs && node build.mjs",
+    "build:schedule": "node build-schedule.mjs"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-app-boot": "0.2.0-rc.2",
+    "@deepseek-ai/cordis": "~4.0.4",
+    "@deepseek-ai/dsh-session-persistence-jsonl": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-agent": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-session": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-llm": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-scope": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-credentials-local": "0.2.0-rc.2",
+    "@deepseek-ai/schemastery": "3.18.4",
+    "zod": "4.6.6"
+  },
+  "dependencies": {
+    "yaml": "^2.8.0",
+    "@matrix-org/olm": "3.2.15",
+    "@tencent-connect/qqbot-nodejs": "1.0.4",
+    "@wecom/aibot-node-sdk": "1.0.7",
+    "dingtalk-stream": "2.1.4",
+    "imapflow": "^2.0.5",
+    "mailparser": "^3.9.28",
+    "nodemailer": "^10.0.10",
+    "qrcode": "1.5.4",
+    "undici": "7.29.1"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-app-boot": "0.2.0-rc.2",
+    "@deepseek-ai/cordis": "~4.0.4",
+    "@deepseek-ai/dsh-session-persistence-jsonl": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-agent": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-session": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-llm": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-scope": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-credentials-local": "0.2.0-rc.2",
+    "@deepseek-ai/schemastery": "3.18.4",
+    "zod": "4.6.6",
+    "esbuild": "0.25.9",
+    "react": "18.3.1",
+    "@deepseek-ai/dsh-schedule": "0.2.0-rc.2",
+    "@larksuiteoapi/node-sdk": "1.73.0",
+    "https-proxy-agent": "5.0.1",
+    "semver": "7.8.5"
+  },
+  "optionalDependencies": {
+    "@tencent-qqmail/agently-cli": "^1.0.18",
+    "sharp": "0.35.5"
+  },
+  "license": "Apache-2.0",
+  "author": "Become Human contributors",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "autonomous-agent",
+    "single-session",
+    "memory",
+    "mcp"
+  ]
+}

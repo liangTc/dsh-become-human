@@ -1,0 +1,416 @@
+{
+  "upstream": "https://github.com/xmanrui/dsh-im",
+  "version": "4.39.0",
+  "archiveSha256": "5ea4bff9fe56089cac07126c87e939dfab03ff2992e330c81a8a7891efd6694e",
+  "chatChannels": 13,
+  "connectors": 1,
+  "license": "MIT",
+  "sessionMode": "single",
+  "rpcNamespace": "become-human-im",
+  "credentialsPrefix": "BECOME_HUMAN_IM_",
+  "changes": [
+    {
+      "file": "package.json",
+      "kind": "modified",
+      "upstreamSha256": "dc66944dd5acca71cde5b7666b227a14b391a735e040fe01bbf815a56404e7b6",
+      "sha256": "9b2269d27f3668a4056e3e03bc0bdbda312d1a053ae96b45682a334b1b8dd205"
+    },
+    {
+      "file": "plugin-src/client/access-policy-settings.js",
+      "kind": "modified",
+      "upstreamSha256": "93186eec8ec75793bf6dfac3678c496cc17a287464264725ba4e062e605c6c9a",
+      "sha256": "6fb13603064b138c6a23d9faa142cd87ceb61ce2575b081c46823d67a1b9e051"
+    },
+    {
+      "file": "plugin-src/client/agent-preset.js",
+      "kind": "modified",
+      "upstreamSha256": "620520f92b309abded4074d23a0acc5ac5bca0ae1dc7a1eec41ad7a683a9fe11",
+      "sha256": "ff95ae2957ed9ccf319218d47b93a4a8404b3d1001bba1926b3e7e6986ec257e"
+    },
+    {
+      "file": "plugin-src/client/channels/dingtalk/styles.js",
+      "kind": "modified",
+      "upstreamSha256": "5ae922b33c217780d1db963dbe8f9e6262ca2ee50b4d37f5610ac3982cd7d458",
+      "sha256": "62ecb05ba5f3c49938c081af4710c0c83623ed245305c568147ac662ef0ff235"
+    },
+    {
+      "file": "plugin-src/client/channels/discord/styles.js",
+      "kind": "modified",
+      "upstreamSha256": "d586051278f77e82bcbf471c0a8284f41643914f469dcea40c20a0c9a986d990",
+      "sha256": "5cc276a32ed528f8052b8371a6689242a15cc519975867a9beaa73805afc4787"
+    },
+    {
+      "file": "plugin-src/client/channels/email/styles.js",
+      "kind": "modified",
+      "upstreamSha256": "cd2c2cbe9285bef652fa948e634aeee644a75dc423397e905f3dd67d8887dcaa",
+      "sha256": "a5ad3572d41502a254f245d7795b761fcedc4ece8f6c180b486bfabef44efbc1"
+    },
+    {
+      "file": "plugin-src/client/channels/feishu/styles.js",
+      "kind": "modified",
+      "upstreamSha256": "c2606e2de83f7cfd4393fcebc66a8f97ccf8413d5741efefd892e299b1e3dcfa",
+      "sha256": "32ffaa5689e2ed009f45a0228e14b9b70088408957d323342a0698f04bc9fbb3"
+    },
+    {
+      "file": "plugin-src/client/channels/imessage/index.js",
+      "kind": "modified",
+      "upstreamSha256": "3719c903577c8a796876c730307a1c8b5a18f67b6b7b7d6448d5d988ac31ce0e",
+      "sha256": "914d851ee104179b8a3da4053d9404b967bd0583d1aa1d338b7e811e3a1ba157"
+    },
+    {
+      "file": "plugin-src/client/channels/imessage/styles.js",
+      "kind": "modified",
+      "upstreamSha256": "29bc286208a776b7654cc9b78e26c9cbc29ecac1ed0ea57149da4c72d460b492",
+      "sha256": "5f734681664cce01ca571bfa42036bcfcdd9f8b494f2236c49519fee4c2a861b"
+    },
+    {
+      "file": "plugin-src/client/channels/matrix/styles.js",
+      "kind": "modified",
+      "upstreamSha256": "dd08aa2288f6a7915b1d408515c5322f2291454b8e99a2482c45e3c45e25619b",
+      "sha256": "b760d51f63e87f0de27bf17ab859c7a76eb8e315e89ee12062b9a8fc45bcd651"
+    },
+    {
+      "file": "plugin-src/client/channels/office/styles.js",
+      "kind": "modified",
+      "upstreamSha256": "be299e69ec160f9925c61594920118e6e818a54780773881d809b653e8dbfda4",
+      "sha256": "5d1c58f72a46eb60a1d70654e6edf993169e93720276bb3591b7e35b18de8d4b"
+    },
+    {
+      "file": "plugin-src/client/channels/qq/styles.js",
+      "kind": "modified",
+      "upstreamSha256": "f8d97225b101c000443b3141ba0b49a9f846588174003cea487982a4ec1ae3ae",
+      "sha256": "0024b8c6babc9e7bb5acbff8fa97b7698065bdb372b1ea60cfcc3a7b886aae1e"
+    },
+    {
+      "file": "plugin-src/client/channels/slack/styles.js",
+      "kind": "modified",
+      "upstreamSha256": "d2d59e001d3ae82b58bc7304088133c71d3084116b29536f11e251eda870b782",
+      "sha256": "56655c04b0f0366fa215e65752805811b79fef704214703644f5c80b8d19e730"
+    },
+    {
+      "file": "plugin-src/client/channels/telegram/styles.js",
+      "kind": "modified",
+      "upstreamSha256": "6cb96ad718cecb00e24df75cd6e05ea8912ff7ca59ed2dec834929c28b13aefa",
+      "sha256": "18d0baff247f81094e49a50297c8f5cb3f3e53df680d7ac569e96e4a7bead686"
+    },
+    {
+      "file": "plugin-src/client/channels/wecom/styles.js",
+      "kind": "modified",
+      "upstreamSha256": "ab9a48602ac2abedd931d96092ebc397342f20c0a4334baeaaf8f5d71e80ed76",
+      "sha256": "d594eb2c0324f3e7f197839f9c8baea901b359263e435e9651f0b93d4237414a"
+    },
+    {
+      "file": "plugin-src/client/channels/wecom-app/styles.js",
+      "kind": "modified",
+      "upstreamSha256": "1feafad302c986e69e057b5f82858f0b14ab476277c3daad5b1577449b627073",
+      "sha256": "5fda2371e3623243cd183cb9156b0cf9c273413573f4b683c01ccfa5ab6d3d79"
+    },
+    {
+      "file": "plugin-src/client/channels/weixin/styles.js",
+      "kind": "modified",
+      "upstreamSha256": "81605f7c7158f3a581b54e99c3821b62d2e6e39142ec16a81691fa16cb3fa6a4",
+      "sha256": "0e99f9b4c3cfbd2d4b297b65fe48030d94d0178d8ceeb12312da7555b59d53a7"
+    },
+    {
+      "file": "plugin-src/client/channels/whatsapp/styles.js",
+      "kind": "modified",
+      "upstreamSha256": "cd511730d8697ae7f4b63afde6a991707606081465f3385ca09395befa1cab86",
+      "sha256": "b523158ae6309d7d7dca62d909f95404589ba4a0e4bd5502ea0fed69853bde7f"
+    },
+    {
+      "file": "plugin-src/client/delivery-settings.js",
+      "kind": "modified",
+      "upstreamSha256": "1540db7946ab5eebac27cc51620c79c83e3d1fa1ce4796350ce94d25b6d8aaa7",
+      "sha256": "ba711316f437f61fe6d95dca7408880caa99bbdd8e63398370833df0c9bab57c"
+    },
+    {
+      "file": "plugin-src/client/i18n.js",
+      "kind": "modified",
+      "upstreamSha256": "1b24b8ff352dde130a1758e4d1a161ffc50d5a497b86122dc258a129844821ce",
+      "sha256": "e420ed54b939c8dc5ffca4315b7a6305780295dfe262991c595a65faf18e17ef"
+    },
+    {
+      "file": "plugin-src/client/index.js",
+      "kind": "modified",
+      "upstreamSha256": "dee488122ff2303be739cd03fd9fa728942282dc9379c85246c09121372971a7",
+      "sha256": "55ee89db1536301e8d04b3ee944b917970c78678790bcaf99ca957c9a9856122"
+    },
+    {
+      "file": "plugin-src/client/model-setting.js",
+      "kind": "modified",
+      "upstreamSha256": "b41b69fdd0a8d55b787d4a0cc67dc5aea3f715ffa459923dfab98a9e8f8ebd02",
+      "sha256": "9fd365774cfe8906ce296d5c85bbc9d3684649a9a5e91f41744cf1472c35eda1"
+    },
+    {
+      "file": "plugin-src/client/plugin-page.js",
+      "kind": "modified",
+      "upstreamSha256": "14a7d59b972cf90b5004027042afc64c9ff417880a425943bab0f100f4b7361f",
+      "sha256": "784293cbf0690874d4f663901cc97f6fbedb009eba6ed9c65465345dc6178ff0"
+    },
+    {
+      "file": "plugin-src/client/styles.js",
+      "kind": "modified",
+      "upstreamSha256": "c9a190acf524551d92c555c6c0bef71e6304048a66c6c47a4f3d4b259c826919",
+      "sha256": "6d3da2637d22f1412fb8f39fded6d7144a568fe79de16be37ef8e9b2f8176cdd"
+    },
+    {
+      "file": "plugin-src/client/update-panel.js",
+      "kind": "modified",
+      "upstreamSha256": "21f54a2315211d9068fe6ac9edb65e42fff02200edb62bd8970d74c9f40f36ba",
+      "sha256": "d12c773965b312af99556d1ac4ab73cd5b3ebc910383867a99867485ca20a490"
+    },
+    {
+      "file": "plugin-src/client/workspace-editor.js",
+      "kind": "modified",
+      "upstreamSha256": "c4ebd987b22f68c27dffc652c32045f84f5797fd71e1545c8cc3760a7dc61207",
+      "sha256": "08512484edd9206a865b0543936428a451d5179d1261a2fccc2cc5c421902c16"
+    },
+    {
+      "file": "plugin-src/host/channels/dingtalk/production.mjs",
+      "kind": "modified",
+      "upstreamSha256": "c97dcbb7b089f42962e4e4abc36d0823f73123012082b34914692e2dd4d9f33e",
+      "sha256": "df7e8399c067cc7c8f021f6c143d6de8027bb493b6d0969ea8d3fe717affada7"
+    },
+    {
+      "file": "plugin-src/host/channels/feishu/production.mjs",
+      "kind": "modified",
+      "upstreamSha256": "8f72a6a9eee00e741c9f1bc174f54d88a759f38a08a17e3378e246fa27b8e550",
+      "sha256": "b07e216542f89e2cadd801721acbe1bb45f5d56e02e051a09f9edcc7fe61df7f"
+    },
+    {
+      "file": "plugin-src/host/channels/matrix/production.mjs",
+      "kind": "modified",
+      "upstreamSha256": "27a71b442ea683c0c4559ef679222679e4d600c740ce785d3bcdd1c96a9e0bfb",
+      "sha256": "23032ec8dcd94f33f09e07ead0c55cded8e810fe66ef3fe4dd943d9c57c1494f"
+    },
+    {
+      "file": "plugin-src/host/channels/office/production.mjs",
+      "kind": "modified",
+      "upstreamSha256": "e49ee9317e36b17b19fc16256e8d5a9f5bf9f8215277235c9a1fd9151dc1769b",
+      "sha256": "e5f7af695c96fc94ec25bd5a6fa281a9b7146d034c24f2ba4b6d903b6dbfed37"
+    },
+    {
+      "file": "plugin-src/host/channels/qq/production.mjs",
+      "kind": "modified",
+      "upstreamSha256": "bab8ddcae5054bf5068a268f8c228e17afe42b50c398461701b2a91f92394ef5",
+      "sha256": "1f547c5ac7cf57eb546251cccf6eaf533c0410371aa43127cce90112f34191c0"
+    },
+    {
+      "file": "plugin-src/host/channels/shared/access-policy-production.mjs",
+      "kind": "modified",
+      "upstreamSha256": "73177cf116e079045659a285ab3a9800188197734ec2c6af9b07f006dcdb4ba0",
+      "sha256": "e1c15111c25edddf50ab15cbf65977af004ec43cd9bae074c88de4eafdd67138"
+    },
+    {
+      "file": "plugin-src/host/channels/shared/production.mjs",
+      "kind": "modified",
+      "upstreamSha256": "cfbe3b1f41c7f136ba7a6e0c58ef827118c0a2a2d254dfefbe67f278cf31f292",
+      "sha256": "524c90d94d054ff3746e786438fe01d79dbfdae5fbd2f5dfd23dc7a3c3c4e460"
+    },
+    {
+      "file": "plugin-src/host/channels/slack/production.mjs",
+      "kind": "modified",
+      "upstreamSha256": "7ae4f1fa514a11bba832767e6324b78be8d3819171acc5cbbc251094196676c3",
+      "sha256": "880e60bf1e44132d137fb9c2699d8ef53a8395ec6c358b6140469926d55ed30e"
+    },
+    {
+      "file": "plugin-src/host/channels/wecom/production.mjs",
+      "kind": "modified",
+      "upstreamSha256": "4a3c2792dafaa5bad7d8307f92cc1783f5635a7ede7a763e8512ae8240cf3167",
+      "sha256": "8c57019c377429a1438eaec9d41578ae167612d3102a5467925a8f5f738ec981"
+    },
+    {
+      "file": "plugin-src/host/channels/wecom-app/production.mjs",
+      "kind": "modified",
+      "upstreamSha256": "cdf81c3f9acebe557e5ece5af699928e7132f686aa613e876762b2c3423d68a7",
+      "sha256": "34c44155c5490449e62552f66dc755313b5973e19c5ebf3e4b6d9d14520e1414"
+    },
+    {
+      "file": "plugin-src/host/channels/weixin/production.mjs",
+      "kind": "modified",
+      "upstreamSha256": "9937b7b3c69790e387ecaadb435a2ac18601efea8dcbcb03486f5af712f993ea",
+      "sha256": "01584d3d4e601878166bda50edd9b6ada11ebb17ae840161bb04712023a01b5e"
+    },
+    {
+      "file": "plugin-src/host/channels/whatsapp/production.mjs",
+      "kind": "modified",
+      "upstreamSha256": "c725cd0c185586fbab51cd341881db46decc7a689e9f23a45b6047c00b6d527a",
+      "sha256": "d00717071933ecc2edbb27f50638f334e66c8ef8550330224bcf67cb684d6344"
+    },
+    {
+      "file": "plugin-src/host/delivery-adapter.mjs",
+      "kind": "modified",
+      "upstreamSha256": "6ed0a010b7d966df1484e881309e69e6ebd64ad0f35952b2d6fbeecee253cb80",
+      "sha256": "4380a343438e6c2f0fba5d8df0e85fc0db45019b693937e42a44349b17c33a85"
+    },
+    {
+      "file": "plugin-src/host/harness-connection.mjs",
+      "kind": "modified",
+      "upstreamSha256": "48b3e6d71615f67f3d89d594c0f8533b12ca7ba31e8c3ca236d9ed3d24bdc696",
+      "sha256": "066a1fddfac670c4f565af7a10dc226eff0c2466b030c0f786c54b949d2696f6"
+    },
+    {
+      "file": "plugin-src/host/index.mjs",
+      "kind": "modified",
+      "upstreamSha256": "081ff4e1bf1d7b4e53a26b2321a2191f39fd361b6723308d671eb3ed50c67246",
+      "sha256": "60c1a18a05b554ce755291800a9676ceac1649932a8f3bda273112230ab4d611"
+    },
+    {
+      "file": "plugin-src/host/native-account-proof.mjs",
+      "kind": "added",
+      "upstreamSha256": null,
+      "sha256": "1e0864277ba849bf6cddb4631f8388868d9c571378bd142fabb46e41e8d61cb8"
+    },
+    {
+      "file": "plugin-src/host/scoped-credentials.mjs",
+      "kind": "added",
+      "upstreamSha256": null,
+      "sha256": "a2c39a514eacc533639dc018781e8bc4e903cff8e71e3fd04be2d510ff3b0c7b"
+    },
+    {
+      "file": "plugin-src/host/single-entry.mjs",
+      "kind": "added",
+      "upstreamSha256": null,
+      "sha256": "c8e4d0a42f1d6912c010b596d20a3c7fcfee67a8956715672ec9d79d33167a6a"
+    },
+    {
+      "file": "plugin-src/management-rpc.mjs",
+      "kind": "modified",
+      "upstreamSha256": "68e2cec2ad7cfa176fd01921ac91a6a9f1a0567d9c4cd2de2034d8d4d496b06d",
+      "sha256": "68b89c125d81a5ca68cfcfa36200c1a4401771ce3ea08c0065bfb8ae34a2cade"
+    },
+    {
+      "file": "src/channels/dingtalk/dingtalk-bridge.mjs",
+      "kind": "modified",
+      "upstreamSha256": "7c5b3c0a27dd8bb881b4a7638a19cac53affcbd4fc7dac467adc787d0dfeb441",
+      "sha256": "0cef718b614ae97d04a120f853c646abbe8c6f7e66a72e2c4839c06df94b69b2"
+    },
+    {
+      "file": "src/channels/dingtalk/dingtalk-controller.mjs",
+      "kind": "modified",
+      "upstreamSha256": "c40f869131e8722ef04d3c71ea3ae84889ba65696cfd62b4ebfe03ce1a73c07f",
+      "sha256": "ab433074a446b37c70858edf7f32c4775864a4aed976ee1abd2111f07090569c"
+    },
+    {
+      "file": "src/channels/email/email-controller.mjs",
+      "kind": "modified",
+      "upstreamSha256": "3c6dc94a614f08230a32c7db453ff2a59d6a1ecce9beab20031bb9f206541977",
+      "sha256": "bd111e8c62567b7deff43aaa5fa48c983695511c8aa72bbe8666c84b8a001355"
+    },
+    {
+      "file": "src/channels/feishu/bridge.mjs",
+      "kind": "modified",
+      "upstreamSha256": "95484c5919b1c67c405eaa1d0b440193f858c10d9462c002e4515b967af42355",
+      "sha256": "544b494edef803b468fb55ba7b7f5f96b383f2a2fdc6771734aca51777b10b1d"
+    },
+    {
+      "file": "src/channels/matrix/matrix-controller.mjs",
+      "kind": "modified",
+      "upstreamSha256": "2245d92f55246bc4739829437e02c876c726379f42d11164fadb7a59a7096a8f",
+      "sha256": "dd9836c997a803a1cff5130e701642ad2fb3c6d4a902b2944ec58b3c910a5002"
+    },
+    {
+      "file": "src/channels/office/office-job-executor.mjs",
+      "kind": "modified",
+      "upstreamSha256": "5d0aba2cea8c50c04bb5c83dbd181bf0d977b0df40db3c18a20b5bb5b21ccbed",
+      "sha256": "d6c4522db2c67f9623efeda07bb4720f2d49068e6632c3d6afe8ccbbf62cd413"
+    },
+    {
+      "file": "src/channels/qq/qq-bridge.mjs",
+      "kind": "modified",
+      "upstreamSha256": "47b9156501edc2abcca55cc6fbfbb95abfe846cb82a7d8aae78449a0a4063c41",
+      "sha256": "98abd6b0a7773192b21d048addec3d91b1107f7aa95c199797d55bcb869131f4"
+    },
+    {
+      "file": "src/channels/qq/qq-controller.mjs",
+      "kind": "modified",
+      "upstreamSha256": "d6bd9a1126d6acf859a63b3845e27c1e84260d4abc255e9247d19d1d22e28c49",
+      "sha256": "fd403eb07900d0361566f1b331270101c666db69130d059f4af30ce98d40ae71"
+    },
+    {
+      "file": "src/channels/shared/bot-workspace-store.mjs",
+      "kind": "modified",
+      "upstreamSha256": "6c57c7c1ca7c409631215e455cd04e989ff9299ed9253ec8127b65b93679517b",
+      "sha256": "b5e2cbd67af3ca07fea3781a30c00803d37323b072e2ded434a7ac2545049e01"
+    },
+    {
+      "file": "src/channels/shared/harness-client.mjs",
+      "kind": "modified",
+      "upstreamSha256": "d36276ffb0e89838b8cad6a76503b5bb378a406900196b40fcd930ece641e1d2",
+      "sha256": "6256a9148949f9cbecf3469b9356b87dbb46ccf01359dac5ba4e436bae04c8bc"
+    },
+    {
+      "file": "src/channels/shared/inbound-access.mjs",
+      "kind": "modified",
+      "upstreamSha256": "3b850b10b2640127782cb62d8f17bd08b857f5c8be55bde16a7fedbe58cad611",
+      "sha256": "8eacfa01393759fb0b98ec2cba446b3868647dbc7e23a99de9b7d4444d5fe8f5"
+    },
+    {
+      "file": "src/channels/shared/single-session-boundary.mjs",
+      "kind": "added",
+      "upstreamSha256": null,
+      "sha256": "14acef6d7e4bfa5592b2dcd5a0e7824a4bdd408c098584badc2b90cfe58d5542"
+    },
+    {
+      "file": "src/channels/shared/text-harness-bridge.mjs",
+      "kind": "modified",
+      "upstreamSha256": "773515d21e67d52f79a04d262e6ed49422e65df5f2b7a03ed281f23d57d290a1",
+      "sha256": "7aea954dd377c2b8c7d0c06df247c14ffb48b5d2127569249e0a89703e5ff5c7"
+    },
+    {
+      "file": "src/channels/shared/token-bot-controller.mjs",
+      "kind": "modified",
+      "upstreamSha256": "db6c506cbbd634c5ac9fc44ea1c0f40680866b2e5f6b8981f73216a903ab0f6f",
+      "sha256": "649c1878ae8420635c1263e7dee3dbd2e2bfca2975baa4a3c5e4bd149723a230"
+    },
+    {
+      "file": "src/channels/slack/slack-controller.mjs",
+      "kind": "modified",
+      "upstreamSha256": "59d7e2d7c0d39c0a63b003c3594fdb597e8012eebe110a272c172acd51b83ed5",
+      "sha256": "bce32eefc2a55f047e2f33680a003eda45e130a44d6485b3839347fb0bb2687a"
+    },
+    {
+      "file": "src/channels/wecom/wecom-bridge.mjs",
+      "kind": "modified",
+      "upstreamSha256": "c753a9f88727161188d90e37c5b65f5a62765bfe91f0a54a474628f193e804c0",
+      "sha256": "02a95b1ec652815703d2dd759824ba0303f9537ac862c107b364a8e730f63380"
+    },
+    {
+      "file": "src/channels/wecom/wecom-controller.mjs",
+      "kind": "modified",
+      "upstreamSha256": "a986f9c837f3f7b52f99f7504f54dd198398c7ffd7d70b14a7b883652b428791",
+      "sha256": "d34b918d5b5fd40de2a183e6a355fff3357e777d39a8d1f52b99b5715845a3ae"
+    },
+    {
+      "file": "src/channels/wecom-app/wecom-app-bridge.mjs",
+      "kind": "modified",
+      "upstreamSha256": "ec1de77fceab8e1bf83908eeda0fd145be31737070e59830c1de765be760b071",
+      "sha256": "833a63ac20ee40ddbd6feeed14060077247e4db71b903e3e0e7807b2afca59cf"
+    },
+    {
+      "file": "src/channels/wecom-app/wecom-app-controller.mjs",
+      "kind": "modified",
+      "upstreamSha256": "740398488ad5c65db27eea206710c3a2a547e23f71dddc35de4713e6213d7d79",
+      "sha256": "08cecad82272ffe429a60e0ce839d3306a7a6d6e085f48e2f78be65dd281f48e"
+    },
+    {
+      "file": "src/channels/weixin/weixin-bridge.mjs",
+      "kind": "modified",
+      "upstreamSha256": "c22f2c01de80df050e37cb4a1e8551efe7db1815ae1248a2316a593cef41006f",
+      "sha256": "0a6958560f63997c42d2c23da1674737f5f5da10a45b550aa79975bc2de8e587"
+    },
+    {
+      "file": "src/channels/weixin/weixin-controller.mjs",
+      "kind": "modified",
+      "upstreamSha256": "6f0f1c3c84dfad06af138504785282a84f08970c04b386ec18642f87bc808877",
+      "sha256": "68238b3532b36648715fb9a2868de22c5225ca952db8014ab26ce95ac7616469"
+    },
+    {
+      "file": "src/channels/whatsapp/whatsapp-controller.mjs",
+      "kind": "modified",
+      "upstreamSha256": "fbd29bfed68166c7ec467e485ce5801fc48b5d496dd83403d2af5fa31a1180d3",
+      "sha256": "892d65bd2ad0a2996067c559120b6bc1aa11eb7a59960ce5049de508f7bf0a96"
+    }
+  ],
+  "unchanged": 356
+}

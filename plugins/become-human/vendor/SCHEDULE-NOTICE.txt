@@ -1,0 +1,4 @@
+Schedule time rules: Copyright (c) 2026 DeepSeek. MIT License.
+Temporal polyfill: Copyright 2017, 2018, 2019, 2020 ECMA International. ISC License.
+jsbi: Copyright 2018 the V8 project authors. Apache License 2.0.
+See the upstream package licenses included with this distribution.

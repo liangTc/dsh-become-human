@@ -1,0 +1,13 @@
+name: 功能建议 / Feature request
+description: 描述实际使用场景与需要的能力。
+body:
+  - type: textarea
+    id: scenario
+    attributes:
+      label: 想解决的使用问题
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 建议方案及权限边界

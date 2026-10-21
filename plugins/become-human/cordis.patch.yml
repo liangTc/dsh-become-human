@@ -1,0 +1,75 @@
+- id: agent-loop
+  disabled: true
+- id: session-persistence-jsonl
+  disabled: true
+- id: file-upload
+  disabled: true
+- id: ui-attachment
+  disabled: true
+- id: subagent-spawn-in-process
+  disabled: true
+- id: subagent-fork-in-process
+  disabled: true
+- id: goal-round-driver
+  disabled: true
+- id: tool-plugin-manager
+  disabled: true
+- id: tool-bash
+  disabled: true
+- id: tool-pwsh
+  disabled: true
+- id: tool-jobs
+  disabled: true
+- id: tool-fs
+  disabled: true
+- id: tool-fs-search
+  disabled: true
+- id: tool-skill
+  disabled: true
+- id: tool-subagent-control
+  disabled: true
+- id: tool-subagent-list-agents
+  disabled: true
+- id: tool-subagent
+  disabled: true
+- id: tool-subagent-fork
+  disabled: true
+- id: tool-workflow
+  disabled: true
+- id: tool-result-pruner
+  disabled: true
+- id: tool-todo
+  disabled: true
+- id: tool-goal
+  disabled: true
+- id: tool-ralph
+  disabled: true
+- id: tool-web
+  disabled: true
+- id: session-title-llm
+  disabled: true
+- id: session-log-deepseek
+  disabled: true
+- id: session-log-download
+  disabled: true
+- id: desktop-product-telemetry
+  disabled: true
+- id: product-analytics
+  disabled: true
+- id: session-telemetry-otel
+  disabled: true
+- insert:
+    - id: become-human-storage
+      name: dsh-become-human/storage
+      config:
+        root: !!js dshHomePath('sessions')
+    - id: become-human-upload-guard
+      name: dsh-become-human/upload-guard
+    - id: become-human
+      name: dsh-become-human
+      config:
+        intervalMs: 15000
+        tokenBudget: 16000
+        budgetRound: initial
+        maxCycles: 3
+        maxTokens: 512

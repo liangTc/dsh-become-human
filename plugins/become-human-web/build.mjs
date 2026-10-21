@@ -1,0 +1,28 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import {createRequire} from 'node:module';
+const root=import.meta.dirname,source=path.resolve(root,'../become-human');
+const pkg=JSON.parse(await fs.readFile(path.join(source,'package.json'),'utf8'));
+await fs.mkdir(path.join(root,'runtime'),{recursive:true});await fs.mkdir(path.join(root,'runtime-bundle'),{recursive:true});
+for(const file of pkg.files)if(file!=='cordis.patch.yml')await fs.cp(path.join(source,file),path.join(root,'runtime',file),{recursive:true});
+await fs.writeFile(path.join(root,'runtime-bundle/package.json'),JSON.stringify({name:'dsh-become-human-runtime',version:pkg.version,type:'module',license:'Apache-2.0',author:'Become Human contributors',main:'index.mjs',exports:{'.':'./index.mjs','./client':'./client.js'},dsh:{bundle:{patch:'./cordis.patch.yml'},client:{platform:'web',immediately:true}}},null,2)+'\n');
+for(const file of ['LICENSE','NOTICE','THIRD_PARTY_NOTICES.md'])await fs.copyFile(path.join(source,file),path.join(root,'runtime-bundle',file));
+const thirdParty=await fs.readFile(path.resolve(root,'../../THIRD_PARTY_NOTICES.md'),'utf8');
+await fs.writeFile(path.join(root,'THIRD_PARTY_NOTICES.md'),thirdParty.replaceAll('](plugins/become-human-web/','](').replaceAll('](plugins/become-human/','](runtime/'));
+await fs.writeFile(path.join(root,'runtime/THIRD_PARTY_NOTICES.md'),thirdParty.replaceAll('](plugins/become-human-web/','](../').replaceAll('](plugins/become-human/',']('));
+await fs.writeFile(path.join(root,'runtime-bundle/THIRD_PARTY_NOTICES.md'),thirdParty.replaceAll('](plugins/become-human-web/','](../').replaceAll('](plugins/become-human/','](../runtime/'));
+await fs.cp(path.resolve(root,'../../docs'),path.join(root,'docs'),{recursive:true,filter:file=>path.basename(file)!=='banner-concept.png'});
+await fs.writeFile(path.join(root,'runtime-bundle/index.mjs'),"export * from '../runtime/index.mjs';\n");
+const client=(await fs.readFile(path.join(source,'native-client.js'),'utf8')).replace("id: 'dsh-become-human'","id: 'dsh-become-human-runtime'");
+await fs.writeFile(path.join(root,'runtime-bundle/client.js'),client);
+const patch=(await fs.readFile(path.join(source,'cordis.patch.yml'),'utf8')).replaceAll('name: dsh-become-human/storage','name: dsh-become-human-web/storage').replaceAll('name: dsh-become-human/upload-guard','name: dsh-become-human-web/upload-guard').replace('name: dsh-become-human\n','name: dsh-become-human-runtime\n');
+await fs.writeFile(path.join(root,'runtime-bundle/cordis.patch.yml'),patch);
+const require=createRequire(import.meta.url),esbuild=require('esbuild');
+const bundle=await esbuild.build({absWorkingDir:root,preserveSymlinks:true,entryPoints:['native-client.tsx'],bundle:true,format:'cjs',platform:'browser',target:['chrome100'],external:['react','react-dom','@deepseek-ai/*'],loader:{'.css':'text'},write:false,logLevel:'warning'});
+const im=await fs.readFile(path.join(root,'im-client.js'),'utf8'),begin=im.indexOf('var module={exports:{}},exports=module.exports;'),end=im.lastIndexOf('return module.exports;}});');
+if(begin<0||end<begin)throw new Error('IM_CLIENT_FACTORY_CONTRACT_CHANGED');
+const imBody=im.slice(begin,end).replace('ctx.effect(() => installSessionChannelLogos(), "im-settings: Session channel logos");','');
+const humanBody=bundle.outputFiles[0].text;
+await fs.writeFile(path.join(root,'client.js'),`window.__ModuleLoader__.load({id:'dsh-become-human-web',factory:(require)=>{const im=(()=>{${imBody}\nreturn module.exports;})();const human=(()=>{var module={exports:{}},exports=module.exports;${humanBody}\nreturn module.exports;})();return {inject:[...new Set([...im.inject,...human.inject])],apply(ctx){im.apply(ctx);human.apply(ctx);}};}});\n`);
+console.log(JSON.stringify({package:'dsh-become-human-web',runtimeResources:pkg.files.length,managerDoesNotReplaceHostFactory:true}));
+

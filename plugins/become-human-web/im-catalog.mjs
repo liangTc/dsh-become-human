@@ -1,0 +1,15 @@
+export const IM_CHANNELS=Object.freeze([
+  {id:'weixin',name:'微信',setup:'扫码绑定'},
+  {id:'feishu',name:'飞书',setup:'扫码创建或 App ID / Secret'},
+  {id:'dingtalk',name:'钉钉',setup:'扫码创建或 Client ID / Secret'},
+  {id:'wecom',name:'企业微信',setup:'扫码创建智能机器人或 Bot ID / Secret'},
+  {id:'wecom-app',name:'企业微信应用',setup:'企业 ID / AgentId / Secret 与回调',experimental:true},
+  {id:'qq',name:'QQ',setup:'扫码创建或 AppID / AppSecret'},
+  {id:'slack',name:'Slack',setup:'Bot Token / App Token'},
+  {id:'telegram',name:'Telegram',setup:'Bot Token'},
+  {id:'discord',name:'Discord',setup:'Bot Token'},
+  {id:'imessage',name:'iMessage',setup:'macOS Messages 权限',platform:'darwin',experimental:true},
+  {id:'email',name:'邮箱',setup:'IMAP / SMTP 或 OAuth',experimental:true},
+  {id:'matrix',name:'Matrix',setup:'Homeserver / Token 或密码',experimental:true},
+  {id:'office',name:'AI Office',setup:'设备 Token / 指令别名',connector:true,experimental:true},
+]);

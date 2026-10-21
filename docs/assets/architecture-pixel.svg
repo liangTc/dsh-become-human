@@ -1,0 +1,152 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1180" viewBox="0 0 1280 1180" role="img" aria-labelledby="title desc" shape-rendering="crispEdges">
+  <title id="title">Become Human · 单一会话与串行自主运行架构</title>
+  <desc id="desc">架构示意，非界面截图。Web 与一个 IM 渠道共享唯一 Human 会话。管理模块与独立运行模块隔离；事件按优先级排队，结合当前人格、记忆、反馈和目标，由模型选题，交给临时子任务上下文执行，再统一回写和表达。用户消息可抢占自主任务，模型回合串行执行。</desc>
+  <defs>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#0d2034" stroke-width="1"/>
+    </pattern>
+    <marker id="arrow" markerWidth="4" markerHeight="4" refX="3" refY="2" orient="auto" markerUnits="strokeWidth">
+      <path d="M0 0H2V1H3V3H2V4H0Z" fill="#69d8ff"/>
+    </marker>
+    <marker id="amber-arrow" markerWidth="4" markerHeight="4" refX="3" refY="2" orient="auto" markerUnits="strokeWidth">
+      <path d="M0 0H2V1H3V3H2V4H0Z" fill="#c6eaff"/>
+    </marker>
+    <style>
+      .text{font-family:"Microsoft YaHei","PingFang SC","Noto Sans CJK SC",sans-serif;fill:#edf6ff}
+      .title{font-size:36px;font-weight:700;letter-spacing:.5px}
+      .heading{font-size:23px;font-weight:700}
+      .body{font-size:17px}
+      .small{font-size:14px}
+      .micro{font-size:12px;letter-spacing:1.6px}
+      .muted{fill:#9cb1c9}
+      .mint{fill:#69d8ff}
+      .amber{fill:#c6eaff}
+      .flow{fill:none;stroke:#69d8ff;stroke-width:4;marker-end:url(#arrow)}
+    </style>
+  </defs>
+  <rect width="1280" height="1180" fill="#050b16"/>
+  <rect width="1280" height="1180" fill="url(#grid)"/>
+  <g aria-hidden="true" fill="none" stroke="#3786b8" stroke-width="2">
+    <path d="M8 112V16H104M1176 16H1272V112M8 1068V1172H64M1176 1172H1272V1068"/>
+  </g>
+  <g aria-hidden="true" fill="#69d8ff" opacity=".6">
+    <rect x="1178" y="94" width="46" height="2"/><rect x="1228" y="94" width="12" height="2"/>
+    <rect x="1202" y="102" width="22" height="2"/><rect x="1232" y="102" width="8" height="2"/>
+    <rect x="18" y="1136" width="3" height="12"/><rect x="18" y="1156" width="3" height="8"/>
+  </g>
+  <g aria-hidden="true">
+    <path d="M48 36H56V44H64V52H72V60H64V68H56V76H48V68H40V60H32V52H40V44H48Z" fill="none" stroke="#69d8ff" stroke-width="2"/>
+    <rect x="48" y="52" width="8" height="8" fill="#edf6ff"/>
+    <path d="M32 36H40V40H32ZM64 76H72V80H64ZM28 68H32V72H28Z" fill="#3786b8"/>
+  </g>
+  <text class="text title" x="96" y="69">一个 Human，一条思考线</text>
+  <text class="text small muted" x="96" y="102">从当前人格出发，把每次主动行动接回同一个会话。</text>
+  <path d="M968 39H1240V63L1232 71H960V47Z" fill="#102c47" stroke="#3786b8"/>
+  <rect x="960" y="39" width="8" height="32" fill="#c6eaff"/>
+  <text class="text micro amber" x="982" y="60">BETA · WORK IN PROGRESS</text>
+
+  <!-- DSH host owns the UI and channel transport; the Human session remains unique. -->
+  <rect x="40" y="146" width="1200" height="224" fill="#0a192b" stroke="#254560" stroke-width="2"/>
+  <rect x="40" y="146" width="8" height="40" fill="#69d8ff"/>
+  <text class="text heading" x="72" y="179">管理模块 · DSH Web</text>
+  <text class="text small muted" x="925" y="179">设置、会话视图、渠道管理</text>
+  <rect x="72" y="217" width="260" height="88" fill="#102840" stroke="#3786b8" stroke-width="2"/>
+  <path d="M92 235H132V263H92ZM108 267H116V275H108ZM100 275H124V279H100Z" fill="#69d8ff"/>
+  <rect x="96" y="239" width="32" height="20" fill="#0a192b"/>
+  <text class="text heading" x="150" y="252">Web 入口</text>
+  <text class="text small muted" x="150" y="280">同一会话的界面</text>
+  <rect x="465" y="211" width="350" height="100" fill="#102840" stroke="#69d8ff" stroke-width="3"/>
+  <rect x="481" y="227" width="8" height="68" fill="#69d8ff"/>
+  <text class="text heading" x="512" y="248">唯一 Human 会话入口</text>
+  <text class="text body muted" x="512" y="279">Web / IM 共享消息与状态</text>
+  <rect x="948" y="217" width="260" height="88" fill="#102840" stroke="#3786b8" stroke-width="2"/>
+  <path d="M968 233H996V277H968ZM976 241H988V261H976ZM980 267H984V271H980Z" fill="#69d8ff"/>
+  <text class="text heading" x="1014" y="252">唯一 IM 渠道</text>
+  <text class="text small muted" x="1014" y="280">渠道只是消息入口</text>
+  <path class="flow" d="M332 261H453"/>
+  <path class="flow" d="M948 261H827"/>
+  <text class="text small muted" x="72" y="342">唯一会话与长期数据由运行模块持有；更换渠道替换旧绑定，临时子任务不生成第二个对话入口。</text>
+
+  <path d="M40 398H1240" stroke="#48667e" stroke-width="2" stroke-dasharray="8 8"/>
+  <rect x="888" y="384" width="336" height="28" fill="#050b16"/>
+  <text class="text small muted" x="904" y="404">进程隔离 · 受控接口 · 权限边界</text>
+  <path class="flow" d="M640 311V468"/>
+
+  <!-- A single vertical execution lane, with side panels for rules and capabilities. -->
+  <rect x="40" y="424" width="1200" height="724" fill="#071322" stroke="#254560" stroke-width="2"/>
+  <rect x="40" y="424" width="8" height="42" fill="#c6eaff"/>
+  <text class="text heading" x="72" y="460">独立自主运行模块</text>
+  <text class="text micro muted" x="924" y="458">ONE EXECUTION LINE</text>
+  <path class="flow" d="M640 424V468"/>
+
+  <g class="text">
+    <rect x="465" y="480" width="350" height="90" fill="#102840" stroke="#3786b8" stroke-width="2"/>
+    <text class="micro mint" x="489" y="505">01 · EVENT QUEUE</text>
+    <text class="heading" x="489" y="535">事件队列与优先级</text>
+    <text class="small muted" x="489" y="557">新消息 / 定时唤醒 / 到期任务</text>
+    <path class="flow" d="M640 570V598"/>
+
+    <rect x="465" y="610" width="350" height="90" fill="#102840" stroke="#3786b8" stroke-width="2"/>
+    <text class="micro mint" x="489" y="635">02 · CONTEXT</text>
+    <text class="heading" x="489" y="665">人格 → 记忆、反馈与目标</text>
+    <text class="small muted" x="489" y="687">分层检索，按阶段装配必要上下文</text>
+    <path class="flow" d="M640 700V728"/>
+
+    <rect x="465" y="740" width="350" height="90" fill="#102840" stroke="#3786b8" stroke-width="2"/>
+    <text class="micro mint" x="489" y="765">03 · CHOOSE</text>
+    <text class="heading" x="489" y="795">模型判断下一步</text>
+    <text class="small muted" x="489" y="817">选题、提出问题，或决定等待</text>
+    <path class="flow" d="M640 830V858"/>
+
+    <rect x="465" y="870" width="350" height="90" fill="#102840" stroke="#3786b8" stroke-width="2"/>
+    <text class="micro mint" x="489" y="895">04 · EXECUTE</text>
+    <text class="heading" x="489" y="925">临时子任务上下文</text>
+    <text class="small muted" x="489" y="947">围绕一个任务思考与执行</text>
+    <path class="flow" d="M640 960V988"/>
+
+    <rect x="465" y="1000" width="350" height="102" fill="#0d2d45" stroke="#69d8ff" stroke-width="2"/>
+    <text class="micro mint" x="489" y="1025">05 · COMMIT &amp; EXPRESS</text>
+    <text class="heading" x="489" y="1055">统一回写与自然表达</text>
+    <text class="small muted" x="489" y="1077">记忆 / 笔记 / 目标进度 / 会话消息</text>
+  </g>
+
+  <rect x="72" y="496" width="320" height="156" fill="#10243b" stroke="#5ca8d1" stroke-width="2"/>
+  <text class="text micro amber" x="96" y="525">USER FIRST</text>
+  <text class="text heading" x="96" y="557">用户介入，优先接管</text>
+  <text class="text body muted" x="96" y="588">暂停自主任务，保留检查点。</text>
+  <text class="text body muted" x="96" y="618">清理后再判断是否继续。</text>
+  <path d="M392 574H426V525H453" fill="none" stroke="#c6eaff" stroke-width="3" stroke-dasharray="7 5" marker-end="url(#amber-arrow)"/>
+
+  <rect x="72" y="710" width="320" height="174" fill="#0a192b" stroke="#254560" stroke-width="2"/>
+  <text class="text micro mint" x="96" y="739">BOUNDED AUTONOMY</text>
+  <text class="text heading" x="96" y="771">自主行为有边界</text>
+  <text class="text body muted" x="96" y="804">时间与轮次、请求与 token</text>
+  <text class="text body muted" x="96" y="834">遵守额度、静默与退避规则。</text>
+  <text class="text small muted" x="96" y="862">额度不足可提出额外授权申请。</text>
+
+  <rect x="888" y="610" width="320" height="220" fill="#0a192b" stroke="#254560" stroke-width="2"/>
+  <text class="text micro mint" x="912" y="639">CAPABILITIES</text>
+  <text class="text heading" x="912" y="671">工具按权限接入</text>
+  <text class="text body muted" x="912" y="705">只读网页 MCP</text>
+  <text class="text body muted" x="912" y="735">指定 DSH 会话读取</text>
+  <text class="text body muted" x="912" y="765">受管写入与逐项授权</text>
+  <text class="text small amber" x="912" y="802">工具结果属于外部资料，不能授予权限。</text>
+  <path d="M888 722H852V915H827" fill="none" stroke="#3786b8" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <rect x="888" y="880" width="320" height="222" fill="#0a192b" stroke="#254560" stroke-width="2"/>
+  <text class="text micro mint" x="912" y="909">TRACEABLE OUTPUT</text>
+  <text class="text heading" x="912" y="941">执行事实可追溯</text>
+  <text class="text body muted" x="912" y="975">记录选择、动作、回写与回执。</text>
+  <text class="text body muted" x="912" y="1005">失败和未知状态保留证据。</text>
+  <text class="text small amber" x="912" y="1040">一次会话不等于一次模型调用。</text>
+  <text class="text small muted" x="912" y="1074">此图表达流程，不展示模型内部思维。</text>
+  <path d="M815 1051H876" fill="none" stroke="#3786b8" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <rect x="40" y="1162" width="8" height="8" fill="#69d8ff"/>
+  <rect x="56" y="1162" width="8" height="8" fill="#c6eaff"/>
+  <text class="text small muted" x="80" y="1170">架构示意，非界面截图 · BETA · WORK IN PROGRESS</text>
+  <g aria-hidden="true" fill="none" stroke="#69d8ff" stroke-width="2" opacity=".65">
+    <path d="M40 176V146H70M1210 146H1240V176M40 454V424H70M1210 424H1240V454"/>
+    <path d="M465 506V480H491M789 480H815V506M465 1076V1102H491M789 1102H815V1076"/>
+  </g>
+</svg>

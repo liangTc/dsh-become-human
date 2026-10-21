@@ -1,0 +1,2411 @@
+{
+  "schemaVersion": 1,
+  "package": "dsh-become-human-web",
+  "version": "0.7.0-beta.1",
+  "upstream": {
+    "name": "dsh-im",
+    "version": "4.39.0",
+    "license": "MIT"
+  },
+  "excludedProviders": [
+    "whatsapp"
+  ],
+  "excludedDependencies": [
+    "@whiskeysockets/baileys",
+    "libsignal",
+    "rustbridge"
+  ],
+  "externalNotBundled": [
+    "@tencent-connect/qqbot-connector",
+    "@tencent-connect/qqbot-nodejs",
+    "@wecom/aibot-node-sdk",
+    "dingtalk-stream",
+    "imapflow",
+    "mailparser",
+    "nodemailer",
+    "qrcode",
+    "sharp",
+    "undici",
+    "@matrix-org/olm"
+  ],
+  "host": {
+    "file": "lib/index.js",
+    "sha256": "b13ecabd822535708098ad0d9639fadd1af7ca9b9434bb24142db71179b0cb6d",
+    "inputs": [
+      {
+        "file": "im/package.json",
+        "bytes": 3165
+      },
+      {
+        "file": "im/plugin-src/client/agent-preset.js",
+        "bytes": 4213
+      },
+      {
+        "file": "im/plugin-src/client/channels/feishu/api.js",
+        "bytes": 15999
+      },
+      {
+        "file": "im/plugin-src/client/i18n.js",
+        "bytes": 121524
+      },
+      {
+        "file": "im/plugin-src/client/last-message-error.js",
+        "bytes": 796
+      },
+      {
+        "file": "im/plugin-src/client/model-setting.js",
+        "bytes": 8725
+      },
+      {
+        "file": "im/plugin-src/host/channels/dingtalk/connection-supervisor.mjs",
+        "bytes": 3743
+      },
+      {
+        "file": "im/plugin-src/host/channels/dingtalk/index.mjs",
+        "bytes": 1440
+      },
+      {
+        "file": "im/plugin-src/host/channels/dingtalk/production.mjs",
+        "bytes": 8481
+      },
+      {
+        "file": "im/plugin-src/host/channels/dingtalk/rpc.mjs",
+        "bytes": 15442
+      },
+      {
+        "file": "im/plugin-src/host/channels/discord/index.mjs",
+        "bytes": 1294
+      },
+      {
+        "file": "im/plugin-src/host/channels/discord/production.mjs",
+        "bytes": 878
+      },
+      {
+        "file": "im/plugin-src/host/channels/discord/rpc.mjs",
+        "bytes": 622
+      },
+      {
+        "file": "im/plugin-src/host/channels/email/availability.mjs",
+        "bytes": 2146
+      },
+      {
+        "file": "im/plugin-src/host/channels/email/index.mjs",
+        "bytes": 1775
+      },
+      {
+        "file": "im/plugin-src/host/channels/email/production.mjs",
+        "bytes": 2838
+      },
+      {
+        "file": "im/plugin-src/host/channels/email/rpc.mjs",
+        "bytes": 6961
+      },
+      {
+        "file": "im/plugin-src/host/channels/feishu/connection-supervisor.mjs",
+        "bytes": 4789
+      },
+      {
+        "file": "im/plugin-src/host/channels/feishu/controller.mjs",
+        "bytes": 5486
+      },
+      {
+        "file": "im/plugin-src/host/channels/feishu/credential-store.mjs",
+        "bytes": 3032
+      },
+      {
+        "file": "im/plugin-src/host/channels/feishu/index.mjs",
+        "bytes": 2574
+      },
+      {
+        "file": "im/plugin-src/host/channels/feishu/production.mjs",
+        "bytes": 14376
+      },
+      {
+        "file": "im/plugin-src/host/channels/feishu/rpc.mjs",
+        "bytes": 41664
+      },
+      {
+        "file": "im/plugin-src/host/channels/imessage/index.mjs",
+        "bytes": 1089
+      },
+      {
+        "file": "im/plugin-src/host/channels/imessage/production.mjs",
+        "bytes": 862
+      },
+      {
+        "file": "im/plugin-src/host/channels/imessage/rpc.mjs",
+        "bytes": 3167
+      },
+      {
+        "file": "im/plugin-src/host/channels/matrix/index.mjs",
+        "bytes": 1264
+      },
+      {
+        "file": "im/plugin-src/host/channels/matrix/production.mjs",
+        "bytes": 10669
+      },
+      {
+        "file": "im/plugin-src/host/channels/matrix/rpc.mjs",
+        "bytes": 10847
+      },
+      {
+        "file": "im/plugin-src/host/channels/office/index.mjs",
+        "bytes": 704
+      },
+      {
+        "file": "im/plugin-src/host/channels/office/production.mjs",
+        "bytes": 2100
+      },
+      {
+        "file": "im/plugin-src/host/channels/office/rpc.mjs",
+        "bytes": 3238
+      },
+      {
+        "file": "im/plugin-src/host/channels/qq/connection-supervisor.mjs",
+        "bytes": 3673
+      },
+      {
+        "file": "im/plugin-src/host/channels/qq/index.mjs",
+        "bytes": 1311
+      },
+      {
+        "file": "im/plugin-src/host/channels/qq/production.mjs",
+        "bytes": 8112
+      },
+      {
+        "file": "im/plugin-src/host/channels/qq/rpc.mjs",
+        "bytes": 12638
+      },
+      {
+        "file": "im/plugin-src/host/channels/shared/access-policy-production.mjs",
+        "bytes": 5570
+      },
+      {
+        "file": "im/plugin-src/host/channels/shared/access-policy-rpc.mjs",
+        "bytes": 627
+      },
+      {
+        "file": "im/plugin-src/host/channels/shared/agent-preset-rpc.mjs",
+        "bytes": 891
+      },
+      {
+        "file": "im/plugin-src/host/channels/shared/bot-alias-rpc.mjs",
+        "bytes": 540
+      },
+      {
+        "file": "im/plugin-src/host/channels/shared/connection-supervisor.mjs",
+        "bytes": 3913
+      },
+      {
+        "file": "im/plugin-src/host/channels/shared/context-enhancement-rpc.mjs",
+        "bytes": 675
+      },
+      {
+        "file": "im/plugin-src/host/channels/shared/model-setting-rpc.mjs",
+        "bytes": 751
+      },
+      {
+        "file": "im/plugin-src/host/channels/shared/production.mjs",
+        "bytes": 11189
+      },
+      {
+        "file": "im/plugin-src/host/channels/shared/rpc.mjs",
+        "bytes": 11330
+      },
+      {
+        "file": "im/plugin-src/host/channels/shared/startup-error.mjs",
+        "bytes": 2602
+      },
+      {
+        "file": "im/plugin-src/host/channels/shared/startup.mjs",
+        "bytes": 3760
+      },
+      {
+        "file": "im/plugin-src/host/channels/shared/thinking-traces-rpc.mjs",
+        "bytes": 505
+      },
+      {
+        "file": "im/plugin-src/host/channels/shared/workspace-rpc.mjs",
+        "bytes": 1046
+      },
+      {
+        "file": "im/plugin-src/host/channels/slack/index.mjs",
+        "bytes": 1244
+      },
+      {
+        "file": "im/plugin-src/host/channels/slack/production.mjs",
+        "bytes": 7768
+      },
+      {
+        "file": "im/plugin-src/host/channels/slack/rpc.mjs",
+        "bytes": 10723
+      },
+      {
+        "file": "im/plugin-src/host/channels/telegram/index.mjs",
+        "bytes": 1314
+      },
+      {
+        "file": "im/plugin-src/host/channels/telegram/production.mjs",
+        "bytes": 997
+      },
+      {
+        "file": "im/plugin-src/host/channels/telegram/rpc.mjs",
+        "bytes": 771
+      },
+      {
+        "file": "im/plugin-src/host/channels/wecom-app/index.mjs",
+        "bytes": 1357
+      },
+      {
+        "file": "im/plugin-src/host/channels/wecom-app/production.mjs",
+        "bytes": 10257
+      },
+      {
+        "file": "im/plugin-src/host/channels/wecom-app/rpc.mjs",
+        "bytes": 13033
+      },
+      {
+        "file": "im/plugin-src/host/channels/wecom/connection-supervisor.mjs",
+        "bytes": 3679
+      },
+      {
+        "file": "im/plugin-src/host/channels/wecom/index.mjs",
+        "bytes": 1382
+      },
+      {
+        "file": "im/plugin-src/host/channels/wecom/production.mjs",
+        "bytes": 8279
+      },
+      {
+        "file": "im/plugin-src/host/channels/wecom/rpc.mjs",
+        "bytes": 12899
+      },
+      {
+        "file": "im/plugin-src/host/channels/weixin/connection-supervisor.mjs",
+        "bytes": 4321
+      },
+      {
+        "file": "im/plugin-src/host/channels/weixin/index.mjs",
+        "bytes": 2049
+      },
+      {
+        "file": "im/plugin-src/host/channels/weixin/production.mjs",
+        "bytes": 11250
+      },
+      {
+        "file": "im/plugin-src/host/channels/weixin/rpc.mjs",
+        "bytes": 13001
+      },
+      {
+        "file": "im/plugin-src/host/delivery-adapter.mjs",
+        "bytes": 17213
+      },
+      {
+        "file": "im/plugin-src/host/delivery-http.mjs",
+        "bytes": 3923
+      },
+      {
+        "file": "im/plugin-src/host/delivery-rpc.mjs",
+        "bytes": 6644
+      },
+      {
+        "file": "im/plugin-src/host/delivery-service.mjs",
+        "bytes": 21882
+      },
+      {
+        "file": "im/plugin-src/host/delivery-suggestions.mjs",
+        "bytes": 6575
+      },
+      {
+        "file": "im/plugin-src/host/harness-command-executor.mjs",
+        "bytes": 1913
+      },
+      {
+        "file": "im/plugin-src/host/harness-connection.mjs",
+        "bytes": 912
+      },
+      {
+        "file": "im/plugin-src/host/harness-session-coordinator.mjs",
+        "bytes": 6772
+      },
+      {
+        "file": "im/plugin-src/host/host-language-rpc.mjs",
+        "bytes": 2829
+      },
+      {
+        "file": "im/plugin-src/host/host-language.mjs",
+        "bytes": 5782
+      },
+      {
+        "file": "im/plugin-src/host/image-input-rpc.mjs",
+        "bytes": 1274
+      },
+      {
+        "file": "im/plugin-src/host/inbound-ttl-rpc.mjs",
+        "bytes": 3864
+      },
+      {
+        "file": "im/plugin-src/host/inbound-ttl-runtime.mjs",
+        "bytes": 3434
+      },
+      {
+        "file": "im/plugin-src/host/inbound-ttl-service.mjs",
+        "bytes": 5879
+      },
+      {
+        "file": "im/plugin-src/host/index.mjs",
+        "bytes": 9888
+      },
+      {
+        "file": "im/plugin-src/host/injected-context.mjs",
+        "bytes": 4819
+      },
+      {
+        "file": "im/plugin-src/host/native-account-proof.mjs",
+        "bytes": 1718
+      },
+      {
+        "file": "im/plugin-src/host/rpc-authority.mjs",
+        "bytes": 528
+      },
+      {
+        "file": "im/plugin-src/host/scoped-credentials.mjs",
+        "bytes": 616
+      },
+      {
+        "file": "im/plugin-src/host/session-sync-coordinator.mjs",
+        "bytes": 8623
+      },
+      {
+        "file": "im/plugin-src/host/session-title-prefix.mjs",
+        "bytes": 5475
+      },
+      {
+        "file": "im/plugin-src/host/single-entry.mjs",
+        "bytes": 958
+      },
+      {
+        "file": "im/plugin-src/host/update-rpc.mjs",
+        "bytes": 2624
+      },
+      {
+        "file": "im/plugin-src/host/update-runtime.mjs",
+        "bytes": 15037
+      },
+      {
+        "file": "im/plugin-src/host/update-service.mjs",
+        "bytes": 16796
+      },
+      {
+        "file": "im/plugin-src/management-rpc.mjs",
+        "bytes": 4164
+      },
+      {
+        "file": "im/src/channels/dingtalk/config-store.mjs",
+        "bytes": 9895
+      },
+      {
+        "file": "im/src/channels/dingtalk/connection-error.mjs",
+        "bytes": 11721
+      },
+      {
+        "file": "im/src/channels/dingtalk/device-auth.mjs",
+        "bytes": 7809
+      },
+      {
+        "file": "im/src/channels/dingtalk/dingtalk-api.mjs",
+        "bytes": 43056
+      },
+      {
+        "file": "im/src/channels/dingtalk/dingtalk-bridge.mjs",
+        "bytes": 74780
+      },
+      {
+        "file": "im/src/channels/dingtalk/dingtalk-card-stream.mjs",
+        "bytes": 7751
+      },
+      {
+        "file": "im/src/channels/dingtalk/dingtalk-controller.mjs",
+        "bytes": 34934
+      },
+      {
+        "file": "im/src/channels/dingtalk/dingtalk-menu.mjs",
+        "bytes": 4702
+      },
+      {
+        "file": "im/src/channels/dingtalk/dingtalk-runtime.mjs",
+        "bytes": 18046
+      },
+      {
+        "file": "im/src/channels/dingtalk/harness-client.mjs",
+        "bytes": 397
+      },
+      {
+        "file": "im/src/channels/dingtalk/state-store.mjs",
+        "bytes": 11430
+      },
+      {
+        "file": "im/src/channels/discord/config-store.mjs",
+        "bytes": 1380
+      },
+      {
+        "file": "im/src/channels/discord/discord-api.mjs",
+        "bytes": 13194
+      },
+      {
+        "file": "im/src/channels/discord/discord-bridge.mjs",
+        "bytes": 529
+      },
+      {
+        "file": "im/src/channels/discord/discord-controller.mjs",
+        "bytes": 1897
+      },
+      {
+        "file": "im/src/channels/discord/discord-runtime.mjs",
+        "bytes": 36247
+      },
+      {
+        "file": "im/src/channels/discord/harness-client.mjs",
+        "bytes": 252
+      },
+      {
+        "file": "im/src/channels/discord/state-store.mjs",
+        "bytes": 147
+      },
+      {
+        "file": "im/src/channels/email/config-store.mjs",
+        "bytes": 7189
+      },
+      {
+        "file": "im/src/channels/email/email-api.mjs",
+        "bytes": 634
+      },
+      {
+        "file": "im/src/channels/email/email-bridge.mjs",
+        "bytes": 581
+      },
+      {
+        "file": "im/src/channels/email/email-controller.mjs",
+        "bytes": 36470
+      },
+      {
+        "file": "im/src/channels/email/email-runtime.mjs",
+        "bytes": 28788
+      },
+      {
+        "file": "im/src/channels/email/harness-client.mjs",
+        "bytes": 223
+      },
+      {
+        "file": "im/src/channels/email/mail-format.mjs",
+        "bytes": 3321
+      },
+      {
+        "file": "im/src/channels/email/state-store.mjs",
+        "bytes": 6849
+      },
+      {
+        "file": "im/src/channels/email/transport.mjs",
+        "bytes": 2547
+      },
+      {
+        "file": "im/src/channels/email/transports/agent-mail.mjs",
+        "bytes": 24315
+      },
+      {
+        "file": "im/src/channels/email/transports/agently-cli.mjs",
+        "bytes": 10032
+      },
+      {
+        "file": "im/src/channels/email/transports/imap-smtp.mjs",
+        "bytes": 6406
+      },
+      {
+        "file": "im/src/channels/feishu/bridge.mjs",
+        "bytes": 274939
+      },
+      {
+        "file": "im/src/channels/feishu/external-consumer.mjs",
+        "bytes": 5414
+      },
+      {
+        "file": "im/src/channels/feishu/feishu-app.mjs",
+        "bytes": 1930
+      },
+      {
+        "file": "im/src/channels/feishu/feishu-cards.mjs",
+        "bytes": 56077
+      },
+      {
+        "file": "im/src/channels/feishu/feishu-channel.mjs",
+        "bytes": 24552
+      },
+      {
+        "file": "im/src/channels/feishu/feishu-runtime.mjs",
+        "bytes": 37485
+      },
+      {
+        "file": "im/src/channels/feishu/group-message-permission-manager.mjs",
+        "bytes": 2237
+      },
+      {
+        "file": "im/src/channels/feishu/group-response-mode.mjs",
+        "bytes": 451
+      },
+      {
+        "file": "im/src/channels/feishu/harness-client.mjs",
+        "bytes": 393
+      },
+      {
+        "file": "im/src/channels/feishu/history-reader.mjs",
+        "bytes": 5536
+      },
+      {
+        "file": "im/src/channels/feishu/live-cot.mjs",
+        "bytes": 7688
+      },
+      {
+        "file": "im/src/channels/feishu/message-utils.mjs",
+        "bytes": 22181
+      },
+      {
+        "file": "im/src/channels/feishu/multi-bot-controller.mjs",
+        "bytes": 63942
+      },
+      {
+        "file": "im/src/channels/feishu/nearby-history.mjs",
+        "bytes": 3933
+      },
+      {
+        "file": "im/src/channels/feishu/plugin-config-store.mjs",
+        "bytes": 8300
+      },
+      {
+        "file": "im/src/channels/feishu/plugin-controller.mjs",
+        "bytes": 7860
+      },
+      {
+        "file": "im/src/channels/feishu/registration-manager.mjs",
+        "bytes": 10289
+      },
+      {
+        "file": "im/src/channels/feishu/repair-manager.mjs",
+        "bytes": 4645
+      },
+      {
+        "file": "im/src/channels/feishu/resource-download.mjs",
+        "bytes": 4695
+      },
+      {
+        "file": "im/src/channels/feishu/slash-command-panel.mjs",
+        "bytes": 9550
+      },
+      {
+        "file": "im/src/channels/feishu/slash-command-registry.mjs",
+        "bytes": 18514
+      },
+      {
+        "file": "im/src/channels/feishu/state-store.mjs",
+        "bytes": 7055
+      },
+      {
+        "file": "im/src/channels/feishu/step-push-mode.mjs",
+        "bytes": 1696
+      },
+      {
+        "file": "im/src/channels/feishu/voice-config.mjs",
+        "bytes": 1748
+      },
+      {
+        "file": "im/src/channels/feishu/voice.mjs",
+        "bytes": 6242
+      },
+      {
+        "file": "im/src/channels/imessage/config-store.mjs",
+        "bytes": 617
+      },
+      {
+        "file": "im/src/channels/imessage/controller.mjs",
+        "bytes": 1185
+      },
+      {
+        "file": "im/src/channels/imessage/harness-client.mjs",
+        "bytes": 232
+      },
+      {
+        "file": "im/src/channels/imessage/imessage-api.mjs",
+        "bytes": 7812
+      },
+      {
+        "file": "im/src/channels/imessage/imessage-bridge.mjs",
+        "bytes": 539
+      },
+      {
+        "file": "im/src/channels/imessage/runtime.mjs",
+        "bytes": 6362
+      },
+      {
+        "file": "im/src/channels/imessage/state-store.mjs",
+        "bytes": 148
+      },
+      {
+        "file": "im/src/channels/matrix/matrix-api.mjs",
+        "bytes": 29555
+      },
+      {
+        "file": "im/src/channels/matrix/matrix-bridge.mjs",
+        "bytes": 537
+      },
+      {
+        "file": "im/src/channels/matrix/matrix-config-store.mjs",
+        "bytes": 18370
+      },
+      {
+        "file": "im/src/channels/matrix/matrix-controller.mjs",
+        "bytes": 16275
+      },
+      {
+        "file": "im/src/channels/matrix/matrix-crypto-store.mjs",
+        "bytes": 10921
+      },
+      {
+        "file": "im/src/channels/matrix/matrix-crypto.mjs",
+        "bytes": 39120
+      },
+      {
+        "file": "im/src/channels/matrix/matrix-harness-client.mjs",
+        "bytes": 249
+      },
+      {
+        "file": "im/src/channels/matrix/matrix-normalize.mjs",
+        "bytes": 18269
+      },
+      {
+        "file": "im/src/channels/matrix/matrix-rich-text.mjs",
+        "bytes": 11872
+      },
+      {
+        "file": "im/src/channels/matrix/matrix-room-history.mjs",
+        "bytes": 25218
+      },
+      {
+        "file": "im/src/channels/matrix/matrix-runtime.mjs",
+        "bytes": 73423
+      },
+      {
+        "file": "im/src/channels/office/config-store.mjs",
+        "bytes": 3830
+      },
+      {
+        "file": "im/src/channels/office/office-controller.mjs",
+        "bytes": 7536
+      },
+      {
+        "file": "im/src/channels/office/office-job-executor.mjs",
+        "bytes": 14176
+      },
+      {
+        "file": "im/src/channels/office/office-runtime.mjs",
+        "bytes": 6133
+      },
+      {
+        "file": "im/src/channels/office/office-transport.mjs",
+        "bytes": 6593
+      },
+      {
+        "file": "im/src/channels/office/protocol.mjs",
+        "bytes": 1610
+      },
+      {
+        "file": "im/src/channels/qq/config-store.mjs",
+        "bytes": 5555
+      },
+      {
+        "file": "im/src/channels/qq/harness-client.mjs",
+        "bytes": 237
+      },
+      {
+        "file": "im/src/channels/qq/markdown-reply.mjs",
+        "bytes": 4102
+      },
+      {
+        "file": "im/src/channels/qq/qq-bridge.mjs",
+        "bytes": 61980
+      },
+      {
+        "file": "im/src/channels/qq/qq-controller.mjs",
+        "bytes": 22717
+      },
+      {
+        "file": "im/src/channels/qq/qq-mention.mjs",
+        "bytes": 1711
+      },
+      {
+        "file": "im/src/channels/qq/qq-menu.mjs",
+        "bytes": 12532
+      },
+      {
+        "file": "im/src/channels/qq/qq-runtime.mjs",
+        "bytes": 11708
+      },
+      {
+        "file": "im/src/channels/qq/qr-auth.mjs",
+        "bytes": 2090
+      },
+      {
+        "file": "im/src/channels/qq/state-error.mjs",
+        "bytes": 678
+      },
+      {
+        "file": "im/src/channels/qq/state-store.mjs",
+        "bytes": 4691
+      },
+      {
+        "file": "im/src/channels/shared/access-policy.mjs",
+        "bytes": 7755
+      },
+      {
+        "file": "im/src/channels/shared/agent-preset.mjs",
+        "bytes": 2368
+      },
+      {
+        "file": "im/src/channels/shared/batch-input.mjs",
+        "bytes": 8255
+      },
+      {
+        "file": "im/src/channels/shared/bot-alias.mjs",
+        "bytes": 877
+      },
+      {
+        "file": "im/src/channels/shared/bot-workspace-store.mjs",
+        "bytes": 100690
+      },
+      {
+        "file": "im/src/channels/shared/busy-message-dispatcher.mjs",
+        "bytes": 4098
+      },
+      {
+        "file": "im/src/channels/shared/clear-command.mjs",
+        "bytes": 3893
+      },
+      {
+        "file": "im/src/channels/shared/command-catalog.mjs",
+        "bytes": 5143
+      },
+      {
+        "file": "im/src/channels/shared/command-list-snapshots.mjs",
+        "bytes": 1173
+      },
+      {
+        "file": "im/src/channels/shared/command-permission.mjs",
+        "bytes": 1294
+      },
+      {
+        "file": "im/src/channels/shared/compact-command.mjs",
+        "bytes": 4951
+      },
+      {
+        "file": "im/src/channels/shared/config-read-error.mjs",
+        "bytes": 783
+      },
+      {
+        "file": "im/src/channels/shared/connection-error.mjs",
+        "bytes": 15271
+      },
+      {
+        "file": "im/src/channels/shared/connection-test.mjs",
+        "bytes": 2089
+      },
+      {
+        "file": "im/src/channels/shared/context-enhancement.mjs",
+        "bytes": 16617
+      },
+      {
+        "file": "im/src/channels/shared/control-command.mjs",
+        "bytes": 4811
+      },
+      {
+        "file": "im/src/channels/shared/conversation-state-store.mjs",
+        "bytes": 5252
+      },
+      {
+        "file": "im/src/channels/shared/conversation/ambient-provider.mjs",
+        "bytes": 5516
+      },
+      {
+        "file": "im/src/channels/shared/conversation/context-builder.mjs",
+        "bytes": 5743
+      },
+      {
+        "file": "im/src/channels/shared/conversation/reply-context.mjs",
+        "bytes": 3532
+      },
+      {
+        "file": "im/src/channels/shared/conversation/root-context.mjs",
+        "bytes": 4135
+      },
+      {
+        "file": "im/src/channels/shared/conversation/route.mjs",
+        "bytes": 3341
+      },
+      {
+        "file": "im/src/channels/shared/conversation/trigger-policy.mjs",
+        "bytes": 3852
+      },
+      {
+        "file": "im/src/channels/shared/default-workspace.mjs",
+        "bytes": 1111
+      },
+      {
+        "file": "im/src/channels/shared/deferred-delivery-coordinator.mjs",
+        "bytes": 11547
+      },
+      {
+        "file": "im/src/channels/shared/deferred-delivery.mjs",
+        "bytes": 6876
+      },
+      {
+        "file": "im/src/channels/shared/deferred-state.mjs",
+        "bytes": 2242
+      },
+      {
+        "file": "im/src/channels/shared/diagnostic-details.mjs",
+        "bytes": 8703
+      },
+      {
+        "file": "im/src/channels/shared/editable-message-stream.mjs",
+        "bytes": 3009
+      },
+      {
+        "file": "im/src/channels/shared/file-download.mjs",
+        "bytes": 2126
+      },
+      {
+        "file": "im/src/channels/shared/harness-approval.mjs",
+        "bytes": 26034
+      },
+      {
+        "file": "im/src/channels/shared/harness-client.mjs",
+        "bytes": 93267
+      },
+      {
+        "file": "im/src/channels/shared/harness-mux.mjs",
+        "bytes": 4773
+      },
+      {
+        "file": "im/src/channels/shared/harness-question.mjs",
+        "bytes": 3816
+      },
+      {
+        "file": "im/src/channels/shared/harness-session-binding.mjs",
+        "bytes": 4512
+      },
+      {
+        "file": "im/src/channels/shared/history-command.mjs",
+        "bytes": 8956
+      },
+      {
+        "file": "im/src/channels/shared/i18n-en.mjs",
+        "bytes": 1335
+      },
+      {
+        "file": "im/src/channels/shared/i18n-en/diagnostics.mjs",
+        "bytes": 7266
+      },
+      {
+        "file": "im/src/channels/shared/i18n-en/dingtalk.mjs",
+        "bytes": 9697
+      },
+      {
+        "file": "im/src/channels/shared/i18n-en/discord.mjs",
+        "bytes": 800
+      },
+      {
+        "file": "im/src/channels/shared/i18n-en/email.mjs",
+        "bytes": 1718
+      },
+      {
+        "file": "im/src/channels/shared/i18n-en/feishu.mjs",
+        "bytes": 35916
+      },
+      {
+        "file": "im/src/channels/shared/i18n-en/image-input.mjs",
+        "bytes": 2632
+      },
+      {
+        "file": "im/src/channels/shared/i18n-en/matrix.mjs",
+        "bytes": 7536
+      },
+      {
+        "file": "im/src/channels/shared/i18n-en/office.mjs",
+        "bytes": 2103
+      },
+      {
+        "file": "im/src/channels/shared/i18n-en/permission.mjs",
+        "bytes": 3868
+      },
+      {
+        "file": "im/src/channels/shared/i18n-en/qq.mjs",
+        "bytes": 7057
+      },
+      {
+        "file": "im/src/channels/shared/i18n-en/shared-a.mjs",
+        "bytes": 23801
+      },
+      {
+        "file": "im/src/channels/shared/i18n-en/shared-b.mjs",
+        "bytes": 22384
+      },
+      {
+        "file": "im/src/channels/shared/i18n-en/shared-c.mjs",
+        "bytes": 16061
+      },
+      {
+        "file": "im/src/channels/shared/i18n-en/slack.mjs",
+        "bytes": 1934
+      },
+      {
+        "file": "im/src/channels/shared/i18n-en/telegram.mjs",
+        "bytes": 1761
+      },
+      {
+        "file": "im/src/channels/shared/i18n-en/wecom-app.mjs",
+        "bytes": 3758
+      },
+      {
+        "file": "im/src/channels/shared/i18n-en/wecom.mjs",
+        "bytes": 6087
+      },
+      {
+        "file": "im/src/channels/shared/i18n-en/weixin.mjs",
+        "bytes": 12072
+      },
+      {
+        "file": "im/src/channels/shared/i18n.mjs",
+        "bytes": 3010
+      },
+      {
+        "file": "im/src/channels/shared/im-source-guidance.mjs",
+        "bytes": 2521
+      },
+      {
+        "file": "im/src/channels/shared/image-input-policy.mjs",
+        "bytes": 1380
+      },
+      {
+        "file": "im/src/channels/shared/image-input-settings-store.mjs",
+        "bytes": 2280
+      },
+      {
+        "file": "im/src/channels/shared/image-input.mjs",
+        "bytes": 6477
+      },
+      {
+        "file": "im/src/channels/shared/image-prompt.mjs",
+        "bytes": 12894
+      },
+      {
+        "file": "im/src/channels/shared/inbound-access.mjs",
+        "bytes": 1663
+      },
+      {
+        "file": "im/src/channels/shared/inbound-file.mjs",
+        "bytes": 11041
+      },
+      {
+        "file": "im/src/channels/shared/inbound-ttl-store.mjs",
+        "bytes": 3749
+      },
+      {
+        "file": "im/src/channels/shared/inbound-ttl.mjs",
+        "bytes": 803
+      },
+      {
+        "file": "im/src/channels/shared/injected-context.mjs",
+        "bytes": 16760
+      },
+      {
+        "file": "im/src/channels/shared/interface-language-store.mjs",
+        "bytes": 4335
+      },
+      {
+        "file": "im/src/channels/shared/interface-language.mjs",
+        "bytes": 2359
+      },
+      {
+        "file": "im/src/channels/shared/markdown-chunks.mjs",
+        "bytes": 10754
+      },
+      {
+        "file": "im/src/channels/shared/message-failure.mjs",
+        "bytes": 14515
+      },
+      {
+        "file": "im/src/channels/shared/message-mode.mjs",
+        "bytes": 703
+      },
+      {
+        "file": "im/src/channels/shared/model-command.mjs",
+        "bytes": 27516
+      },
+      {
+        "file": "im/src/channels/shared/model-setting.mjs",
+        "bytes": 5530
+      },
+      {
+        "file": "im/src/channels/shared/permission-command.mjs",
+        "bytes": 7955
+      },
+      {
+        "file": "im/src/channels/shared/preset-command.mjs",
+        "bytes": 9665
+      },
+      {
+        "file": "im/src/channels/shared/semantic/artifact-delivery.mjs",
+        "bytes": 5176
+      },
+      {
+        "file": "im/src/channels/shared/semantic/artifact.mjs",
+        "bytes": 29961
+      },
+      {
+        "file": "im/src/channels/shared/semantic/delivery.mjs",
+        "bytes": 6036
+      },
+      {
+        "file": "im/src/channels/shared/semantic/reply-reference.mjs",
+        "bytes": 5714
+      },
+      {
+        "file": "im/src/channels/shared/session-binding-lock.mjs",
+        "bytes": 1189
+      },
+      {
+        "file": "im/src/channels/shared/session-channel-labels.mjs",
+        "bytes": 1044
+      },
+      {
+        "file": "im/src/channels/shared/session-reply-recovery.mjs",
+        "bytes": 4277
+      },
+      {
+        "file": "im/src/channels/shared/session-sync-registry.mjs",
+        "bytes": 732
+      },
+      {
+        "file": "im/src/channels/shared/session-title.mjs",
+        "bytes": 2890
+      },
+      {
+        "file": "im/src/channels/shared/single-session-boundary.mjs",
+        "bytes": 275
+      },
+      {
+        "file": "im/src/channels/shared/speaker-label.mjs",
+        "bytes": 2268
+      },
+      {
+        "file": "im/src/channels/shared/status-reaction.mjs",
+        "bytes": 3183
+      },
+      {
+        "file": "im/src/channels/shared/text-harness-bridge.mjs",
+        "bytes": 81156
+      },
+      {
+        "file": "im/src/channels/shared/token-bot-controller.mjs",
+        "bytes": 17923
+      },
+      {
+        "file": "im/src/channels/shared/token-config-store.mjs",
+        "bytes": 7088
+      },
+      {
+        "file": "im/src/channels/shared/workspace-command.mjs",
+        "bytes": 24667
+      },
+      {
+        "file": "im/src/channels/shared/workspace-session.mjs",
+        "bytes": 8702
+      },
+      {
+        "file": "im/src/channels/slack/config-store.mjs",
+        "bytes": 6157
+      },
+      {
+        "file": "im/src/channels/slack/harness-client.mjs",
+        "bytes": 246
+      },
+      {
+        "file": "im/src/channels/slack/slack-api.mjs",
+        "bytes": 20468
+      },
+      {
+        "file": "im/src/channels/slack/slack-bridge.mjs",
+        "bytes": 547
+      },
+      {
+        "file": "im/src/channels/slack/slack-controller.mjs",
+        "bytes": 15769
+      },
+      {
+        "file": "im/src/channels/slack/slack-runtime.mjs",
+        "bytes": 27584
+      },
+      {
+        "file": "im/src/channels/slack/state-store.mjs",
+        "bytes": 145
+      },
+      {
+        "file": "im/src/channels/telegram/config-store.mjs",
+        "bytes": 3011
+      },
+      {
+        "file": "im/src/channels/telegram/harness-client.mjs",
+        "bytes": 255
+      },
+      {
+        "file": "im/src/channels/telegram/state-store.mjs",
+        "bytes": 148
+      },
+      {
+        "file": "im/src/channels/telegram/telegram-api.mjs",
+        "bytes": 17869
+      },
+      {
+        "file": "im/src/channels/telegram/telegram-bridge.mjs",
+        "bytes": 3020
+      },
+      {
+        "file": "im/src/channels/telegram/telegram-controller.mjs",
+        "bytes": 1539
+      },
+      {
+        "file": "im/src/channels/telegram/telegram-http.mjs",
+        "bytes": 543
+      },
+      {
+        "file": "im/src/channels/telegram/telegram-rich-message.mjs",
+        "bytes": 5364
+      },
+      {
+        "file": "im/src/channels/telegram/telegram-runtime.mjs",
+        "bytes": 54108
+      },
+      {
+        "file": "im/src/channels/wecom-app/callback-server.mjs",
+        "bytes": 16068
+      },
+      {
+        "file": "im/src/channels/wecom-app/config-store.mjs",
+        "bytes": 8987
+      },
+      {
+        "file": "im/src/channels/wecom-app/harness-client.mjs",
+        "bytes": 256
+      },
+      {
+        "file": "im/src/channels/wecom-app/state-store.mjs",
+        "bytes": 3281
+      },
+      {
+        "file": "im/src/channels/wecom-app/wecom-app-api.mjs",
+        "bytes": 16947
+      },
+      {
+        "file": "im/src/channels/wecom-app/wecom-app-bridge.mjs",
+        "bytes": 43066
+      },
+      {
+        "file": "im/src/channels/wecom-app/wecom-app-controller.mjs",
+        "bytes": 20050
+      },
+      {
+        "file": "im/src/channels/wecom-app/wecom-app-runtime.mjs",
+        "bytes": 7640
+      },
+      {
+        "file": "im/src/channels/wecom/config-store.mjs",
+        "bytes": 5712
+      },
+      {
+        "file": "im/src/channels/wecom/harness-client.mjs",
+        "bytes": 246
+      },
+      {
+        "file": "im/src/channels/wecom/qr-auth.mjs",
+        "bytes": 3286
+      },
+      {
+        "file": "im/src/channels/wecom/send-error.mjs",
+        "bytes": 1601
+      },
+      {
+        "file": "im/src/channels/wecom/state-store.mjs",
+        "bytes": 3278
+      },
+      {
+        "file": "im/src/channels/wecom/wecom-bridge.mjs",
+        "bytes": 75442
+      },
+      {
+        "file": "im/src/channels/wecom/wecom-cards.mjs",
+        "bytes": 4533
+      },
+      {
+        "file": "im/src/channels/wecom/wecom-controller.mjs",
+        "bytes": 23813
+      },
+      {
+        "file": "im/src/channels/wecom/wecom-runtime.mjs",
+        "bytes": 10074
+      },
+      {
+        "file": "im/src/channels/weixin/config-store.mjs",
+        "bytes": 7149
+      },
+      {
+        "file": "im/src/channels/weixin/connection-error.en.mjs",
+        "bytes": 14969
+      },
+      {
+        "file": "im/src/channels/weixin/connection-error.mjs",
+        "bytes": 11632
+      },
+      {
+        "file": "im/src/channels/weixin/diagnostic-details.mjs",
+        "bytes": 136
+      },
+      {
+        "file": "im/src/channels/weixin/harness-client.mjs",
+        "bytes": 393
+      },
+      {
+        "file": "im/src/channels/weixin/state-store.mjs",
+        "bytes": 10184
+      },
+      {
+        "file": "im/src/channels/weixin/weixin-api.mjs",
+        "bytes": 34151
+      },
+      {
+        "file": "im/src/channels/weixin/weixin-bridge.mjs",
+        "bytes": 58437
+      },
+      {
+        "file": "im/src/channels/weixin/weixin-controller.mjs",
+        "bytes": 26995
+      },
+      {
+        "file": "im/src/channels/weixin/weixin-runtime.mjs",
+        "bytes": 15131
+      },
+      {
+        "file": "node_modules/@larksuiteoapi/node-sdk/lib/index.js",
+        "bytes": 6256284
+      },
+      {
+        "file": "node_modules/@protobufjs/aspromise/index.js",
+        "bytes": 1592
+      },
+      {
+        "file": "node_modules/@protobufjs/base64/index.js",
+        "bytes": 3943
+      },
+      {
+        "file": "node_modules/@protobufjs/eventemitter/index.js",
+        "bytes": 2348
+      },
+      {
+        "file": "node_modules/@protobufjs/float/index.js",
+        "bytes": 11448
+      },
+      {
+        "file": "node_modules/@protobufjs/pool/index.js",
+        "bytes": 1240
+      },
+      {
+        "file": "node_modules/@protobufjs/utf8/index.js",
+        "bytes": 3929
+      },
+      {
+        "file": "node_modules/asynckit/index.js",
+        "bytes": 156
+      },
+      {
+        "file": "node_modules/asynckit/lib/abort.js",
+        "bytes": 497
+      },
+      {
+        "file": "node_modules/asynckit/lib/async.js",
+        "bytes": 599
+      },
+      {
+        "file": "node_modules/asynckit/lib/defer.js",
+        "bytes": 441
+      },
+      {
+        "file": "node_modules/asynckit/lib/iterate.js",
+        "bytes": 1794
+      },
+      {
+        "file": "node_modules/asynckit/lib/state.js",
+        "bytes": 941
+      },
+      {
+        "file": "node_modules/asynckit/lib/terminator.js",
+        "bytes": 533
+      },
+      {
+        "file": "node_modules/asynckit/parallel.js",
+        "bytes": 1017
+      },
+      {
+        "file": "node_modules/asynckit/serial.js",
+        "bytes": 501
+      },
+      {
+        "file": "node_modules/asynckit/serialOrdered.js",
+        "bytes": 1751
+      },
+      {
+        "file": "node_modules/axios/dist/node/axios.cjs",
+        "bytes": 231875
+      },
+      {
+        "file": "node_modules/call-bind-apply-helpers/actualApply.js",
+        "bytes": 280
+      },
+      {
+        "file": "node_modules/call-bind-apply-helpers/functionApply.js",
+        "bytes": 99
+      },
+      {
+        "file": "node_modules/call-bind-apply-helpers/functionCall.js",
+        "bytes": 97
+      },
+      {
+        "file": "node_modules/call-bind-apply-helpers/index.js",
+        "bytes": 511
+      },
+      {
+        "file": "node_modules/call-bind-apply-helpers/reflectApply.js",
+        "bytes": 132
+      },
+      {
+        "file": "node_modules/call-bound/index.js",
+        "bytes": 687
+      },
+      {
+        "file": "node_modules/combined-stream/lib/combined_stream.js",
+        "bytes": 4687
+      },
+      {
+        "file": "node_modules/debug/src/browser.js",
+        "bytes": 4734
+      },
+      {
+        "file": "node_modules/debug/src/debug.js",
+        "bytes": 4394
+      },
+      {
+        "file": "node_modules/debug/src/index.js",
+        "bytes": 263
+      },
+      {
+        "file": "node_modules/debug/src/node.js",
+        "bytes": 6015
+      },
+      {
+        "file": "node_modules/delayed-stream/lib/delayed_stream.js",
+        "bytes": 2319
+      },
+      {
+        "file": "node_modules/dunder-proto/get.js",
+        "bytes": 980
+      },
+      {
+        "file": "node_modules/es-define-property/index.js",
+        "bytes": 288
+      },
+      {
+        "file": "node_modules/es-errors/eval.js",
+        "bytes": 75
+      },
+      {
+        "file": "node_modules/es-errors/index.js",
+        "bytes": 66
+      },
+      {
+        "file": "node_modules/es-errors/range.js",
+        "bytes": 77
+      },
+      {
+        "file": "node_modules/es-errors/ref.js",
+        "bytes": 79
+      },
+      {
+        "file": "node_modules/es-errors/syntax.js",
+        "bytes": 79
+      },
+      {
+        "file": "node_modules/es-errors/type.js",
+        "bytes": 75
+      },
+      {
+        "file": "node_modules/es-errors/uri.js",
+        "bytes": 73
+      },
+      {
+        "file": "node_modules/es-object-atoms/index.js",
+        "bytes": 67
+      },
+      {
+        "file": "node_modules/es-set-tostringtag/index.js",
+        "bytes": 1213
+      },
+      {
+        "file": "node_modules/follow-redirects/debug.js",
+        "bytes": 315
+      },
+      {
+        "file": "node_modules/follow-redirects/index.js",
+        "bytes": 21539
+      },
+      {
+        "file": "node_modules/form-data/lib/form_data.js",
+        "bytes": 15086
+      },
+      {
+        "file": "node_modules/form-data/lib/populate.js",
+        "bytes": 232
+      },
+      {
+        "file": "node_modules/form-data/node_modules/mime-db/db.json",
+        "bytes": 185882
+      },
+      {
+        "file": "node_modules/form-data/node_modules/mime-db/index.js",
+        "bytes": 189
+      },
+      {
+        "file": "node_modules/form-data/node_modules/mime-types/index.js",
+        "bytes": 3663
+      },
+      {
+        "file": "node_modules/function-bind/implementation.js",
+        "bytes": 2043
+      },
+      {
+        "file": "node_modules/function-bind/index.js",
+        "bytes": 126
+      },
+      {
+        "file": "node_modules/get-intrinsic/index.js",
+        "bytes": 14439
+      },
+      {
+        "file": "node_modules/get-proto/index.js",
+        "bytes": 821
+      },
+      {
+        "file": "node_modules/get-proto/Object.getPrototypeOf.js",
+        "bytes": 156
+      },
+      {
+        "file": "node_modules/get-proto/Reflect.getPrototypeOf.js",
+        "bytes": 150
+      },
+      {
+        "file": "node_modules/gopd/gOPD.js",
+        "bytes": 97
+      },
+      {
+        "file": "node_modules/gopd/index.js",
+        "bytes": 206
+      },
+      {
+        "file": "node_modules/has-symbols/index.js",
+        "bytes": 447
+      },
+      {
+        "file": "node_modules/has-symbols/shams.js",
+        "bytes": 1922
+      },
+      {
+        "file": "node_modules/has-tostringtag/shams.js",
+        "bytes": 189
+      },
+      {
+        "file": "node_modules/hasown/index.js",
+        "bytes": 206
+      },
+      {
+        "file": "node_modules/https-proxy-agent/dist/agent.js",
+        "bytes": 7841
+      },
+      {
+        "file": "node_modules/https-proxy-agent/dist/index.js",
+        "bytes": 579
+      },
+      {
+        "file": "node_modules/https-proxy-agent/dist/parse-proxy-response.js",
+        "bytes": 2460
+      },
+      {
+        "file": "node_modules/https-proxy-agent/node_modules/agent-base/dist/src/index.js",
+        "bytes": 7910
+      },
+      {
+        "file": "node_modules/https-proxy-agent/node_modules/agent-base/dist/src/promisify.js",
+        "bytes": 495
+      },
+      {
+        "file": "node_modules/https-proxy-agent/node_modules/debug/src/browser.js",
+        "bytes": 6103
+      },
+      {
+        "file": "node_modules/https-proxy-agent/node_modules/debug/src/common.js",
+        "bytes": 6915
+      },
+      {
+        "file": "node_modules/https-proxy-agent/node_modules/debug/src/index.js",
+        "bytes": 314
+      },
+      {
+        "file": "node_modules/https-proxy-agent/node_modules/debug/src/node.js",
+        "bytes": 4728
+      },
+      {
+        "file": "node_modules/https-proxy-agent/node_modules/ms/index.js",
+        "bytes": 3024
+      },
+      {
+        "file": "node_modules/lodash.identity/index.js",
+        "bytes": 761
+      },
+      {
+        "file": "node_modules/lodash.merge/index.js",
+        "bytes": 51155
+      },
+      {
+        "file": "node_modules/lodash.pickby/index.js",
+        "bytes": 64343
+      },
+      {
+        "file": "node_modules/long/umd/index.js",
+        "bytes": 50994
+      },
+      {
+        "file": "node_modules/math-intrinsics/abs.js",
+        "bytes": 73
+      },
+      {
+        "file": "node_modules/math-intrinsics/floor.js",
+        "bytes": 77
+      },
+      {
+        "file": "node_modules/math-intrinsics/isNaN.js",
+        "bytes": 121
+      },
+      {
+        "file": "node_modules/math-intrinsics/max.js",
+        "bytes": 73
+      },
+      {
+        "file": "node_modules/math-intrinsics/min.js",
+        "bytes": 73
+      },
+      {
+        "file": "node_modules/math-intrinsics/pow.js",
+        "bytes": 73
+      },
+      {
+        "file": "node_modules/math-intrinsics/round.js",
+        "bytes": 77
+      },
+      {
+        "file": "node_modules/math-intrinsics/sign.js",
+        "bytes": 214
+      },
+      {
+        "file": "node_modules/ms/index.js",
+        "bytes": 2764
+      },
+      {
+        "file": "node_modules/object-inspect/index.js",
+        "bytes": 19059
+      },
+      {
+        "file": "node_modules/object-inspect/util.inspect.js",
+        "bytes": 42
+      },
+      {
+        "file": "node_modules/protobufjs/minimal.js",
+        "bytes": 96
+      },
+      {
+        "file": "node_modules/protobufjs/src/index-minimal.js",
+        "bytes": 925
+      },
+      {
+        "file": "node_modules/protobufjs/src/reader_buffer.js",
+        "bytes": 1252
+      },
+      {
+        "file": "node_modules/protobufjs/src/reader.js",
+        "bytes": 12363
+      },
+      {
+        "file": "node_modules/protobufjs/src/roots.js",
+        "bytes": 471
+      },
+      {
+        "file": "node_modules/protobufjs/src/rpc.js",
+        "bytes": 1204
+      },
+      {
+        "file": "node_modules/protobufjs/src/rpc/service.js",
+        "bytes": 4763
+      },
+      {
+        "file": "node_modules/protobufjs/src/util/longbits.js",
+        "bytes": 5393
+      },
+      {
+        "file": "node_modules/protobufjs/src/util/minimal.js",
+        "bytes": 14686
+      },
+      {
+        "file": "node_modules/protobufjs/src/writer_buffer.js",
+        "bytes": 2356
+      },
+      {
+        "file": "node_modules/protobufjs/src/writer.js",
+        "bytes": 12077
+      },
+      {
+        "file": "node_modules/qs/lib/formats.js",
+        "bytes": 476
+      },
+      {
+        "file": "node_modules/qs/lib/index.js",
+        "bytes": 211
+      },
+      {
+        "file": "node_modules/qs/lib/parse.js",
+        "bytes": 19010
+      },
+      {
+        "file": "node_modules/qs/lib/stringify.js",
+        "bytes": 12167
+      },
+      {
+        "file": "node_modules/qs/lib/utils.js",
+        "bytes": 17756
+      },
+      {
+        "file": "node_modules/react/cjs/react.development.js",
+        "bytes": 87593
+      },
+      {
+        "file": "node_modules/react/cjs/react.production.min.js",
+        "bytes": 6930
+      },
+      {
+        "file": "node_modules/react/index.js",
+        "bytes": 190
+      },
+      {
+        "file": "node_modules/semver/classes/comparator.js",
+        "bytes": 3631
+      },
+      {
+        "file": "node_modules/semver/classes/range.js",
+        "bytes": 15647
+      },
+      {
+        "file": "node_modules/semver/classes/semver.js",
+        "bytes": 9891
+      },
+      {
+        "file": "node_modules/semver/functions/clean.js",
+        "bytes": 205
+      },
+      {
+        "file": "node_modules/semver/functions/cmp.js",
+        "bytes": 961
+      },
+      {
+        "file": "node_modules/semver/functions/coerce.js",
+        "bytes": 2004
+      },
+      {
+        "file": "node_modules/semver/functions/compare-build.js",
+        "bytes": 281
+      },
+      {
+        "file": "node_modules/semver/functions/compare-loose.js",
+        "bytes": 132
+      },
+      {
+        "file": "node_modules/semver/functions/compare.js",
+        "bytes": 170
+      },
+      {
+        "file": "node_modules/semver/functions/diff.js",
+        "bytes": 1423
+      },
+      {
+        "file": "node_modules/semver/functions/eq.js",
+        "bytes": 126
+      },
+      {
+        "file": "node_modules/semver/functions/gt.js",
+        "bytes": 124
+      },
+      {
+        "file": "node_modules/semver/functions/gte.js",
+        "bytes": 127
+      },
+      {
+        "file": "node_modules/semver/functions/inc.js",
+        "bytes": 478
+      },
+      {
+        "file": "node_modules/semver/functions/lt.js",
+        "bytes": 124
+      },
+      {
+        "file": "node_modules/semver/functions/lte.js",
+        "bytes": 127
+      },
+      {
+        "file": "node_modules/semver/functions/major.js",
+        "bytes": 136
+      },
+      {
+        "file": "node_modules/semver/functions/minor.js",
+        "bytes": 136
+      },
+      {
+        "file": "node_modules/semver/functions/neq.js",
+        "bytes": 128
+      },
+      {
+        "file": "node_modules/semver/functions/parse.js",
+        "bytes": 331
+      },
+      {
+        "file": "node_modules/semver/functions/patch.js",
+        "bytes": 136
+      },
+      {
+        "file": "node_modules/semver/functions/prerelease.js",
+        "bytes": 234
+      },
+      {
+        "file": "node_modules/semver/functions/rcompare.js",
+        "bytes": 132
+      },
+      {
+        "file": "node_modules/semver/functions/rsort.js",
+        "bytes": 163
+      },
+      {
+        "file": "node_modules/semver/functions/satisfies.js",
+        "bytes": 247
+      },
+      {
+        "file": "node_modules/semver/functions/sort.js",
+        "bytes": 161
+      },
+      {
+        "file": "node_modules/semver/functions/truncate.js",
+        "bytes": 1021
+      },
+      {
+        "file": "node_modules/semver/functions/valid.js",
+        "bytes": 176
+      },
+      {
+        "file": "node_modules/semver/index.js",
+        "bytes": 2691
+      },
+      {
+        "file": "node_modules/semver/internal/constants.js",
+        "bytes": 873
+      },
+      {
+        "file": "node_modules/semver/internal/debug.js",
+        "bytes": 240
+      },
+      {
+        "file": "node_modules/semver/internal/identifiers.js",
+        "bytes": 525
+      },
+      {
+        "file": "node_modules/semver/internal/lrucache.js",
+        "bytes": 802
+      },
+      {
+        "file": "node_modules/semver/internal/parse-options.js",
+        "bytes": 338
+      },
+      {
+        "file": "node_modules/semver/internal/re.js",
+        "bytes": 8139
+      },
+      {
+        "file": "node_modules/semver/ranges/gtr.js",
+        "bytes": 231
+      },
+      {
+        "file": "node_modules/semver/ranges/intersects.js",
+        "bytes": 224
+      },
+      {
+        "file": "node_modules/semver/ranges/ltr.js",
+        "bytes": 227
+      },
+      {
+        "file": "node_modules/semver/ranges/max-satisfying.js",
+        "bytes": 593
+      },
+      {
+        "file": "node_modules/semver/ranges/min-satisfying.js",
+        "bytes": 591
+      },
+      {
+        "file": "node_modules/semver/ranges/min-version.js",
+        "bytes": 1514
+      },
+      {
+        "file": "node_modules/semver/ranges/outside.js",
+        "bytes": 2204
+      },
+      {
+        "file": "node_modules/semver/ranges/simplify.js",
+        "bytes": 1355
+      },
+      {
+        "file": "node_modules/semver/ranges/subset.js",
+        "bytes": 7478
+      },
+      {
+        "file": "node_modules/semver/ranges/to-comparators.js",
+        "bytes": 282
+      },
+      {
+        "file": "node_modules/semver/ranges/valid.js",
+        "bytes": 326
+      },
+      {
+        "file": "node_modules/side-channel-list/index.js",
+        "bytes": 3289
+      },
+      {
+        "file": "node_modules/side-channel-map/index.js",
+        "bytes": 1981
+      },
+      {
+        "file": "node_modules/side-channel-weakmap/index.js",
+        "bytes": 2708
+      },
+      {
+        "file": "node_modules/side-channel/index.js",
+        "bytes": 1222
+      },
+      {
+        "file": "node_modules/ws/index.js",
+        "bytes": 796
+      },
+      {
+        "file": "node_modules/ws/lib/buffer-util.js",
+        "bytes": 3056
+      },
+      {
+        "file": "node_modules/ws/lib/constants.js",
+        "bytes": 503
+      },
+      {
+        "file": "node_modules/ws/lib/event-target.js",
+        "bytes": 7321
+      },
+      {
+        "file": "node_modules/ws/lib/extension.js",
+        "bytes": 6183
+      },
+      {
+        "file": "node_modules/ws/lib/limiter.js",
+        "bytes": 1034
+      },
+      {
+        "file": "node_modules/ws/lib/permessage-deflate.js",
+        "bytes": 14669
+      },
+      {
+        "file": "node_modules/ws/lib/receiver.js",
+        "bytes": 17439
+      },
+      {
+        "file": "node_modules/ws/lib/sender.js",
+        "bytes": 16886
+      },
+      {
+        "file": "node_modules/ws/lib/stream.js",
+        "bytes": 4204
+      },
+      {
+        "file": "node_modules/ws/lib/subprotocol.js",
+        "bytes": 1498
+      },
+      {
+        "file": "node_modules/ws/lib/validation.js",
+        "bytes": 3903
+      },
+      {
+        "file": "node_modules/ws/lib/websocket-server.js",
+        "bytes": 17022
+      },
+      {
+        "file": "node_modules/ws/lib/websocket.js",
+        "bytes": 37848
+      }
+    ]
+  },
+  "client": {
+    "file": "../im-client.js",
+    "sha256": "ab57d5cb2146f5d0dd79ad77f8f3da9724cffa6778853b27cc5a8429baf58777",
+    "inputs": [
+      {
+        "file": "im/package.json",
+        "bytes": 56
+      },
+      {
+        "file": "im/plugin-src/client/access-policy-settings.js",
+        "bytes": 15281
+      },
+      {
+        "file": "im/plugin-src/client/agent-preset.js",
+        "bytes": 4213
+      },
+      {
+        "file": "im/plugin-src/client/bot-alias.js",
+        "bytes": 7664
+      },
+      {
+        "file": "im/plugin-src/client/bot-general-settings.js",
+        "bytes": 5607
+      },
+      {
+        "file": "im/plugin-src/client/bot-settings-tabs.js",
+        "bytes": 4364
+      },
+      {
+        "file": "im/plugin-src/client/channel-card-meta.js",
+        "bytes": 4293
+      },
+      {
+        "file": "im/plugin-src/client/channel-logos.js",
+        "bytes": 10743
+      },
+      {
+        "file": "im/plugin-src/client/channels/dingtalk/api.js",
+        "bytes": 10736
+      },
+      {
+        "file": "im/plugin-src/client/channels/dingtalk/index.js",
+        "bytes": 40575
+      },
+      {
+        "file": "im/plugin-src/client/channels/dingtalk/styles.js",
+        "bytes": 11538
+      },
+      {
+        "file": "im/plugin-src/client/channels/discord/api.js",
+        "bytes": 447
+      },
+      {
+        "file": "im/plugin-src/client/channels/discord/index.js",
+        "bytes": 923
+      },
+      {
+        "file": "im/plugin-src/client/channels/discord/styles.js",
+        "bytes": 737
+      },
+      {
+        "file": "im/plugin-src/client/channels/email/api.js",
+        "bytes": 2326
+      },
+      {
+        "file": "im/plugin-src/client/channels/email/index.js",
+        "bytes": 32226
+      },
+      {
+        "file": "im/plugin-src/client/channels/email/styles.js",
+        "bytes": 3228
+      },
+      {
+        "file": "im/plugin-src/client/channels/feishu/api.js",
+        "bytes": 15999
+      },
+      {
+        "file": "im/plugin-src/client/channels/feishu/group-settings.js",
+        "bytes": 22500
+      },
+      {
+        "file": "im/plugin-src/client/channels/feishu/index.js",
+        "bytes": 65566
+      },
+      {
+        "file": "im/plugin-src/client/channels/feishu/slash-panel-settings.js",
+        "bytes": 12439
+      },
+      {
+        "file": "im/plugin-src/client/channels/feishu/styles.js",
+        "bytes": 23275
+      },
+      {
+        "file": "im/plugin-src/client/channels/feishu/voice-editor.js",
+        "bytes": 5004
+      },
+      {
+        "file": "im/plugin-src/client/channels/feishu/voice-settings.js",
+        "bytes": 2559
+      },
+      {
+        "file": "im/plugin-src/client/channels/imessage/api.js",
+        "bytes": 517
+      },
+      {
+        "file": "im/plugin-src/client/channels/imessage/index.js",
+        "bytes": 4080
+      },
+      {
+        "file": "im/plugin-src/client/channels/imessage/styles.js",
+        "bytes": 1216
+      },
+      {
+        "file": "im/plugin-src/client/channels/matrix/api.js",
+        "bytes": 441
+      },
+      {
+        "file": "im/plugin-src/client/channels/matrix/index.js",
+        "bytes": 6106
+      },
+      {
+        "file": "im/plugin-src/client/channels/matrix/styles.js",
+        "bytes": 2163
+      },
+      {
+        "file": "im/plugin-src/client/channels/office/api.js",
+        "bytes": 2065
+      },
+      {
+        "file": "im/plugin-src/client/channels/office/index.js",
+        "bytes": 9553
+      },
+      {
+        "file": "im/plugin-src/client/channels/office/styles.js",
+        "bytes": 5518
+      },
+      {
+        "file": "im/plugin-src/client/channels/qq/api.js",
+        "bytes": 7732
+      },
+      {
+        "file": "im/plugin-src/client/channels/qq/index.js",
+        "bytes": 26720
+      },
+      {
+        "file": "im/plugin-src/client/channels/qq/styles.js",
+        "bytes": 740
+      },
+      {
+        "file": "im/plugin-src/client/channels/shared/collapsible-account.js",
+        "bytes": 3539
+      },
+      {
+        "file": "im/plugin-src/client/channels/shared/token-api.js",
+        "bytes": 5540
+      },
+      {
+        "file": "im/plugin-src/client/channels/shared/token-channel.js",
+        "bytes": 21451
+      },
+      {
+        "file": "im/plugin-src/client/channels/slack/api.js",
+        "bytes": 441
+      },
+      {
+        "file": "im/plugin-src/client/channels/slack/index.js",
+        "bytes": 5113
+      },
+      {
+        "file": "im/plugin-src/client/channels/slack/styles.js",
+        "bytes": 2075
+      },
+      {
+        "file": "im/plugin-src/client/channels/telegram/api.js",
+        "bytes": 452
+      },
+      {
+        "file": "im/plugin-src/client/channels/telegram/index.js",
+        "bytes": 1052
+      },
+      {
+        "file": "im/plugin-src/client/channels/telegram/styles.js",
+        "bytes": 2330
+      },
+      {
+        "file": "im/plugin-src/client/channels/telegram/thinking-traces.js",
+        "bytes": 1172
+      },
+      {
+        "file": "im/plugin-src/client/channels/wecom-app/api.js",
+        "bytes": 5846
+      },
+      {
+        "file": "im/plugin-src/client/channels/wecom-app/index.js",
+        "bytes": 28133
+      },
+      {
+        "file": "im/plugin-src/client/channels/wecom-app/styles.js",
+        "bytes": 1515
+      },
+      {
+        "file": "im/plugin-src/client/channels/wecom/api.js",
+        "bytes": 7326
+      },
+      {
+        "file": "im/plugin-src/client/channels/wecom/index.js",
+        "bytes": 28506
+      },
+      {
+        "file": "im/plugin-src/client/channels/wecom/styles.js",
+        "bytes": 825
+      },
+      {
+        "file": "im/plugin-src/client/channels/weixin/api.js",
+        "bytes": 8642
+      },
+      {
+        "file": "im/plugin-src/client/channels/weixin/connection-error.js",
+        "bytes": 164
+      },
+      {
+        "file": "im/plugin-src/client/channels/weixin/index.js",
+        "bytes": 35070
+      },
+      {
+        "file": "im/plugin-src/client/channels/weixin/styles.js",
+        "bytes": 10058
+      },
+      {
+        "file": "im/plugin-src/client/connection-error.js",
+        "bytes": 7992
+      },
+      {
+        "file": "im/plugin-src/client/context-enhancement.js",
+        "bytes": 18740
+      },
+      {
+        "file": "im/plugin-src/client/credential-binding.js",
+        "bytes": 3637
+      },
+      {
+        "file": "im/plugin-src/client/delivery-settings.js",
+        "bytes": 34248
+      },
+      {
+        "file": "im/plugin-src/client/global-settings.js",
+        "bytes": 17709
+      },
+      {
+        "file": "im/plugin-src/client/i18n.js",
+        "bytes": 121524
+      },
+      {
+        "file": "im/plugin-src/client/index.js",
+        "bytes": 24577
+      },
+      {
+        "file": "im/plugin-src/client/interface-language.js",
+        "bytes": 3658
+      },
+      {
+        "file": "im/plugin-src/client/last-message-error.js",
+        "bytes": 796
+      },
+      {
+        "file": "im/plugin-src/client/lifecycle.js",
+        "bytes": 2338
+      },
+      {
+        "file": "im/plugin-src/client/loopback-recovery.js",
+        "bytes": 2444
+      },
+      {
+        "file": "im/plugin-src/client/model-setting.js",
+        "bytes": 8725
+      },
+      {
+        "file": "im/plugin-src/client/panel-error-boundary.js",
+        "bytes": 612
+      },
+      {
+        "file": "im/plugin-src/client/plugin-page.js",
+        "bytes": 2222
+      },
+      {
+        "file": "im/plugin-src/client/session-channel-logos.js",
+        "bytes": 8884
+      },
+      {
+        "file": "im/plugin-src/client/styles.js",
+        "bytes": 112718
+      },
+      {
+        "file": "im/plugin-src/client/update-panel.js",
+        "bytes": 24382
+      },
+      {
+        "file": "im/plugin-src/client/workspace-directory-picker.js",
+        "bytes": 11152
+      },
+      {
+        "file": "im/plugin-src/client/workspace-editor.js",
+        "bytes": 2327
+      },
+      {
+        "file": "im/plugin-src/client/workspace-snapshot-fence.js",
+        "bytes": 955
+      },
+      {
+        "file": "im/plugin-src/host/rpc-authority.mjs",
+        "bytes": 528
+      },
+      {
+        "file": "im/plugin-src/management-rpc.mjs",
+        "bytes": 4164
+      },
+      {
+        "file": "im/src/channels/feishu/slash-command-panel.mjs",
+        "bytes": 9550
+      },
+      {
+        "file": "im/src/channels/feishu/step-push-mode.mjs",
+        "bytes": 1696
+      },
+      {
+        "file": "im/src/channels/feishu/voice-config.mjs",
+        "bytes": 1748
+      },
+      {
+        "file": "im/src/channels/office/protocol.mjs",
+        "bytes": 1610
+      },
+      {
+        "file": "im/src/channels/shared/access-policy.mjs",
+        "bytes": 7755
+      },
+      {
+        "file": "im/src/channels/shared/bot-alias.mjs",
+        "bytes": 877
+      },
+      {
+        "file": "im/src/channels/shared/context-enhancement.mjs",
+        "bytes": 16617
+      },
+      {
+        "file": "im/src/channels/shared/diagnostic-details.mjs",
+        "bytes": 8703
+      },
+      {
+        "file": "im/src/channels/shared/i18n-en/diagnostics.mjs",
+        "bytes": 7266
+      },
+      {
+        "file": "im/src/channels/shared/i18n-en/image-input.mjs",
+        "bytes": 2632
+      },
+      {
+        "file": "im/src/channels/shared/image-input-policy.mjs",
+        "bytes": 1380
+      },
+      {
+        "file": "im/src/channels/shared/inbound-ttl.mjs",
+        "bytes": 803
+      },
+      {
+        "file": "im/src/channels/shared/interface-language.mjs",
+        "bytes": 2359
+      },
+      {
+        "file": "im/src/channels/shared/message-mode.mjs",
+        "bytes": 703
+      },
+      {
+        "file": "im/src/channels/shared/model-setting.mjs",
+        "bytes": 5530
+      },
+      {
+        "file": "im/src/channels/shared/session-channel-labels.mjs",
+        "bytes": 1044
+      },
+      {
+        "file": "im/src/channels/slack/manifest.mjs",
+        "bytes": 920
+      },
+      {
+        "file": "im/src/channels/weixin/connection-error.en.mjs",
+        "bytes": 14969
+      },
+      {
+        "file": "im/src/channels/weixin/diagnostic-details.mjs",
+        "bytes": 136
+      },
+      {
+        "file": "node_modules/semver/classes/semver.js",
+        "bytes": 9891
+      },
+      {
+        "file": "node_modules/semver/functions/compare.js",
+        "bytes": 170
+      },
+      {
+        "file": "node_modules/semver/functions/parse.js",
+        "bytes": 331
+      },
+      {
+        "file": "node_modules/semver/functions/rcompare.js",
+        "bytes": 132
+      },
+      {
+        "file": "node_modules/semver/functions/valid.js",
+        "bytes": 176
+      },
+      {
+        "file": "node_modules/semver/internal/constants.js",
+        "bytes": 873
+      },
+      {
+        "file": "node_modules/semver/internal/debug.js",
+        "bytes": 240
+      },
+      {
+        "file": "node_modules/semver/internal/identifiers.js",
+        "bytes": 525
+      },
+      {
+        "file": "node_modules/semver/internal/parse-options.js",
+        "bytes": 338
+      },
+      {
+        "file": "node_modules/semver/internal/re.js",
+        "bytes": 8139
+      }
+    ]
+  }
+}

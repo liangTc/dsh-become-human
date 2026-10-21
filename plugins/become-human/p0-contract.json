@@ -1,0 +1,22 @@
+{
+  "contractVersion": 1,
+  "packageVersion": "0.2.0-p0.1",
+  "stage": "P0 design freeze and host compatibility spike",
+  "platform": {"os": "win32", "nodeVerified": "24.19.0", "dsh": "0.2.0-rc.2", "cordis": "4.0.4", "keyBackend": "Windows current-user DPAPI"},
+  "limits": {"controllers": 1, "inflightModelCalls": 1, "maxCyclesPerStart": 3, "maxOutputTokens": 512, "requestDeadlineMs": 45000, "defaultWakeMs": 15000, "deletePreviewTtlMs": 120000},
+  "hostApi": {
+    "state": "GET /api/become-human/state",
+    "control": "POST /api/become-human/control",
+    "authentication": "DSH Connection session cookie; loopback host and same origin",
+    "commands": ["pause", "start", "once", "message", "retry", "persona", "receipt", "memory-save", "persona-auto", "persona-rollback", "session-delete-preview", "session-delete-confirm", "session-delete-recover", "delete-fixture-preview", "delete-fixture-confirm", "delete-fixture-recover"],
+    "message": {"requestId": "optional, server creates an id if absent; UI always supplies a stable id", "text": "required, 1 to 1024 characters", "target": "next-turn default, or next-step", "sessionId": "optional current id; UI supplies it"},
+    "sessionDelete": {"requestId": "required stable id", "id": "preview session id", "token": "unexpired exact preview token", "confirmation": "删除当前会话"}
+  },
+  "businessTables": ["control", "reservation", "metadata", "audit", "outbox", "attempt", "user_request", "response_stage", "retirement", "source_record", "memory_record", "dependency", "extraction_block", "persona_change", "goal_record"],
+  "safetyTables": ["identity", "instruction"],
+  "memoryTypes": ["identity", "working", "episode", "fact", "goal", "skill"],
+  "namespaces": ["real", "fictional"],
+  "persona": {"fields": ["verbosity", "humor"], "minIndependentRoots": 3, "minSpanDays": 7, "maxStep": 0.05, "cooldownDays": 7, "max30DayAbsoluteChange": 0.15, "maxBaselineOffset": 0.2, "autoDefault": false},
+  "disabled": ["tools", "nativeLoop", "uploads", "forks", "modelTitle", "embeddings", "rawExport", "exportDownload", "proactiveExternalSend", "goalExecution", "recordDeletePublicApi", "factForgetPublicApi", "telemetry"],
+  "notAccepted": ["all T01-T53 first-release scenarios", "open natural-language memory benchmark", "24-hour soak", "all export producer races", "cross-platform keys", "external anti-rollback anchor", "Word page visual QA"]
+}

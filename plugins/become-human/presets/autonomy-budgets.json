@@ -1,0 +1,54 @@
+{
+  "schema": "human-config-preset-catalog-v1",
+  "kind": "autonomy-budget",
+  "presets": [
+    {
+      "id": "low",
+      "name": "低额度",
+      "description": "本地自然日最多 60,000 预留 token、12 次请求、6 轮；每轮累计 2 分钟。",
+      "config": {
+        "quotaEnabled": true,
+        "tokenQuotaEnabled": true,
+        "requestQuotaEnabled": true,
+        "roundQuotaEnabled": true,
+        "tokenLimit": 60000,
+        "requestLimit": 12,
+        "roundLimit": 6,
+        "budgetWindow": "local-day",
+        "roundTimeoutMs": 120000
+      }
+    },
+    {
+      "id": "medium",
+      "name": "中额度",
+      "description": "本地自然日最多 200,000 预留 token、36 次请求、18 轮；每轮累计 5 分钟。",
+      "config": {
+        "quotaEnabled": true,
+        "tokenQuotaEnabled": true,
+        "requestQuotaEnabled": true,
+        "roundQuotaEnabled": true,
+        "tokenLimit": 200000,
+        "requestLimit": 36,
+        "roundLimit": 18,
+        "budgetWindow": "local-day",
+        "roundTimeoutMs": 300000
+      }
+    },
+    {
+      "id": "high",
+      "name": "高额度",
+      "description": "本地自然日最多 600,000 预留 token、96 次请求、48 轮；每轮累计 10 分钟。",
+      "config": {
+        "quotaEnabled": true,
+        "tokenQuotaEnabled": true,
+        "requestQuotaEnabled": true,
+        "roundQuotaEnabled": true,
+        "tokenLimit": 600000,
+        "requestLimit": 96,
+        "roundLimit": 48,
+        "budgetWindow": "local-day",
+        "roundTimeoutMs": 600000
+      }
+    }
+  ]
+}

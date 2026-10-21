@@ -1,0 +1,54 @@
+# Private runtime and development data
+node_modules/
+.dsh-verify/
+.manager-test/
+.web-test/
+.docx-work/
+.dsh/
+.dsh-human-runtime/
+.env
+.env.*
+!.env.example
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+*.log
+*.bhbackup
+*.tgz
+*.zip
+*.docx
+*.pdf
+*.pem
+*.key
+.credentials.yaml
+.human-*.lock
+launch.json
+runtime-selection.json
+dist/
+build-meta/
+.DS_Store
+Thumbs.db
+
+# Generated distribution files
+plugins/become-human-web/runtime/
+plugins/become-human-web/runtime-bundle/
+plugins/become-human-web/docs/
+plugins/become-human-web/client.js
+plugins/become-human-web/im-client.js
+plugins/become-human-web/im/lib/
+
+# Historical private presets and unused upstream marketing images
+/presets/
+docs/assets/banner-concept.png
+plugins/become-human-web/im/assets/logo_cn.png
+plugins/become-human-web/im/assets/logo-dsh-im-*.png
+plugins/become-human-web/im/assets/logo.png
+plugins/become-human-web/im/assets/logo-plugin-phone.png
+plugins/become-human-web/im/assets/screenshot-menu-card.png
+
+# WhatsApp transport is excluded from the Apache release
+plugins/become-human-web/im/src/channels/whatsapp/
+plugins/become-human-web/im/plugin-src/host/channels/whatsapp/
+plugins/become-human-web/im/plugin-src/client/channels/whatsapp/
+plugins/become-human-web/im/src/channels/shared/i18n-en/whatsapp.mjs

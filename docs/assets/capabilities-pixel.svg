@@ -1,0 +1,151 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="860" viewBox="0 0 1280 860" role="img" aria-labelledby="title desc" shape-rendering="crispEdges">
+  <title id="title">Become Human · 六个能力板块</title>
+  <desc id="desc">功能示意，非界面截图。展示人格配置、自主额度、记忆学习、目标定时、活动溯源，以及只读工具与授权六个板块。项目仍处于 Beta 开发阶段。</desc>
+  <defs>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#0d2034" stroke-width="1"/>
+    </pattern>
+    <style>
+      .text{font-family:"Microsoft YaHei","PingFang SC","Noto Sans CJK SC",sans-serif;fill:#edf6ff}
+      .title{font-size:36px;font-weight:700;letter-spacing:.5px}
+      .heading{font-size:26px;font-weight:700}
+      .body{font-size:18px}
+      .small{font-size:14px}
+      .micro{font-size:12px;letter-spacing:1.5px}
+      .muted{fill:#9cb1c9}
+      .mint{fill:#69d8ff}
+      .amber{fill:#c6eaff}
+    </style>
+    <g id="person" fill="#69d8ff">
+      <path d="M16 0H40V8H48V32H40V40H16V32H8V8H16Z"/>
+      <path d="M8 48H48V56H56V64H0V56H8Z"/>
+      <path d="M20 12H36V28H20Z" fill="#0a192b"/>
+    </g>
+    <g id="meter" fill="#c6eaff">
+      <path d="M0 8H8V56H64V64H0Z"/>
+      <path d="M16 40H24V48H16ZM32 24H40V48H32ZM48 8H56V48H48Z"/>
+      <path d="M8 0H56V8H8Z" opacity=".35"/>
+    </g>
+    <g id="memory" fill="#69d8ff">
+      <path d="M0 8H24V16H40V8H64V56H40V64H24V56H0Z"/>
+      <path d="M8 16H24V48H8ZM40 16H56V48H40Z" fill="#0a192b"/>
+      <path d="M12 24H20V28H12ZM12 36H20V40H12ZM44 24H52V28H44ZM44 36H52V40H44Z"/>
+    </g>
+    <g id="clock" fill="#c6eaff">
+      <path d="M16 0H48V8H56V16H64V48H56V56H48V64H16V56H8V48H0V16H8V8H16Z"/>
+      <path d="M16 8H48V16H56V48H48V56H16V48H8V16H16Z" fill="#0a192b"/>
+      <path d="M28 16H36V32H48V40H28Z"/>
+    </g>
+    <g id="trace" fill="#69d8ff">
+      <path d="M0 0H16V16H0ZM0 24H16V40H0ZM0 48H16V64H0ZM24 4H64V12H24ZM24 28H56V36H24ZM24 52H64V60H24Z"/>
+      <path d="M6 16H10V24H6ZM6 40H10V48H6Z" fill="#3786b8"/>
+    </g>
+    <g id="tools" fill="#c6eaff">
+      <path d="M8 0H24V16H16V24H32V16H40V0H48V32H40V40H32V64H16V40H8V32H0V8H8Z"/>
+      <path d="M48 40H64V64H48Z" fill="#69d8ff"/>
+      <path d="M52 32H60V40H52Z" fill="#69d8ff"/>
+    </g>
+  </defs>
+  <rect width="1280" height="860" fill="#050b16"/>
+  <rect width="1280" height="860" fill="url(#grid)"/>
+  <g aria-hidden="true" fill="none" stroke="#3786b8" stroke-width="2">
+    <path d="M8 112V16H104M1176 16H1272V112M8 748V852H104M1176 852H1272V748"/>
+  </g>
+  <g aria-hidden="true" fill="#69d8ff" opacity=".6">
+    <rect x="1178" y="94" width="46" height="2"/><rect x="1228" y="94" width="12" height="2"/>
+    <rect x="1202" y="102" width="22" height="2"/><rect x="1232" y="102" width="8" height="2"/>
+    <rect x="18" y="816" width="3" height="12"/><rect x="18" y="836" width="3" height="8"/>
+  </g>
+  <g aria-hidden="true">
+    <path d="M48 36H56V44H64V52H72V60H64V68H56V76H48V68H40V60H32V52H40V44H48Z" fill="none" stroke="#69d8ff" stroke-width="2"/>
+    <rect x="48" y="52" width="8" height="8" fill="#edf6ff"/>
+    <path d="M32 36H40V40H32ZM64 76H72V80H64ZM28 68H32V72H28Z" fill="#3786b8"/>
+  </g>
+  <text class="text title" x="96" y="69">让自主行为看得见、管得住</text>
+  <text class="text body muted" x="96" y="106">一个身份，一份长期状态；配置决定行为，事件记录结果。</text>
+  <path d="M968 39H1240V63L1232 71H960V47Z" fill="#102c47" stroke="#3786b8"/>
+  <rect x="960" y="39" width="8" height="32" fill="#c6eaff"/>
+  <text class="text micro amber" x="982" y="60">BETA · WORK IN PROGRESS</text>
+
+  <!-- Card 1: editable personality configuration. -->
+  <rect x="40" y="164" width="384" height="276" fill="#0a192b" stroke="#254560" stroke-width="2"/>
+  <rect x="40" y="164" width="384" height="6" fill="#69d8ff"/>
+  <use href="#person" x="64" y="194"/>
+  <text class="text heading" x="148" y="219">人物与表达</text>
+  <text class="text micro muted" x="148" y="247">PERSONALITY</text>
+  <text class="text body" x="64" y="302">人物预设与详细自定义</text>
+  <text class="text body muted" x="64" y="338">角色、职责、爱好与交流节奏</text>
+  <text class="text body muted" x="64" y="370">记忆与反馈参与后续行为选择</text>
+  <rect x="64" y="395" width="148" height="24" fill="#0d2d45"/>
+  <text class="text small mint" x="76" y="412">核心边界受控</text>
+
+  <!-- Card 2: independent autonomy limits. -->
+  <rect x="448" y="164" width="384" height="276" fill="#0a192b" stroke="#254560" stroke-width="2"/>
+  <rect x="448" y="164" width="384" height="6" fill="#c6eaff"/>
+  <use href="#meter" x="472" y="194"/>
+  <text class="text heading" x="556" y="219">自主与额度</text>
+  <text class="text micro muted" x="556" y="247">AUTONOMY BUDGET</text>
+  <text class="text body" x="472" y="302">高中低预设，或自行配置</text>
+  <text class="text body muted" x="472" y="338">时间 / 轮次 / 请求 / token</text>
+  <text class="text body muted" x="472" y="370">静默、退避与额外额度授权</text>
+  <rect x="472" y="395" width="172" height="24" fill="#102c47"/>
+  <text class="text small amber" x="484" y="412">前台沟通单独计量</text>
+
+  <!-- Card 3: inspectable memory and source-linked learning. -->
+  <rect x="856" y="164" width="384" height="276" fill="#0a192b" stroke="#254560" stroke-width="2"/>
+  <rect x="856" y="164" width="384" height="6" fill="#69d8ff"/>
+  <use href="#memory" x="880" y="194"/>
+  <text class="text heading" x="964" y="219">记忆与学习</text>
+  <text class="text micro muted" x="964" y="247">MEMORY &amp; LEARNING</text>
+  <text class="text body" x="880" y="302">分层上下文与长期话题</text>
+  <text class="text body muted" x="880" y="338">搜索、来源摘录与学习笔记</text>
+  <text class="text body muted" x="880" y="370">查看、编辑、纠正与撤回</text>
+  <rect x="880" y="395" width="148" height="24" fill="#0d2d45"/>
+  <text class="text small mint" x="892" y="412">来源保留在笔记</text>
+
+  <!-- Card 4: finite goals and scheduled occurrences. -->
+  <rect x="40" y="464" width="384" height="276" fill="#0a192b" stroke="#254560" stroke-width="2"/>
+  <rect x="40" y="464" width="384" height="6" fill="#c6eaff"/>
+  <use href="#clock" x="64" y="494"/>
+  <text class="text heading" x="148" y="519">目标与定时</text>
+  <text class="text micro muted" x="148" y="547">GOALS &amp; SCHEDULES</text>
+  <text class="text body" x="64" y="602">多步目标、检查点与本地产物</text>
+  <text class="text body muted" x="64" y="638">单次 / 周期 / Cron 定时任务</text>
+  <text class="text body muted" x="64" y="670">暂停、取消、进度与执行回执</text>
+  <rect x="64" y="695" width="172" height="24" fill="#102c47"/>
+  <text class="text small amber" x="76" y="712">建议与执行有区分</text>
+
+  <!-- Card 5: activity summaries linked to task evidence. -->
+  <rect x="448" y="464" width="384" height="276" fill="#0a192b" stroke="#254560" stroke-width="2"/>
+  <rect x="448" y="464" width="384" height="6" fill="#69d8ff"/>
+  <use href="#trace" x="472" y="494"/>
+  <text class="text heading" x="556" y="519">活动与溯源</text>
+  <text class="text micro muted" x="556" y="547">ACTIVITY &amp; EVIDENCE</text>
+  <text class="text body" x="472" y="602">时间线与事件日志统一入口</text>
+  <text class="text body muted" x="472" y="638">看做了什么、写入了什么</text>
+  <text class="text body muted" x="472" y="670">关联任务，多维筛选与追踪</text>
+  <rect x="472" y="695" width="172" height="24" fill="#0d2d45"/>
+  <text class="text small mint" x="484" y="712">摘要不冒充内部思维</text>
+
+  <!-- Card 6: capabilities are scoped and writes require exact approval. -->
+  <rect x="856" y="464" width="384" height="276" fill="#0a192b" stroke="#254560" stroke-width="2"/>
+  <rect x="856" y="464" width="384" height="6" fill="#c6eaff"/>
+  <use href="#tools" x="880" y="494"/>
+  <text class="text heading" x="964" y="519">工具与授权</text>
+  <text class="text micro muted" x="964" y="547">TOOLS &amp; PERMISSIONS</text>
+  <text class="text body" x="880" y="602">统一能力接口与只读网页 MCP</text>
+  <text class="text body muted" x="880" y="638">指定 DSH 会话读取与权限范围</text>
+  <text class="text body muted" x="880" y="670">写操作先预览，再逐项授权</text>
+  <rect x="880" y="695" width="196" height="24" fill="#102c47"/>
+  <text class="text small amber" x="892" y="712">浏览器操作待继续验证</text>
+
+  <path d="M40 774H1240" stroke="#254560" stroke-width="2"/>
+  <rect x="40" y="800" width="8" height="8" fill="#69d8ff"/>
+  <rect x="56" y="800" width="8" height="8" fill="#c6eaff"/>
+  <text class="text small muted" x="80" y="810">功能示意，非界面截图 · BETA · WORK IN PROGRESS</text>
+  <text class="text small muted" x="80" y="838">实际可用范围取决于模型、平台、配置与授权；独立项目，不代表 DSH 官方。</text>
+  <g aria-hidden="true" fill="none" stroke="#69d8ff" stroke-width="2" opacity=".65">
+    <path d="M40 192V164H68M396 164H424V192M448 192V164H476M804 164H832V192M856 192V164H884M1212 164H1240V192"/>
+    <path d="M40 492V464H68M396 464H424V492M448 492V464H476M804 464H832V492M856 492V464H884M1212 464H1240V492"/>
+  </g>
+</svg>

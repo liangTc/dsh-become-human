@@ -1,0 +1,25 @@
+import React,{useState} from 'react';
+
+export function Recovery({api,s,ui}:any){
+  const {Button,Band}=ui,health=s?.manager?.health;
+  return <section className="hn-group"><h3>运行恢复</h3><Band>状态：{s?.manager?.error??s?.lastError??(s?.stopReason==='user'?'主人已暂停':s?.stopReason)??(s?.status==='unavailable'?'运行模块不可用':s?.desired==='running'?'运行正常':'已暂停')}。重启运行模块后保持暂停，需明确恢复；失败模型任务和未知投递不会自动重试。</Band>{health?.lastExit&&<p>最近退出：{new Date(health.lastExit.at).toLocaleString()} · 退出码 {health.lastExit.exitCode??'未知'} · 信号 {health.lastExit.signal??'无'}</p>}<Button disabled={api.snapshot.busy||s?.agentBusy} onClick={()=>api.run(()=>api.control({op:'runtime-restart'}),'运行模块已重启，保持暂停')}>重启运行模块</Button><Button onClick={()=>api.refresh()}>重新读取状态</Button></section>;
+}
+
+export function Readiness({api,s,ui,onSection,initialOpen=false}:any){
+  const {Button,Band,ReadState,useRead}=ui,[open,setOpen]=useState(initialOpen),result=useRead(api,{kind:'readiness'},s.management?.revision??0);
+  return <section className="hn-group"><div className="hn-row hn-between"><strong>使用准备与当前状态</strong><Button onClick={()=>setOpen(x=>!x)}>{open?'收起':'检查配置'}</Button></div>{open&&<ReadState result={result}>{(data:any)=><>{data.items.map((item:any)=><div className="hn-line" key={item.id}><div className="hn-grow"><strong>{item.label} · {({done:'已配置',todo:'待补充',optional:'可选',review:'请核对'} as any)[item.status]}</strong><p>{item.detail}</p></div><Button onClick={()=>onSection(item.section)}>前往配置</Button></div>)}<Band>待机原因：{s.autonomy?.lastWait??'尚无'}。模型选择与配置就绪不代表已测试供应商连接。</Band></>}</ReadState>}</section>;
+}
+
+export function DeliveryReview({api,s,ui}:any){
+  const {Button,Band,ReadState,useRead}=ui,[nonce,setNonce]=useState(0),result=useRead(api,{kind:'delivery-review',resolution:'unresolved',limit:50},nonce);
+  return <section className="hn-group"><div className="hn-row hn-between"><h3>待人工核对的投递</h3><Button onClick={()=>setNonce(n=>n+1)}>刷新</Button></div><Band>仅记录你实际收到与否，不修改供应商原回执，也不会补发消息。</Band><ReadState result={result}>{(data:any)=>(data.items??[]).length?(data.items??[]).map((row:any)=><div className="hn-line" key={row.channel+row.seq}><div className="hn-grow"><strong>消息 #{row.seq} · {row.state}</strong><p>{row.channel} · {(row.parts??[]).length} 个分片</p><p>未知或拒绝投递，需要在手机核对实际情况。</p></div>{['received','not-received'].map(outcome=><Button key={outcome} disabled={api.snapshot.busy} onClick={()=>api.run(async()=>{await api.control({op:'delivery-confirm',sessionId:s.sessionId,channel:row.channel,seq:row.seq,expectedVersion:row.version,outcome});setNonce(n=>n+1);},'已记录人工确认，未重发')}>{outcome==='received'?'确认收到':'确认未收到'}</Button>)}</div>):<p>暂无待核对投递。</p>}</ReadState></section>;
+}
+
+export function Usage({api,s,ui}:any){
+  const {Button,Band,ReadState,useRead,Input,Field}=ui,[nonce,setNonce]=useState(0),[editing,setEditing]=useState(false),[prices,setPrices]=useState<any[]>([]),result=useRead(api,{kind:'usage-summary'},nonce);
+  const update=(i:number,key:string,value:string)=>setPrices(rows=>rows.map((r,n)=>i===n?{...r,[key]:key==='currency'?value:Number(value)}:r));
+  return <section className="hn-group"><h3>今日用量 · UTC 日</h3><ReadState result={result}>{(data:any)=><><Band>{data.requests} 次请求 / 供应商报告 {data.reportedTokens} token / 未知用量 {data.unknownUsageRequests} 次。保守准入 {data.conservativeAdmission}；准入值不作为账单。</Band>{data.items.map((row:any)=><div className="hn-line" key={row.provider+row.model+row.lane}><div><strong>{row.provider} / {row.model}</strong><p>{row.lane==='owner'?'主人聊天':'自主任务'} · {row.requests} 请求 · {row.reportedTokens} token · 失败 {row.failedRequests}</p><p>{row.estimatedCost===null?'未配置价格':`估算 ${row.estimatedCost.toFixed(4)} ${row.currency}`} · 未知用量 {row.unknownUsageRequests}</p></div></div>)}<Button onClick={()=>{setPrices((s.management.allowedRoutes??[]).map((route:any)=>data.prices.find((p:any)=>p.provider===route.provider&&p.model===route.model)??{...route,currency:'CNY',inputPerMillion:0,outputPerMillion:0,cacheReadPerMillion:0,cacheWritePerMillion:0,perRequest:0}));setEditing(!editing);}}>配置估算价格</Button></>}</ReadState>
+    {editing&&<><Band>按实际供应商方案填写。订阅费、外部工具费及未知用量不自动估计；零值表示你明确设为零。</Band>{prices.map((row,i)=><div className="hn-group" key={row.provider+row.model}><strong>{row.provider} / {row.model}</strong><div className="hn-fields">{[['inputPerMillion','输入 / 百万 token'],['outputPerMillion','输出 / 百万 token'],['cacheReadPerMillion','缓存读取 / 百万 token'],['cacheWritePerMillion','缓存写入 / 百万 token'],['perRequest','每请求固定费用']].map(([k,label])=><Field label={label} key={k}><Input type="number" min={0} value={row[k]} onChange={(v:string)=>update(i,k,v)}/></Field>)}<Field label="币种 · 三位大写"><Input value={row.currency} maxLength={3} onChange={(v:string)=>update(i,'currency',v)}/></Field></div></div>)}<Button disabled={api.snapshot.busy||s.desired!=='paused'} onClick={()=>api.run(async()=>{await api.control({op:'usage-prices-save',prices,expectedRevision:s.management.revision});setEditing(false);setNonce(n=>n+1);},'估算价格已保存')}>保存价格</Button></>}
+    <Button onClick={()=>setNonce(n=>n+1)}>刷新用量</Button>
+  </section>;
+}
