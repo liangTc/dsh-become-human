@@ -38,9 +38,11 @@ npx @deepseek-ai/dsh@0.2.0-rc.2 web
 
 ### 从源码构建
 
-先下载或克隆本仓库，进入仓库根目录。当前仓库地址以项目发布后的 GitHub 地址为准。
+下载或克隆 [liangTc/dsh-become-human](https://github.com/liangTc/dsh-become-human)，进入仓库根目录。
 
 ```powershell
+git clone https://github.com/liangTc/dsh-become-human.git
+cd dsh-become-human
 npm install --prefix plugins/become-human-web
 npm run build --prefix plugins/become-human-web
 npm run release:package

@@ -90,13 +90,13 @@
     },
     {
       "path": "docs/INSTALLATION.md",
-      "bytes": 8000,
-      "sha256": "4db88ce1abf81839f06e283e086c38cd3d3b577a860b3f2561d9d73040423d35"
+      "bytes": 8076,
+      "sha256": "bed2edd915795f64eacf97469ea7ecf884c31d6ce81400c78ffe502c9a6c4578"
     },
     {
       "path": "docs/PLUGIN_SUBMISSION.md",
-      "bytes": 6961,
-      "sha256": "77c116a3dc12a2f2b0330abc1f4dec6c47f936b0579a51d98e995ed92a609171"
+      "bytes": 7295,
+      "sha256": "4820a699965029558cfcb1e298f6a8e1a88c7d7d70d4cfb6b7c96afe92071e32"
     },
     {
       "path": "docs/USAGE.md",
@@ -130,8 +130,8 @@
     },
     {
       "path": "package.json",
-      "bytes": 555,
-      "sha256": "72e1d695f9b81324e558c09eaf1245313ad1b36d5402d017e3295a7d9c0d5676"
+      "bytes": 819,
+      "sha256": "a93d622ad1dfbbe69b7daa04860e8772f0147d24c974d870f79dc3eb8194ff64"
     },
     {
       "path": "plugins/become-human-web/LICENSE",
@@ -2370,8 +2370,8 @@
     },
     {
       "path": "plugins/become-human-web/package.json",
-      "bytes": 4533,
-      "sha256": "c75805e28ef00e2751b13c51495a458dc8ddffbdc9f6d729f3f38161ab053df9"
+      "bytes": 4834,
+      "sha256": "fca1b2a824e4342fb3bfcf7f8ecad58eb01009a9a5a0617dea7fabc0a5815ddb"
     },
     {
       "path": "plugins/become-human-web/remote-client.js",
@@ -2615,8 +2615,8 @@
     },
     {
       "path": "plugins/become-human/package.json",
-      "bytes": 2788,
-      "sha256": "fbc96d37f6d52e8ebb5b3c412c430ac313a2349c48c40f0fdfc08b98d119e327"
+      "bytes": 3085,
+      "sha256": "5cee579cfd9dc870c6aab5558c9d725137f661f098ae2271fe6cb1bffacc7626"
     },
     {
       "path": "plugins/become-human/panel.html",

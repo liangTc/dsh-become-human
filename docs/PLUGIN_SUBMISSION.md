@@ -21,13 +21,13 @@
 
 官方主仓库推荐插件仓库使用 `dsh-plugin` topic。[DeepSeek Harness 仓库](https://github.com/deepseek-ai/deepseek-harness)
 
-## 发布前待填写
+## 仓库信息与发布前待填写
 
-当前 GitHub owner、仓库地址和维护者身份尚未提供。发布前填写真实值，不能把占位符直接写入 npm 或市场：
+目标仓库为 [liangTc/dsh-become-human](https://github.com/liangTc/dsh-become-human)，维护者为 [ltc（liangTc）](https://github.com/liangTc)。仓库及 package.json 的 repository、homepage、bugs 已按该地址配置。推送源码、发布安装包和部署市场索引是各自独立的步骤，以下发行信息仍需在实际发布时确认：
 
-- `https://github.com/OWNER/REPOSITORY`：仓库地址。
+- `https://github.com/liangTc/dsh-become-human`：项目仓库地址。
 - npm 包名与发布账户：确认 `dsh-become-human-web` 是否可用，或采用自有 scope；若改名需同步 patch、导出及内部链接。
-- `package.json` 的 repository、homepage、bugs、author 等公开元数据。
+- 核对 `package.json` 的公开元数据；原创代码署名保留 Become Human contributors，Git 提交使用维护者提供的身份。
 - Release tag、精确包版本、实际发布日期及完整 40 位 commit SHA。
 - 图标的正式托管地址；所有图片应使用脱敏内容。
 - 安全问题的联系渠道；不要填写不存在的邮箱或暗示平台官方支持。
@@ -57,7 +57,7 @@ GitHub tag 只标识源码。若市场使用 Git 来源，构建产物必须能�
 
 ## 为插件集准备条目
 
-发布仓库并得到固定提交后，可运行 `npm run release:market -- https://github.com/OWNER/REPOSITORY 完整40位提交SHA`。生成器先检查该公开提交是否带有匹配版本的预构建 bundle；缺少 runtime、client 或 IM 产物的源码提交会被拒绝。成功后写入 `dist/market/index.json`，仍需将索引部署到可信 HTTPS 静态地址，再添加到 DSH 的自定义市场。该命令不会发布索引，也不表示官方收录。
+发布仓库并得到固定提交后，可运行 `npm run release:market -- https://github.com/liangTc/dsh-become-human 完整40位提交SHA`。生成器先检查该公开提交是否带有匹配版本的预构建 bundle；缺少 runtime、client 或 IM 产物的源码提交会被拒绝。成功后写入 `dist/market/index.json`，仍需将索引部署到可信 HTTPS 静态地址，再添加到 DSH 的自定义市场。该命令不会发布索引，也不表示官方收录。
 
 市场可以引用 npm 包或固定 Git 提交。本仓库包位于 `plugins/become-human-web`，因此 Git 记录必须带该目录。下面是**待填写模板，不是可直接发布的 JSON**：
 
@@ -66,12 +66,12 @@ name: dsh-become-human-web
 title.zh: Become Human · 自主 Agent
 title.en: Become Human
 description.zh: 为 DSH Web 增加统一人格、记忆、学习与主动行为的单会话 Agent。
-repository.url: https://github.com/OWNER/REPOSITORY
+repository.url: https://github.com/liangTc/dsh-become-human
 repository.directory: plugins/become-human-web
 version: 0.7.0-beta.1（必须与实际 package.json 一致）
 publishTimestamp: 实际发布时间的 Unix 秒
 source.type: git
-source.url: https://github.com/OWNER/REPOSITORY
+source.url: https://github.com/liangTc/dsh-become-human
 source.commit: 该版本的完整 40 位 commit SHA
 source.path: plugins/become-human-web
 engines.dsh: 0.2.0-rc.2

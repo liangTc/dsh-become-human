@@ -113,5 +113,14 @@
     "single-session",
     "memory",
     "mcp"
-  ]
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/liangTc/dsh-become-human.git",
+    "directory": "plugins/become-human"
+  },
+  "homepage": "https://github.com/liangTc/dsh-become-human#readme",
+  "bugs": {
+    "url": "https://github.com/liangTc/dsh-become-human/issues"
+  }
 }

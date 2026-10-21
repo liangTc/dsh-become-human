@@ -4,12 +4,22 @@
   "private": true,
   "license": "Apache-2.0",
   "description": "Experimental single-session autonomous companion for DeepSeek Harness",
-  "engines": {"node": ">=24"},
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "build": "npm run build --prefix plugins/become-human-web",
     "release:source": "node scripts/export-source.mjs",
     "release:licenses": "node scripts/collect-third-party.mjs",
     "release:package": "node scripts/package-release.mjs",
     "release:market": "node scripts/generate-market.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/liangTc/dsh-become-human.git"
+  },
+  "homepage": "https://github.com/liangTc/dsh-become-human#readme",
+  "bugs": {
+    "url": "https://github.com/liangTc/dsh-become-human/issues"
   }
 }
