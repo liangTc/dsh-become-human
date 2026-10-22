@@ -3,7 +3,7 @@
 [返回首页](../README.md) · [配置说明](CONFIGURATION.md) · [使用指南](USAGE.md)
 
 > [!WARNING]
-> **`0.7.0-beta.1` 是测试版本，尚未开发完成。** 本页是公开发行的安装流程，不表示干净机器安装与全部能力已完成验收。
+> **`0.7.0-beta.4` 是测试版本，尚未开发完成。** 本页是公开发行的安装流程，不表示干净机器安装与全部能力已完成验收。
 
 ## 支持范围
 
@@ -16,9 +16,13 @@
 | 安装单元 | `plugins/become-human-web` 生成的组合包 |
 | 模型 | 已在源 DSH profile 中配置的 `llm-pi-ai` 提供商与模型 |
 
+当前实机验证环境为 **Windows + Node.js 24 + DSH `0.2.0-rc.2` 的 `web` profile**，包括已有安装升级、模型与微信流程；这不代表所有系统、干净机器或全部渠道均已验收。
+
 先使用独立数据目录尝试，再决定是否用于长期运行。源码内的 `plugins/become-human` 是内部运行模块，**不要把它单独安装到日常 DSH profile**；其隔离配置会禁用普通工具与默认 Agent 循环。
 
-本仓库不承诺 npm 包已经公开发布，也不代表已被任何插件集收录。以下默认使用自己构建、或从可信 Release 下载的 `.tgz` 文件。
+安装流程是：**安装一个组合包 → 打开 Human 完成首次设置 → 创建并启动**。组合包已经包含后台代码；插件自动准备专用运行目录和内部 profile，复用宿主的 Node 与 DSH 启动后台，无需另装第二套 Human 程序。
+
+安装入口为 [v0.7.0-beta.4 测试发行](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.4) 的预构建 `.tgz` 与 SHA-256 文件。npm 包尚未发布；社区登记的提交或合并不替代本页的版本与安装要求。
 
 ## 1. 准备 DSH 与模型
 
@@ -28,47 +32,84 @@
 npx @deepseek-ai/dsh@0.2.0-rc.2 web
 ```
 
-通过 DSH 设置 → 模型，添加可用的第三方或自定义模型 API，记录实际 **Provider ID** 和 **Model ID**。本插件当前读取 `$DSH_HOME/profiles/web/cordis.patch.yml` 内 `llm-pi-ai.config.providers` 的路由；仅配置 `llm-deepseek` 原生适配器尚不足以启动本插件。
+通过 DSH 设置 → 模型，添加可用的第三方或自定义模型 API。Human 首次设置会列出兼容的现有模型，选择后自动保存，不必手工抄写 Provider ID 和 Model ID。本插件当前读取源 profile 的 `cordis.patch.yml` 内 `llm-pi-ai.config.providers` 路由；仅配置 `llm-deepseek` 原生适配器尚不足以启动本插件。
 
 凭据使用 DSH 的凭据引用（`apiKeyEnv`），或该引用对应的环境变量。不要把明文密钥放进插件配置。内联 `apiKey` 与自定义 `headers` 的源路由目前不会被迁入运行模块。模型配置的字段以 [DSH 模型配置指南](https://deepseek-harness.github.io/deepseek-harness/guide/providers) 为准。
 
-完成后关闭该次 DSH 进程，以便安装并修改配置。默认 `$DSH_HOME` 是用户主目录下的 `.dsh`；如使用了自定义值，后续命令必须保持一致。
+完成后关闭该次 DSH 进程，再安装组合包。默认 `$DSH_HOME` 是用户主目录下的 `.dsh`；如使用了自定义值，后续命令必须保持一致。
 
 ## 2. 获取安装包
+
+### 使用预构建包（推荐）
+
+从 [v0.7.0-beta.4 Release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.4) 下载以下两个附件，并保存到同一目录：
+
+- [dsh-become-human-web-0.7.0-beta.4.tgz](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.4/dsh-become-human-web-0.7.0-beta.4.tgz)
+- [dsh-become-human-web-0.7.0-beta.4.tgz.sha256](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.4/dsh-become-human-web-0.7.0-beta.4.tgz.sha256)
+
+在该目录打开 PowerShell，校验后再安装：
+
+```powershell
+$humanExpectedSha = ((Get-Content -LiteralPath './dsh-become-human-web-0.7.0-beta.4.tgz.sha256' -Raw).Trim() -split '\s+')[0]
+$humanActualSha = (Get-FileHash -LiteralPath './dsh-become-human-web-0.7.0-beta.4.tgz' -Algorithm SHA256).Hash
+if ($humanExpectedSha -notmatch '^[a-fA-F0-9]{64}$' -or $humanActualSha -ine $humanExpectedSha) {
+  throw '安装包校验失败，请重新核对下载来源和文件。'
+}
+```
+
+组合包包含 Web 插件、内部运行模块、构建产物、许可证与第三方声明。GitHub 自动生成的 Source code ZIP 与仓库源码缺少预构建 bundle，不能直接安装，也不能把源码 Git 地址当作预构建包来源。开发者需要先按下面步骤构建；发行方式见 [发布清单](PLUGIN_SUBMISSION.md)。
 
 ### 从源码构建
 
 下载或克隆 [liangTc/dsh-become-human](https://github.com/liangTc/dsh-become-human)，进入仓库根目录。
 
 ```powershell
-git clone https://github.com/liangTc/dsh-become-human.git
+git clone --branch v0.7.0-beta.4 --single-branch https://github.com/liangTc/dsh-become-human.git
 cd dsh-become-human
 npm install --prefix plugins/become-human-web
 npm run build --prefix plugins/become-human-web
 npm run release:package
 ```
 
-构建所需的本地依赖由 `package.json` 声明，主构建重建 IM 和 Human Web 客户端，并把同仓库的运行模块复制到分发包中。最终得到类似 `dsh-become-human-web-0.7.0-beta.1.tgz` 的文件；**以命令实际输出路径为准**。
+构建所需的本地依赖由 `package.json` 声明，主构建重建 IM 和 Human Web 客户端，并把同仓库的运行模块复制到分发包中。最终得到类似 `dsh-become-human-web-0.7.0-beta.4.tgz` 的文件；**以命令实际输出路径为准**。
 
 定时规则产物随仓库提供，需要修改日历生成逻辑时，再按 [架构说明](ARCHITECTURE.md#开发与构建边界) 重新生成。`npm run release:source` 可另外导出干净源码，不会自动上传或发布。
-
-### 使用 Release 附件
-
-若维护者已发布 Release，下载其预构建 `.tgz`，核对版本和 SHA-256。不要把源码 ZIP 直接当成安装包。Release 应同时附上许可证与第三方声明；见 [发布清单](PLUGIN_SUBMISSION.md)。
 
 ## 3. 安装到 web profile
 
 在安装包所在目录执行，文件名替换为实际文件名：
 
 ```powershell
-npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./dsh-become-human-web-0.7.0-beta.1.tgz
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./dsh-become-human-web-0.7.0-beta.4.tgz
 ```
 
 这是 DSH 官方组合包安装路径，会更新 profile 的依赖与 bundle 列表。不要用普通 `npm install` 代替 profile 注册，也不要只复制 `manager.mjs`。[官方打包与安装说明](https://deepseek-harness.github.io/deepseek-harness/develop/basic/publish) 说明了 `.tgz`、本地目录和 profile 的区别。
 
-## 4. 填写首次启动配置
+## 4. 启动并完成首次设置
 
-编辑 `$DSH_HOME/profiles/web/cordis.patch.yml`，在已有条目之外追加下面这一个覆盖项。**保留原有提供商、模型及其他插件配置**。
+```powershell
+npx @deepseek-ai/dsh@0.2.0-rc.2 web --no-open
+```
+
+打开终端打印的认证地址，进入左侧 Human 入口。认证链接等同访问凭据，不要贴到 issue、截图或公开日志中。新安装会显示首次设置向导：
+
+1. **选择模型**：从宿主已有的兼容模型中选择，核对环境与凭据是否就绪。没有可用项时，先在 DSH 模型设置中补齐路由和凭据，再返回刷新。
+2. **人物与额度**：选择知秋、小埋、天昊或夏彦，选取低、中、高自主额度；可填写对你的称呼和时区。后续可在 Human 设置中继续编辑。
+3. **核对并创建**：检查选择后点击“创建并启动”。后台目录、内部 profile 和空闲回环端口自动准备，首次配置保存在插件管理的数据目录，无需编辑 YAML。
+
+“同时开启自主学习和主动交流”默认关闭。保持关闭时先开始主人对话；需要主动学习或交流时，在向导中明确勾选，或创建后在自主行为设置中开启。创建过程不通过额外模型请求测试 API，也不会自动完成手机绑定。
+
+创建失败时查看页面错误提示后重试，重试沿用已创建的进度和唯一会话。已有运行数据或显式旧配置的安装会继续原会话、人物、额度和手机绑定，不会重新套用首次设置预设。
+
+首次明确“创建并启动”与之后的冷启动不同：DSH 重启或运行模块重启后仍保持暂停，需核对状态后明确恢复；不会自动重试旧失败任务。关闭浏览器页面后，只要 DSH 服务仍在，Human 可以继续运行；停止 DSH 服务会一并停止它管理的后台。本次流程未增加后台常驻或登录自启入口。
+
+手机连接在创建后按需配置。开源版不包含 WhatsApp 及其 GPL 依赖链，也不包含 QQ 的未授权扫码连接器；QQ 采用手动 AppID / AppSecret。列表中的 12 种聊天渠道实现与 Office 连接器不代表全部真实验收通过。**一个 Human 只能绑定一个有效 IM，更换渠道会替换旧绑定。**
+
+## 高级配置
+
+新安装可直接使用首次设置。需要指定已有运行目录、内部端口或模型路由时，可在 `$DSH_HOME/profiles/web/cordis.patch.yml` 中覆盖 `become-human-manager`。**保留原有提供商、模型及其他插件配置**。
+
+以下是可选的完整示例；无需为了新安装复制它：
 
 ```yaml
 - id: become-human-manager
@@ -92,23 +133,7 @@ npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./dsh-become-human-web-
 
 将 `YOUR_NAME`、`YOUR_PROVIDER_ID`、`YOUR_MODEL_ID` 改为本机真实值。路径必须为绝对路径；不要照抄示例中的占位符。`runtimeHome` 使用专用、非符号链接的目录，且不可与 `sourceHome` 相同。`3091` 是示例中的内部运行端口，需要空闲；用户继续使用 DSH 主页面，不必直接访问它。
 
-各字段作用及界面中的自主额度与此处的区别，见 [配置说明](CONFIGURATION.md)。安装包只插入管理插件，用户的 profile patch 提供本机路径和模型选择。
-
-## 5. 启动与首次设置
-
-```powershell
-npx @deepseek-ai/dsh@0.2.0-rc.2 web --no-open
-```
-
-打开终端打印的认证地址，进入左侧 Human 入口。认证链接等同访问凭据，不要贴到 issue、截图或公开日志中。首次启动按以下顺序设置：
-
-1. **人格与关系**：选择或自定义人物，填写与你的关系和沟通偏好。
-2. **模型与对话**：核对所选模型、输出长度与连续输入合并设置。
-3. **自主行为**：从低额度开始，设置静默时段、检查间隔和主动联系节奏。
-4. **手机连接**：需要时配置一个渠道，并完成本人的私聊配对。
-5. 核对状态后，明确启动自主运行。冷启动保持暂停，不等于安装失败。
-
-开源版不包含 WhatsApp 及其 GPL 依赖链，也不包含 QQ 的未授权扫码连接器；QQ 采用手动 AppID / AppSecret。列表中的 12 种聊天渠道实现与 Office 连接器不代表全部真实验收通过。**一个 Human 只能绑定一个有效 IM，更换渠道会替换旧绑定。**
+各字段作用及界面中的自主额度与此处的区别，见 [配置说明](CONFIGURATION.md)。显式路径和模型配置继续用于已有安装；不要通过删除旧配置或移动数据目录强制重新进入首次设置。向导只管理 Human 自己的配置，不改写源 profile 的模型配置。
 
 ## 升级、停止与卸载
 
@@ -130,5 +155,6 @@ npx @deepseek-ai/dsh@0.2.0-rc.2 web --no-open
 | `INVALID_RUNTIME_HOME` / `LINKED_RUNTIME_HOME` | 是否使用不同的绝对路径，以及真实目录 |
 | `WORKER_UNAVAILABLE` | 在数据与维护中查看运行状态与日志；确认问题后再手动恢复 |
 | 微信显示已发送但手机未收到 | 区分本地回执、平台受理和真实实收；不要自动重发 `unknown` 投递 |
+| 微信消息同步在线，但发送失败或显示 `-2` | 查看独立的发送健康与最近本人微信入站时间；参考窗口不保证发送。本人发送一条新微信消息后核对状态与新回执，不能仅据 `-2` 断言登录凭据失效 |
 
 提交问题时提供脱敏版本、错误码、操作步骤和日志片段。不要提交数据库、认证链接、配对码或完整聊天记录。

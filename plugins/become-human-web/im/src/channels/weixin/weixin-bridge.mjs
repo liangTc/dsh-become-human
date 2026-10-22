@@ -198,7 +198,7 @@ export function weixinSendFailureOptions(error, { proactive = false } = {}) {
             ? t('微信主动消息发送失败。长轮询在线不代表消息可以发送。')
             : t('回复已经生成，但微信发送失败，可能只收到部分内容。请将下面的诊断信息完整反馈给管理员。'),
           ...(String(current.providerCode) === '-2' ? [
-            t('iLink 拒绝发送，可能涉及会话有效期、发送额度或消息内容。可让接收者发一条消息后重试；不要通过反复发送心跳尝试续期。'),
+            t('iLink 拒绝发送；-2 本身不能确定原因，可能涉及用户互动后的发送窗口、平台限制或消息内容。可让接收者发一条消息后核对新的发送结果；不会自动补发未知投递，也不要反复发送心跳。'),
           ] : []),
           t('微信发送诊断：{diagnostic}', { diagnostic }),
         ].join('\n'),
@@ -384,7 +384,7 @@ export class WeixinHarnessBridge {
     if(this.#harness.singleSessionIngress){
       const sender=nonEmptyString(message?.from_user_id),messageId=weixinMessageId(message),contextToken=nonEmptyString(message?.context_token);
       if(message?.message_type===2||!sender||!messageId)return Promise.resolve();
-      return this.#harness.singleSessionIngress.accept({channel:'weixin',botId:this.#contextEnhancement?.botId,state:this.#state,signal:this.#signal,message:{messageId,senderId:sender,conversationId:sender,kind:'direct',content:extractWeixinText(message),hasMedia:hasWeixinImageItems(message)||hasWeixinFileItems(message)},beforePair:()=>this.#state.rememberContextToken?.({userId:sender,contextToken,seq:message.seq,messageTimeMs:message.create_time_ms}),reply:text=>this.#send(sender,text,contextToken,nonEmptyString(message?.run_id))});
+      return this.#harness.singleSessionIngress.accept({channel:'weixin',botId:this.#contextEnhancement?.botId,state:this.#state,signal:this.#signal,message:{messageId,senderId:sender,conversationId:sender,kind:'direct',content:extractWeixinText(message),hasMedia:hasWeixinImageItems(message)||hasWeixinFileItems(message)},beforePair:()=>this.#state.rememberContextToken?.({userId:sender,contextToken,seq:message.seq,messageId,messageTimeMs:message.create_time_ms??weixinMessageTimestampMs(messageId)}),reply:text=>this.#send(sender,text,contextToken,nonEmptyString(message?.run_id))});
     }
     if (this.#signal?.aborted) return Promise.resolve();
     if (message?.message_type === 2) return Promise.resolve();
@@ -432,6 +432,7 @@ export class WeixinHarnessBridge {
       userId: sender,
       contextToken,
       seq: message.seq,
+      messageId,
       messageTimeMs: message.create_time_ms ?? weixinMessageTimestampMs(messageId),
     }).catch((error) => this.#logger.warn?.('[dsh-weixin] failed to persist conversation context:', error));
     const runId = nonEmptyString(message?.run_id) ?? undefined;
@@ -1323,6 +1324,7 @@ export class WeixinHarnessBridge {
     for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex += 1) {
       const chunk = chunks[chunkIndex];
       const sentAt = Date.now();
+      await this.#rememberSend({ userId: toUserId, phase: 'attempt', at: sentAt });
       try {
         const result = await this.#api.sendText({
           baseUrl: this.#baseUrl,
@@ -1334,6 +1336,8 @@ export class WeixinHarnessBridge {
           signal: this.#signal,
         });
         const chunkMessageIds = providerMessageIdsFor(result);
+        await this.#rememberSend({ userId: toUserId, phase: 'success' });
+        if (this.#status.lastMessageError?.reason === 'WEIXIN_SEND_FAILED') clearLastMessageFailure(this.#status);
         providerMessageIds.push(...chunkMessageIds);
         try {
           await this.#state.rememberOutboundMessage?.({
@@ -1347,7 +1351,8 @@ export class WeixinHarnessBridge {
           this.#logger.warn?.('[dsh-weixin] failed to remember an outbound message:', error);
         }
       } catch (error) {
-        throw weixinSendError(error, {
+        await this.#rememberSend({ userId: toUserId, phase: 'failure', code: this.#signal?.aborted ? 'aborted' : error?.code, providerCode: error?.providerCode });
+        const wrapped = weixinSendError(error, {
           baseUrl: this.#baseUrl,
           text,
           chunk,
@@ -1357,9 +1362,16 @@ export class WeixinHarnessBridge {
           contextToken,
           runId,
         });
+        if (!this.#signal?.aborted) setLastMessageFailure(this.#status, channelDeliveryFailure(wrapped, { uncertain: error?.code !== 'send-rejected' }), weixinSendFailureOptions(wrapped));
+        throw wrapped;
       }
     }
     return providerMessageIds;
+  }
+
+  async #rememberSend(input) {
+    try { await this.#state.recordSend?.(input); }
+    catch { this.#logger.warn?.('[dsh-weixin] failed to persist outbound health metadata'); }
   }
 
   async #sendOutOfBand(key, toUserId, text, contextToken, runId) {

@@ -3,6 +3,7 @@ import path from 'node:path';
 import z from '@deepseek-ai/schemastery';
 import {getDshRuntimeVersion} from '@deepseek-ai/dsh-app-boot';
 import {RuntimeSupervisor} from './supervisor.mjs';
+import {HumanOnboarding} from './onboarding.mjs';
 import {RemoteGateway} from './remote.mjs';
 import {SingleImIngress} from './im-ingress.mjs';
 import {createHostCapabilities} from './host-capabilities.mjs';
@@ -10,43 +11,52 @@ import * as FullImPlugin from './im/lib/index.js';
 import {safeOperationCode,assertOfflineStoreUnlocked,acquireRunningLock,adoptRunningLock,releaseRunningLock} from './operations-log.mjs';
 export const name='become-human-manager';
 export const inject=['connection','webServer','sessionController'];
-export const Config=z.object({sourceHome:z.string(),sourceProfile:z.string().default('web'),runtimeHome:z.string(),runtimeProfile:z.string().default('become-human-runtime'),runtimePort:z.number().default(3091),provider:z.string(),model:z.string(),intervalMs:z.number().default(600000),tokenBudget:z.number().default(40000),localQuotaEnabled:z.boolean().default(true),budgetRound:z.string().default('interactive-v1'),maxTokens:z.number().default(2048),maxCycles:z.number().default(1),requestTimeoutMs:z.number().default(90000),interactiveOnly:z.boolean().default(true)});
+export const Config=z.object({sourceHome:z.string().required(false),sourceProfile:z.string().required(false),runtimeHome:z.string().required(false),runtimeProfile:z.string().required(false),runtimePort:z.number().required(false),provider:z.string().required(false),model:z.string().required(false),intervalMs:z.number().default(600000),tokenBudget:z.number().default(40000),localQuotaEnabled:z.boolean().default(true),budgetRound:z.string().default('interactive-v1'),maxTokens:z.number().default(2048),maxCycles:z.number().default(1),requestTimeoutMs:z.number().default(90000),interactiveOnly:z.boolean().default(true)});
 export async function apply(ctx,config){
-  if(getDshRuntimeVersion()!=='0.2.0-rc.2')throw new Error('UNSUPPORTED_DSH_VERSION');
-  assertOfflineStoreUnlocked(process.env.DSH_HOME);
+  const runtimeVersion=getDshRuntimeVersion();
+  const managerHome=ctx.profileContext?.home??process.env.DSH_HOME??config.sourceHome;
+  if(typeof managerHome!=='string'||!path.isAbsolute(managerHome))throw new Error('INVALID_MANAGER_HOME');
+  assertOfflineStoreUnlocked(managerHome);
   const bootstrapHome=process.env.BH_SERVICE_MANAGER_LOCK_HOME,bootstrapNonce=process.env.BH_SERVICE_MANAGER_LOCK_NONCE;delete process.env.BH_SERVICE_MANAGER_LOCK_HOME;delete process.env.BH_SERVICE_MANAGER_LOCK_NONCE;
-  const managerLease=bootstrapHome===path.resolve(process.env.DSH_HOME)&&bootstrapNonce?adoptRunningLock(process.env.DSH_HOME,bootstrapNonce):acquireRunningLock(process.env.DSH_HOME);let startupRuntime,startupRemote,startupIm,startupHost;
+  const managerLease=bootstrapHome===path.resolve(managerHome)&&bootstrapNonce?adoptRunningLock(managerHome,bootstrapNonce):acquireRunningLock(managerHome);let startupRuntime,startupRemote,startupIm,startupHost;
   try{
-  const root=path.join(process.env.DSH_HOME,'become-human-manager');await fs.mkdir(root,{recursive:true});
-  const runtime=new RuntimeSupervisor({...config,sourceHome:config.sourceHome??process.env.DSH_HOME,runtimeHome:config.runtimeHome??path.join(root,'runtime-home')});
-  const hostCapabilities=createHostCapabilities(ctx,{home:process.env.DSH_HOME,getHumanSessionId:async()=>JSON.parse(await fs.readFile(path.join(runtime.config.runtimeHome,'become-human/agent.json'),'utf8')).sessionId});
+  const root=path.join(managerHome,'become-human-manager');await fs.mkdir(root,{recursive:true});
+  const onboarding=await HumanOnboarding.create({root,config,profileContext:ctx.profileContext??{home:managerHome},runtimeVersion});
+  const runtime=new RuntimeSupervisor(onboarding.config);
+  const hostCapabilities=createHostCapabilities(ctx,{home:managerHome,getHumanSessionId:async()=>JSON.parse(await fs.readFile(path.join(runtime.config.runtimeHome,'become-human/agent.json'),'utf8')).sessionId});
   startupHost=hostCapabilities;
   runtime.capabilityHandler=(packet,signal)=>{hostCapabilities.configure(packet.context.policy,{revision:packet.context.policyRevision});return hostCapabilities.handle(packet,signal);};
   startupRuntime=runtime;
   const remote=new RemoteGateway(path.join(root,'remote.sqlite'),runtime);const im=new SingleImIngress(remote,runtime);
+  onboarding.attach(runtime,input=>remote.controlRuntime(input));
   startupRemote=remote;startupIm=im;
   ctx.provide('becomeHumanImIngress',im);
   ctx.plugin(FullImPlugin,{});
   ctx.provide('becomeHumanRemote',Object.freeze({contractVersion:1,registerAdapter:(kind,adapter)=>remote.register(kind,adapter),receive:(channelId,envelope)=>remote.receive(channelId,envelope)}));
-  let bootError;try{await runtime.start();}catch(error){bootError=safeOperationCode(error,'WORKER_START_FAILED');}
+  let bootError;if(!onboarding.required&&onboarding.supported)try{await runtime.start();}catch(error){bootError=safeOperationCode(error,'WORKER_START_FAILED');}
+  else if(!onboarding.supported)bootError=onboarding.describe().error??onboarding.issues[0]?.code??'SETUP_ENVIRONMENT_UNSUPPORTED';
   let closing=false,tick,lastRemoteError=null;
   const latestRemoteError=(other)=>[lastRemoteError,remote.lastError,other].filter(Boolean).sort((a,b)=>b.at-a.at)[0]??null;
   const remoteFailure=(error,operation)=>{lastRemoteError={at:Date.now(),code:safeOperationCode(error,'REMOTE_OPERATION_FAILED'),operation};try{remote.recordError(error,{operation});}catch(storageError){runtime.recordLifecycle('remote-error-store-failed',{code:safeOperationCode(storageError,'REMOTE_ERROR_STORE_FAILED'),originalCode:lastRemoteError.code});}};
   const remoteStatus=()=>{try{return remote.status();}catch(error){remoteFailure(error,'remote-status');return {sessionMode:'single',unavailable:true,lastError:latestRemoteError(),channels:[],deliveries:[],deliveryParts:[]};}};
-  const schedule=()=>{if(closing)return;tick=setTimeout(async()=>{try{await remote.tick();}catch(error){remoteFailure(error,'remote-tick');}finally{schedule();}},1500);};schedule();
+  const schedule=()=>{if(closing)return;tick=setTimeout(async()=>{try{if(!onboarding.required&&runtime.cookie)await remote.tick();}catch(error){remoteFailure(error,'remote-tick');}finally{schedule();}},1500);};schedule();
   async function state(){
-    try{const s=await runtime.state(),remoteState=remoteStatus();let imState;try{imState=await im.describe();}catch(error){remoteFailure(error,'im-describe');imState={error:safeOperationCode(error,'IM_STATUS_FAILED'),channels:[],paired:[]};}const health=runtime.health(s);if(health.status==='healthy'&&(remoteState.unavailable||imState.error))health.status='degraded';return {...s,manager:{version:'0.7.0-beta.1',independentProcess:true,sessionMode:'single',modelSelection:runtime.selection,health,lastRemoteError:latestRemoteError(remoteState.lastError)},remote:remoteState,im:imState};}
-    catch{return {version:'0.7.0-beta.1',sessionId:null,desired:'paused',status:'unavailable',agentBusy:false,canThink:false,interactiveOnly:true,provider:'尚未配置',model:'',used:0,budget:config.tokenBudget,remaining:0,successes:0,intervalMs:config.intervalMs,inbox:0,persona:'',memory:'',messages:[],memories:[],attempts:[],audit:[],receipt:0,manager:{version:'0.7.0-beta.1',independentProcess:true,sessionMode:'single',error:bootError??runtime.lastError??'WORKER_UNAVAILABLE',health:runtime.health(),lastRemoteError:latestRemoteError()},remote:remoteStatus()};}
+    try{const s=await runtime.state(),remoteState=remoteStatus();let imState;try{imState=await im.describe();}catch(error){remoteFailure(error,'im-describe');imState={error:safeOperationCode(error,'IM_STATUS_FAILED'),channels:[],paired:[]};}const health=runtime.health(s);if(health.status==='healthy'&&(remoteState.unavailable||imState.error))health.status='degraded';return {...s,setup:onboarding.describe(),manager:{version:'0.7.0-beta.4',independentProcess:true,sessionMode:'single',modelSelection:runtime.selection,health,lastRemoteError:latestRemoteError(remoteState.lastError)},remote:remoteState,im:imState};}
+    catch{return {version:'0.7.0-beta.4',setup:onboarding.describe(),sessionId:null,desired:'paused',status:'unavailable',agentBusy:false,canThink:false,interactiveOnly:true,provider:'尚未配置',model:'',used:0,budget:config.tokenBudget,remaining:0,successes:0,intervalMs:config.intervalMs,inbox:0,persona:'',memory:'',messages:[],memories:[],attempts:[],audit:[],receipt:0,manager:{version:'0.7.0-beta.4',independentProcess:true,sessionMode:'single',error:bootError??runtime.lastError??(onboarding.required?'SETUP_REQUIRED':'WORKER_UNAVAILABLE'),health:runtime.health(),lastRemoteError:latestRemoteError()},remote:remoteStatus()};}
   }
   let operations=Promise.resolve();
   const mutate=input=>operations=operations.catch(()=>{}).then(async()=>{
     if(!input||typeof input!=='object')throw new Error('INVALID_REQUEST');
+    if(input.op==='setup-refresh'){await onboarding.refresh();return state();}
+    if(input.op==='setup-reset'){await onboarding.reset(input);bootError=null;return state();}
+    if(input.op==='setup-complete'){await onboarding.complete(input);bootError=null;return state();}
+    if(onboarding.required)throw new Error('SETUP_REQUIRED');
     if(input.op==='remote-save')await remote.save(input);
     else if(input.op==='im-pair'){return {pair:im.beginPair(input.channel),state:await state()};}
     else if(input.op==='im-account-check'){return {account:await im.checkAccount(input.botId),state:await state()};}
     else if(input.op==='remote-enable')await remote.enable(input.id,input.enabled);
     else if(input.op==='remote-reply'){if(typeof input.enabled!=='boolean')throw new Error('INVALID_REQUEST');remote.preference('reply-enabled',input.enabled);}
-    else if(input.op==='runtime-restart'){await remote.restartRuntime();bootError=null;}
+    else if(input.op==='runtime-restart'){if(!onboarding.supported)throw new Error('SETUP_ENVIRONMENT_UNSUPPORTED');await remote.restartRuntime();bootError=null;}
     else if(input.op==='runtime-stop')await remote.stopRuntime();
     else if(input.op==='delivery-confirm'){const delivery=await remote.confirmDelivery(input);return {state:await state(),delivery};}
     else if(['tool-submit','tool-cancel','tool-approve','capability-configure','goal-revise','goal-review','goal-propose-gap','usage-prices-save','role-save','action-propose-report','action-approve','action-cancel','pause','start','once','message','retry','persona','receipt','reminder-create','reminder-cancel','schedule-create','schedule-update','schedule-toggle','schedule-cancel','goal-propose','goal-transition','goal-retry','memory-save','memory-revise','memory-forget','note-revise','profile-save','profile-rollback','execution-save','data-save','skill-save','skill-toggle','skill-rollback','persona-auto','persona-rollback','autonomy-configure','autonomy-pause','autonomy-resume','autonomy-retry-task','autonomy-grant','autonomy-grant-revoke','learning-feedback','learning-note-delete','session-delete-preview','session-delete-confirm','session-delete-recover','delete-fixture-preview','delete-fixture-confirm','delete-fixture-recover'].includes(input.op)){
@@ -57,6 +67,7 @@ export async function apply(ctx,config){
   });
   async function read(input){
     if(input.kind==='state')return state();
+    if(input.kind==='setup')return onboarding.refresh();
     const current=await runtime.state();if(input.sessionId&&input.sessionId!==current.sessionId)throw new Error('STALE_SESSION');
     if(input.kind==='delivery-review')return remote.deliveryReview(input);
     if(input.kind==='activity'){

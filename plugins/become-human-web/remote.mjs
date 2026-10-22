@@ -44,7 +44,7 @@ export class RemoteGateway {
     return this.queueControl(async()=>{
       if(this.closed)throw new Error('REMOTE_CLOSED');
       const state=await this.runtime.state();if(state.retiring)throw new Error('SESSION_RETIRING');
-      if(state.desired==='paused'&&state.driveMode==='continuous'&&state.cycleLimit===null&&!state.interactiveOnly)await this.runtime.control({op:'start',sessionId:state.sessionId,expectedEpoch:state.cancelEpoch});
+      if(state.desired==='paused'&&state.driveMode==='continuous'&&state.cycleLimit===null)await this.runtime.control({op:'start',sessionId:state.sessionId,expectedEpoch:state.cancelEpoch});
       this.allowWake('manual-resume');
       return {command:'resumed'};
     });

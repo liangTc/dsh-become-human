@@ -353,7 +353,17 @@ export class HumanAgent {
     if(this.factory.reminders&&!this.inbox.nextTurn.length&&!this.inbox.nextStep.length){const reminder=this.factory.reminders.due(this.id);if(reminder)return runReminderTurn(this,signal,reminder);}
     if(!this.inbox.nextTurn.length&&!this.inbox.nextStep.length){const action=nextActionWork(this);if(action)return runActionTurn(this,signal,action);}
     if(reminderOnly&&!this.inbox.nextTurn.length&&!this.inbox.nextStep.length)return;
-    if(this.factory.autonomy.settings(this.id).enabled)return runAutonomyTurn(this,signal);
+    const ownerPending=this.inbox.nextTurn.length||this.inbox.nextStep.length;
+    if(this.factory.autonomy.settings(this.id).enabled||this.factory.config.interactiveOnly&&ownerPending)return runAutonomyTurn(this,signal);
+    // Chat-only mode stays online for owner input without an idle model turn.
+    // Foreground requests use the same conversation and accounting path as
+    // autonomy-enabled installations, including the separate foreground pool.
+    if(this.factory.config.interactiveOnly){
+      // A bounded manual check still finishes its cycle when there is no input.
+      // runAutonomyTurn records that idle turn without dispatching a model.
+      if(this.factory.journal.value(this.id,'remaining',0)!==null)return runAutonomyTurn(this,signal);
+      return;
+    }
     const journal=this.factory.journal,state=this.desired(),epoch=state.epoch,config=this.factory.config;
     const remaining=journal.value(this.id,'remaining',0);
     if(remaining!==null&&remaining<=0){journal.set(this.id,'paused');return;}

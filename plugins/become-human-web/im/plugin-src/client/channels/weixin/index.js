@@ -12,6 +12,7 @@ import {
   formatRemaining,
   normalizeProvisioning,
   normalizeSnapshot,
+  presentWeixinDelivery,
   presentError,
   safeQrSource,
   safeVerificationUrl,
@@ -63,7 +64,7 @@ function Heading({ totals, adding, busy, onAdd, addButtonRef }) {
       }, h(QrActionIcon), adding ? '正在接入' : '扫码接入机器人'),
       totals.configured > 0
         ? h('div', { className: 'dxw-badge dim-onlineBadge' },
-            h('span', null, `${totals.connected} / ${totals.configured} 在线`))
+            h('span', null, `${totals.connected} / ${totals.configured} 消息同步在线`))
         : null,
     ),
   );
@@ -209,6 +210,27 @@ function checkedTime(timestamp) {
   }
 }
 
+function deliveryTime(timestamp) {
+  return timestamp ? new Date(timestamp).toLocaleString('zh-CN', { hour12: false }) : '尚无记录';
+}
+
+export function WeixinDeliveryStatus({ value }) {
+  const status = presentWeixinDelivery(value), delivery = status.delivery;
+  return h('section', { className: 'dxw-deliveryStatus', 'aria-label': '微信发送与互动窗口', 'data-tone': status.tone },
+    h('strong', null, status.label),
+    h('dl', { className: 'dxw-deliveryFacts' },
+      h('div', null, h('dt', null, '绑定主人最后真实微信互动'), h('dd', null, deliveryTime(delivery?.lastInboundAt))),
+      h('div', null, h('dt', null, '24 小时预计到期'), h('dd', null, deliveryTime(delivery?.estimatedWindowExpiresAt))),
+      h('div', null, h('dt', null, '预计剩余'), h('dd', null, status.windowLabel)),
+      delivery?.lastSendFailureAt ? h('div', null, h('dt', null, '最近发送失败'), h('dd', null, deliveryTime(delivery.lastSendFailureAt))) : null,
+      delivery?.lastSendSuccessAt ? h('div', null, h('dt', null, '最近平台接受发送'), h('dd', null, deliveryTime(delivery.lastSendSuccessAt))) : null),
+    h('p', null, '窗口按收到的真实微信互动估算，不保证平台允许发送；网页消息和自主活动不会刷新窗口，平台接受也不代表手机已读。'),
+    delivery?.scope !== 'bound-owner' ? h('p', null, '尚无绑定主人的窗口记录，不能用其他用户互动或账号在线状态推断。') : null,
+    status.failureHint ? h('p', null, status.failureHint) : null,
+    delivery?.sendability === 'refresh-needed' || delivery?.sendability === 'failed'
+      ? h('p', null, '请在手机给机器人发一条消息，再核对后续发送结果。重新读取状态或检查连接不会刷新互动窗口；未知投递不会自动重发。') : null);
+}
+
 export function AccountCard({
   account,
   busy,
@@ -225,8 +247,9 @@ export function AccountCard({
   onCancelRemove,
 }) {
   const state = busy === 'reconnect' ? 'connecting' : account.state;
-  const tone = account.connected ? 'success' : state === 'error' ? 'error' : 'warning';
-  const summary = account.error?.message ?? (account.connected ? null : account.health.summary);
+  const delivery = presentWeixinDelivery(account.weixinDelivery);
+  const tone = account.connected ? (delivery.tone === 'warning' || account.health.status === 'degraded' ? 'warning' : 'success') : state === 'error' ? 'error' : 'warning';
+  const summary = account.error?.message ?? (!account.connected || account.health.status === 'degraded' ? account.health.summary : null);
   return h('article', { className: 'dxw-card dim-botCard', tabIndex: -1, 'data-bot-id': account.botId },
     h('div', { className: 'dxw-cardBody dim-botCardBody' },
       h(CollapsibleAccountSection, {
@@ -252,7 +275,7 @@ export function AccountCard({
             className: 'dxw-health',
             dotClassName: 'dxw-dot',
             tone,
-            stateLabel: account.connected ? '运行正常' : state === 'connecting' ? '正在连接' : '连接未就绪',
+            stateLabel: account.connected ? '消息同步在线' : state === 'connecting' ? '正在连接' : '连接未就绪',
             lastCheckedAt: account.health.lastCheckedAt,
             formatCheckedTime: checkedTime,
           }),
@@ -297,6 +320,7 @@ export function AccountCard({
             'aria-live': 'polite',
           }, typeof feedback === 'string' ? feedback : h(WeixinConnectionError, { error: feedback })) : null)),
       ),
+      h(WeixinDeliveryStatus, { value: account.weixinDelivery }),
     ),
     removing ? h('div', { className: 'dxw-confirm dim-confirm', role: 'alertdialog' },
       h('strong', null, '从此 Harness 移除这个微信账号？'),

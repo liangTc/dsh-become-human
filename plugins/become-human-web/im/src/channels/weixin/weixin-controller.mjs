@@ -372,6 +372,10 @@ export class WeixinController {
       const error = connected ? null : this.#errors.get(config.botId) ?? runtimeStatus?.connectionError ?? (state === 'error'
         ? safeAccountError('connection-failed', t('微信连接未就绪，插件会自动重试。'))
         : null);
+      const delivery = runtimeStatus?.weixinDelivery ?? null;
+      const sendFailed = runtimeStatus?.lastMessageError?.reason === 'WEIXIN_SEND_FAILED'
+        || runtimeStatus?.weixinSendFailureOutstanding === true
+        || delivery?.lastSendFailureAt && delivery.lastSendFailureAt > (delivery.lastSendSuccessAt ?? 0);
       return {
         botId: config.botId,
         state,
@@ -382,9 +386,9 @@ export class WeixinController {
           accountIdMasked: maskWeixinAccountId(config.accountId),
         },
         health: {
-          status: connected ? 'healthy' : state === 'error' ? 'error' : 'offline',
+          status: connected ? sendFailed ? 'degraded' : 'healthy' : state === 'error' ? 'error' : 'offline',
           summary: connected
-            ? t('微信消息长轮询运行正常')
+            ? sendFailed ? t('微信消息长轮询在线；最近发送失败，新互动后的发送仍需核对。') : t('微信消息长轮询运行正常；不代表平台当前允许发送。')
             : state === 'error'
               ? t('微信连接未就绪，插件会自动重试')
               : t('微信连接当前离线'),
@@ -395,6 +399,7 @@ export class WeixinController {
           messagesReplied: runtimeStatus?.messagesReplied ?? 0,
         },
         lastMessageError: publicMessageFailure(runtimeStatus?.lastMessageError),
+        weixinDelivery: delivery,
         error: error ? structuredClone(error) : null,
       };
     });

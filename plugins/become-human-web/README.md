@@ -1,18 +1,20 @@
 # Become Human · DSH Web 插件
 
-> **0.7.0-beta.1 · 测试版本，尚未开发完成。** 当前面向 Windows、Node.js 24+、DeepSeek Harness 0.2.0-rc.2 的 web profile。长期运行与全部渠道尚未完成实测验收。
+> **0.7.0-beta.4 · 测试版本，尚未开发完成。** 当前面向 Windows、Node.js 24+、DeepSeek Harness 0.2.0-rc.2 的 web profile。长期运行与全部渠道尚未完成实测验收。
 
 为 DSH Web 增加一个拥有统一人格、记忆、学习与主动行为的 Human。管理插件嵌入 Web，独立运行模块处理事件循环；一个 Human 只有一个持久主会话，同时只绑定一个有效 IM 渠道。
 
 ## 安装
 
-使用可信 Release 的预构建 `.tgz`：
+使用预构建 `.tgz`，一次安装 Web 插件及其后台代码。当前公开 Release 安装附件与 npm 包尚未发布，可使用维护者提供或自行构建的包：
 
 ```powershell
-npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./dsh-become-human-web-0.7.0-beta.1.tgz
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./dsh-become-human-web-0.7.0-beta.4.tgz
 ```
 
-安装后需填写专用 runtimeHome、sourceHome、实际 provider 与 model；凭据通过 DSH 的 apiKeyEnv 引用解析。详见 [安装与升级](docs/INSTALLATION.md)。单独安装内部 runtime 不属于支持方式。
+安装后启动 DSH，进入 Human，按“选择已有模型 → 人物与额度 → 创建并启动”完成首次设置。路径、私有 profile 和内部空闲端口自动准备，无需另装后台或手工编辑 YAML。模型凭据通过 DSH 的 apiKeyEnv 引用解析；向导不接收明文密钥。详见 [安装与升级](docs/INSTALLATION.md)。单独安装内部 runtime 不属于支持方式。
+
+首次自主行为默认关闭，可在创建前明确勾选；手机连接在创建后按需设置。已有安装保留会话、配置与绑定。后台继续由宿主 DSH 管理，重启后仍保持暂停；本次未增加后台常驻功能。
 
 ## 使用与配置
 

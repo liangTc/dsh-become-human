@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "package": "dsh-become-human-web",
-  "version": "0.7.0-beta.1",
+  "version": "0.7.0-beta.4",
   "upstream": {
     "name": "dsh-im",
     "version": "4.39.0",
@@ -30,7 +30,7 @@
   ],
   "host": {
     "file": "lib/index.js",
-    "sha256": "b13ecabd822535708098ad0d9639fadd1af7ca9b9434bb24142db71179b0cb6d",
+    "sha256": "c007592c362e548d8818ab68bb918016546601eb333560724e311015cdb9b4a3",
     "inputs": [
       {
         "file": "im/package.json",
@@ -362,7 +362,7 @@
       },
       {
         "file": "im/plugin-src/host/native-account-proof.mjs",
-        "bytes": 1718
+        "bytes": 3458
       },
       {
         "file": "im/plugin-src/host/rpc-authority.mjs",
@@ -1282,7 +1282,7 @@
       },
       {
         "file": "im/src/channels/weixin/state-store.mjs",
-        "bytes": 10184
+        "bytes": 16609
       },
       {
         "file": "im/src/channels/weixin/weixin-api.mjs",
@@ -1290,15 +1290,15 @@
       },
       {
         "file": "im/src/channels/weixin/weixin-bridge.mjs",
-        "bytes": 58437
+        "bytes": 59422
       },
       {
         "file": "im/src/channels/weixin/weixin-controller.mjs",
-        "bytes": 26995
+        "bytes": 27524
       },
       {
         "file": "im/src/channels/weixin/weixin-runtime.mjs",
-        "bytes": 15131
+        "bytes": 16279
       },
       {
         "file": "node_modules/@larksuiteoapi/node-sdk/lib/index.js",
@@ -1976,7 +1976,7 @@
   },
   "client": {
     "file": "../im-client.js",
-    "sha256": "ab57d5cb2146f5d0dd79ad77f8f3da9724cffa6778853b27cc5a8429baf58777",
+    "sha256": "1f245bfc0736d33b4de51633d32a75ce10113e4ee64fef299fcc65d4c3daae7e",
     "inputs": [
       {
         "file": "im/package.json",
@@ -2188,7 +2188,7 @@
       },
       {
         "file": "im/plugin-src/client/channels/weixin/api.js",
-        "bytes": 8642
+        "bytes": 11426
       },
       {
         "file": "im/plugin-src/client/channels/weixin/connection-error.js",
@@ -2196,11 +2196,11 @@
       },
       {
         "file": "im/plugin-src/client/channels/weixin/index.js",
-        "bytes": 35070
+        "bytes": 37204
       },
       {
         "file": "im/plugin-src/client/channels/weixin/styles.js",
-        "bytes": 10058
+        "bytes": 10789
       },
       {
         "file": "im/plugin-src/client/connection-error.js",

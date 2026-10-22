@@ -81,6 +81,13 @@ const CSS = String.raw`
 .dxw-accountFooter .dxw-actions { flex: none; flex-wrap: nowrap; gap: 8px; margin-top: 0; }
 .dxw-accountFooter .dxw-button { flex: none; white-space: nowrap; }
 .dxw-summary { color: var(--dsw-alias-label-secondary, #646a73); font-size: 12px; }
+.dxw-deliveryStatus { margin: 12px 0; padding: 12px 14px; border: 1px solid var(--dsw-alias-border-l2, #dfe1e5); border-radius: 9px; font-size: 12px; line-height: 1.6; }
+.dxw-deliveryStatus[data-tone="warning"] { border-color: color-mix(in srgb, #b7791f 45%, transparent); }
+.dxw-deliveryStatus > strong { display: block; margin-bottom: 8px; }
+.dxw-deliveryStatus p { margin: 8px 0 0; color: var(--dsw-alias-label-secondary, #646a73); overflow-wrap: anywhere; }
+.dxw-deliveryFacts { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px 16px; margin: 0; }
+.dxw-deliveryFacts dt { color: var(--dsw-alias-label-secondary, #646a73); }
+.dxw-deliveryFacts dd { margin: 2px 0 0; overflow-wrap: anywhere; }
 .dxw-confirm { padding: 18px 24px; border-top: 1px solid color-mix(in srgb, var(--dxw-error) 25%, transparent); background: color-mix(in srgb, var(--dxw-error) 5%, transparent); }
 .dxw-confirm strong { display: block; font-size: 14px; margin-bottom: 6px; }
 .dxw-confirm p { color: var(--dsw-alias-label-secondary, #646a73); font-size: 12px; line-height: 1.55; }

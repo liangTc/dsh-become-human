@@ -19,6 +19,12 @@ export const WEIXIN_RECENT_OUTBOUND_TTL_MS = 30 * 24 * 60 * 60 * 1_000;
 export const WEIXIN_RECENT_OUTBOUND_TEXT_LIMIT = 8_000;
 export const WEIXIN_RECENT_OUTBOUND_MATCH_TOLERANCE_MS = 15_000;
 const CONTEXT_TOKEN_LIMIT = 1_000;
+// UI guidance only. The provider remains the authority on every send attempt.
+export const WEIXIN_REPLY_WINDOW_ESTIMATE_MS = 24 * 60 * 60 * 1_000;
+const INBOUND_CLOCK_SKEW_MS = 5_000;
+const SEND_CODES = new Set(['send-rejected', 'network-error', 'timeout', 'http-error', 'bot-not-connected', 'invalid-target', 'weixin-send-failed', 'aborted']);
+const safeSendCode = value => SEND_CODES.has(value) ? value : 'weixin-send-failed';
+const safeProviderCode = value => /^-?\d{1,8}$/.test(String(value ?? '')) ? String(value) : null;
 
 function nonEmptyString(value) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
@@ -29,21 +35,47 @@ function timestamp(value) {
   return Number.isFinite(number) && number >= 0 ? Math.trunc(number) : null;
 }
 
+function inboundTimestamp(value, receivedAt) {
+  const source = timestamp(value);
+  if (source === null || source <= 0 || receivedAt === null || source > receivedAt + INBOUND_CLOCK_SKEW_MS) return null;
+  // Small provider/local clock skew is real: source IDs can lead reception by
+  // milliseconds. Clamp to the original receipt; never extend a window into the
+  // future, and never substitute reload time for an old interaction.
+  return Math.min(source, receivedAt);
+}
+
 function sequence(value) {
   const text = typeof value === 'string' ? value : Number.isSafeInteger(value) ? String(value) : '';
   return /^\d+$/.test(text) ? BigInt(text).toString() : null;
+}
+
+function deliveryState(value = {}) {
+  return {
+    lastAttemptAt: timestamp(value.lastAttemptAt), lastSuccessAt: timestamp(value.lastSuccessAt),
+    lastFailureAt: timestamp(value.lastFailureAt),
+    lastFailureCode: value.lastFailureCode ? safeSendCode(value.lastFailureCode) : null,
+    lastFailureProviderCode: safeProviderCode(value.lastFailureProviderCode),
+    lastOutcome: ['success', 'failure'].includes(value.lastOutcome) ? value.lastOutcome : null,
+  };
 }
 
 function normalizeContextTokens(value) {
   if (!value || typeof value !== 'object' || !/^[a-f0-9]{64}$/.test(value.credentialHash ?? '')) return undefined;
   const users = Object.create(null);
   for (const [userId, entry] of Object.entries(value.users ?? {}).slice(-CONTEXT_TOKEN_LIMIT)) {
-    if (!nonEmptyString(userId) || !nonEmptyString(entry?.token)) continue;
+    if (!nonEmptyString(userId) || !entry || typeof entry !== 'object') continue;
+    const receivedAt = timestamp(entry.receivedAt), messageTimeMs = timestamp(entry.messageTimeMs);
+    // beta.3 discarded slightly-ahead source clocks. Recover only from that
+    // event's stored ID and stored receipt, not from the time this file loads.
+    const sourceTime = inboundTimestamp(messageTimeMs ?? (receivedAt !== null ? weixinMessageTimestampMs(entry.messageId, { now: receivedAt }) : null), receivedAt);
     users[userId] = {
-      token: entry.token,
+      token: nonEmptyString(entry.token),
       seq: sequence(entry.seq),
-      messageTimeMs: timestamp(entry.messageTimeMs),
-      receivedAt: timestamp(entry.receivedAt),
+      messageTimeMs: sourceTime, receivedAt,
+      messageId: nonEmptyString(entry.messageId)?.slice(0, 256) ?? null,
+      lastInboundAt: inboundTimestamp(entry.lastInboundAt, receivedAt) ?? sourceTime,
+      contextUpdatedAt: timestamp(entry.contextUpdatedAt) ?? (nonEmptyString(entry.token) ? receivedAt : null),
+      delivery: deliveryState(entry.delivery),
     };
   }
   return { credentialHash: value.credentialHash, users };
@@ -148,22 +180,82 @@ export class WeixinStateStore {
     return this.#state.contextTokens?.users?.[userId]?.token ?? undefined;
   }
 
-  async rememberContextToken({ userId, contextToken, seq, messageTimeMs }) {
-    if (!nonEmptyString(userId) || !nonEmptyString(contextToken) || !this.#state.contextTokens) return;
+  async rememberContextToken({ userId, contextToken, seq, messageTimeMs, messageId }) {
+    if (!nonEmptyString(userId) || !this.#state.contextTokens) return false;
     const users = this.#state.contextTokens.users;
     const previous = users[userId];
-    const next = { token: contextToken, seq: sequence(seq), messageTimeMs: timestamp(messageTimeMs), receivedAt: Date.now() };
+    const receivedAt = Date.now(), sourceTime = inboundTimestamp(messageTimeMs, receivedAt), sourceId = nonEmptyString(messageId)?.slice(0, 256) ?? null;
+    const next = { token: nonEmptyString(contextToken) ?? previous?.token ?? null, seq: sequence(seq), messageTimeMs: sourceTime, receivedAt,
+      messageId: sourceId, lastInboundAt: sourceTime,
+      contextUpdatedAt: nonEmptyString(contextToken) ? receivedAt : previous?.contextUpdatedAt ?? null,
+      delivery: deliveryState(previous?.delivery) };
     // Late/duplicate batches must not replace a newer conversation capability.
     if (previous) {
-      if (previous.seq !== null && next.seq !== null && BigInt(next.seq) <= BigInt(previous.seq)) return;
+      if (sourceId && previous.messageId === sourceId) return false;
+      if (previous.seq !== null && next.seq !== null && BigInt(next.seq) <= BigInt(previous.seq)) return false;
       if (previous.messageTimeMs !== null && next.messageTimeMs !== null
-        && next.messageTimeMs < previous.messageTimeMs) return;
+        && next.messageTimeMs < previous.messageTimeMs) return false;
+      if (!sourceId && next.seq === null && next.messageTimeMs === null) return false;
+      if (!sourceId && next.seq === null && next.messageTimeMs === previous.messageTimeMs) return false;
     }
     delete users[userId];
     users[userId] = next;
     const keys = Object.keys(users);
     if (keys.length > CONTEXT_TOKEN_LIMIT) delete users[keys[0]];
     await this.#persist();
+    return true;
+  }
+
+  async recordSend({ userId, phase, at = Date.now(), code, providerCode }) {
+    if (!nonEmptyString(userId) || !this.#state.contextTokens || !['attempt', 'success', 'failure'].includes(phase)) return;
+    const users = this.#state.contextTokens.users, entry = users[userId] ??= {
+      token: null, seq: null, messageTimeMs: null, receivedAt: null, messageId: null,
+      lastInboundAt: null, contextUpdatedAt: null, delivery: deliveryState(),
+    };
+    const value = Math.min(timestamp(at) ?? Date.now(), Date.now());
+    entry.delivery ??= deliveryState();
+    if (phase === 'attempt') entry.delivery.lastAttemptAt = Math.max(entry.delivery.lastAttemptAt ?? 0, value);
+    if (phase === 'success') { entry.delivery.lastSuccessAt = Math.max(entry.delivery.lastSuccessAt ?? 0, value); entry.delivery.lastOutcome = 'success'; }
+    if (phase === 'failure') {
+      entry.delivery.lastFailureAt = Math.max(entry.delivery.lastFailureAt ?? 0, value);
+      entry.delivery.lastFailureCode = safeSendCode(code);
+      entry.delivery.lastFailureProviderCode = safeProviderCode(providerCode);
+      entry.delivery.lastOutcome = 'failure';
+    }
+    const keys = Object.keys(users); if (keys.length > CONTEXT_TOKEN_LIMIT) delete users[keys[0]];
+    await this.#persist();
+  }
+
+  deliveryHealthFor(userId, { now = Date.now(), scope = 'bound-owner' } = {}) {
+    if (scope !== 'bound-owner') userId = null;
+    const entry = userId ? this.#state.contextTokens?.users?.[userId] : null;
+    const lastInboundAt = entry?.lastInboundAt > 0 && entry.lastInboundAt <= now ? entry.lastInboundAt : null;
+    const expires = lastInboundAt === null ? null : lastInboundAt + WEIXIN_REPLY_WINDOW_ESTIMATE_MS;
+    const windowEstimate = expires === null ? 'unknown' : now < expires ? 'within' : 'outside';
+    const delivery = deliveryState(entry?.delivery);
+    // Old versions recorded successful outbound completion, but no attempt log.
+    const oldSuccess = userId ? Math.max(0, ...this.#state.recentOutboundMessages.filter(row => row.toUserId === userId).map(row => row.completedAt)) : 0;
+    const lastSuccessAt = Math.max(delivery.lastSuccessAt ?? 0, oldSuccess) || null;
+    const failureOutstanding = delivery.lastFailureAt !== null && (delivery.lastFailureAt > (lastSuccessAt ?? 0)
+      || delivery.lastFailureAt === lastSuccessAt && delivery.lastOutcome === 'failure');
+    let sendability = lastSuccessAt ? 'available' : 'unknown';
+    if (failureOutstanding) sendability = lastInboundAt !== null && lastInboundAt > delivery.lastFailureAt ? 'unknown'
+      : delivery.lastFailureProviderCode === '-2' ? 'refresh-needed' : 'failed';
+    else if (windowEstimate === 'outside') sendability = 'refresh-needed';
+    return {
+      scope: userId && scope === 'bound-owner' ? 'bound-owner' : 'unknown', lastInboundAt,
+      contextUpdatedAt: entry?.contextUpdatedAt ?? null, estimatedWindowExpiresAt: expires,
+      estimatedWindowMs: WEIXIN_REPLY_WINDOW_ESTIMATE_MS, windowEstimate, sendability,
+      lastSendAttemptAt: delivery.lastAttemptAt, lastSendSuccessAt: lastSuccessAt,
+      lastSendFailureAt: delivery.lastFailureAt, lastSendFailureCode: delivery.lastFailureCode,
+      lastSendFailureProviderCode: delivery.lastFailureProviderCode, windowIsEstimate: true,
+    };
+  }
+
+  hasSendFailureFor(userId) {
+    const d = this.deliveryHealthFor(userId), entry = this.#state.contextTokens?.users?.[userId];
+    return d.lastSendFailureAt !== null && (d.lastSendFailureAt > (d.lastSendSuccessAt ?? 0)
+      || d.lastSendFailureAt === d.lastSendSuccessAt && entry?.delivery?.lastOutcome === 'failure');
   }
 
   sessionFor(key) {

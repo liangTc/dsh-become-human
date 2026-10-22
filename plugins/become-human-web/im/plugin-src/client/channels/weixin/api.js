@@ -51,6 +51,54 @@ function timestamp(value) {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
+export function normalizeWeixinDelivery(value) {
+  if (!isRecord(value)) return null;
+  const scope = value.scope === 'bound-owner' ? 'bound-owner' : 'unknown';
+  if (scope !== 'bound-owner') value = {};
+  const states = ['unknown', 'available', 'refresh-needed', 'failed'];
+  const windows = ['within', 'outside', 'unknown'];
+  const deliveryTime = value => timestamp(value) > 0 ? timestamp(value) : null;
+  return {
+    scope,
+    lastInboundAt: deliveryTime(value.lastInboundAt),
+    contextUpdatedAt: deliveryTime(value.contextUpdatedAt),
+    estimatedWindowExpiresAt: deliveryTime(value.estimatedWindowExpiresAt),
+    estimatedWindowMs: 86_400_000,
+    windowEstimate: windows.includes(value.windowEstimate) ? value.windowEstimate : 'unknown',
+    sendability: states.includes(value.sendability) ? value.sendability : 'unknown',
+    lastSendAttemptAt: deliveryTime(value.lastSendAttemptAt),
+    lastSendSuccessAt: deliveryTime(value.lastSendSuccessAt),
+    lastSendFailureAt: deliveryTime(value.lastSendFailureAt),
+    lastSendFailureCode: typeof value.lastSendFailureCode === 'string'
+      && /^[-\w.:]{1,64}$/.test(value.lastSendFailureCode) ? value.lastSendFailureCode : null,
+    lastSendFailureProviderCode: typeof value.lastSendFailureProviderCode === 'string'
+      && /^-?\d{1,8}$/.test(value.lastSendFailureProviderCode) ? value.lastSendFailureProviderCode : null,
+    windowIsEstimate: true,
+  };
+}
+
+export function presentWeixinDelivery(value, now = Date.now()) {
+  const delivery = normalizeWeixinDelivery(value);
+  const state = delivery?.sendability;
+  const remaining = delivery?.estimatedWindowExpiresAt == null ? null
+    : Math.max(0, delivery.estimatedWindowExpiresAt - now);
+  const minutes = remaining == null ? null : Math.ceil(remaining / 60_000);
+  return {
+    delivery,
+    label: ({ unknown: '发送状态待确认', available: '最近发送已被平台接受',
+      'refresh-needed': '发送受限，需核对', failed: '最近发送失败' })[state] ?? '发送状态未提供',
+    tone: state === 'refresh-needed' || state === 'failed' ? 'warning' : 'neutral',
+    windowLabel: minutes == null ? '暂无可估算的互动窗口'
+      : minutes === 0 ? '预计窗口已过'
+        : `预计还剩 ${Math.floor(minutes / 60)} 小时 ${minutes % 60} 分钟`,
+    failureHint: delivery?.lastSendFailureProviderCode === '-2' || delivery?.lastSendFailureCode === '-2'
+      ? state === 'failed' || state === 'refresh-needed'
+        ? '平台最近以 -2 拒绝发送，具体原因未确定；不能仅据此认定窗口过期。'
+        : '历史失败记录为 -2；当前状态已更新，不代表仍在拒绝发送。'
+      : null,
+  };
+}
+
 function normalizeTestMessage(value) {
   if (!isRecord(value)) return null;
   if (value.sent === true) return { sent: true };
@@ -167,7 +215,7 @@ function normalizeBot(value) {
     },
     health: {
       status: string(value.health?.status, connected ? 'healthy' : 'offline'),
-      summary: string(value.health?.summary, connected ? '微信连接正常' : '微信连接未就绪'),
+      summary: string(value.health?.summary, connected ? '微信消息同步在线，发送状态需单独核对' : '微信连接未就绪'),
       lastCheckedAt: timestamp(value.health?.lastCheckedAt),
     },
     stats: {
@@ -175,6 +223,7 @@ function normalizeBot(value) {
       messagesReplied: Math.max(0, Number(value.stats?.messagesReplied) || 0),
     },
     lastMessageError: normalizeLastMessageError(value.lastMessageError),
+    weixinDelivery: normalizeWeixinDelivery(value.weixinDelivery),
     error: isRecord(value.error)
       ? normalizeConnectionError(value.error, 'WEIXIN_ACCOUNT_ERROR', '微信连接未就绪')
       : null,

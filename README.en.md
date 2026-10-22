@@ -9,7 +9,7 @@
 [简体中文](README.md) · [Installation](docs/INSTALLATION.md) · [Usage](docs/USAGE.md) · [Configuration](docs/CONFIGURATION.md) · [Architecture](docs/ARCHITECTURE.md)
 
 > [!WARNING]
-> **Test release · Development is incomplete.** The public release target is `0.7.0-beta.1`, requiring Windows, Node.js 24+, and DSH `0.2.0-rc.2`. Start with a separate data directory. Long-running reliability and several channels and external actions still need validation. This release is not intended for critical workloads.
+> **Test release · Development is incomplete.** The current version is `0.7.0-beta.4`, requiring Windows, Node.js 24+, and DSH `0.2.0-rc.2`. Start with a separate data directory. Long-running reliability and several channels and external actions still need validation. This release is not intended for critical workloads.
 
 ## What it does
 
@@ -50,25 +50,20 @@ A manager bundle integrates with DSH Web. A separate runtime process owns the Hu
 
 ## Quick start
 
-Do not assume that an npm package has been published or that a plugin collection already lists this project. Build a local `.tgz`; see the [installation guide](docs/INSTALLATION.md) for prerequisites and initial configuration. The detailed guides are currently in Chinese.
+Use the prebuilt bundle from the [v0.7.0-beta.4 prerelease](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.4). One `.tgz` installs both the Web plugin and its bundled runtime:
 
-From the repository root:
-
-```powershell
-npm install --prefix plugins/become-human-web
-npm run build --prefix plugins/become-human-web
-npm run release:package
-```
-
-Use the artifact path printed by the command:
+1. Download the [installation package](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.4/dsh-become-human-web-0.7.0-beta.4.tgz) and its [SHA-256 file](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.4/dsh-become-human-web-0.7.0-beta.4.tgz.sha256).
+2. Verify the checksum as described in the [installation guide](docs/INSTALLATION.md#使用预构建包推荐), then run this from your download directory:
 
 ```powershell
-npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add <actual-package-path.tgz>
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./dsh-become-human-web-0.7.0-beta.4.tgz
 ```
 
-Before starting DSH, configure `become-human-manager` in `$DSH_HOME/profiles/web/cordis.patch.yml` with `sourceHome`, `runtimeHome`, `provider`, and `model`. Model import currently requires a `llm-pi-ai` route with an `apiKeyEnv` credential reference; it does not support every DSH provider configuration.
+The npm package is not published. The Git repository and GitHub source ZIP omit generated bundles and cannot be installed directly as a prebuilt plugin. Developers can [build a `.tgz` from source](docs/INSTALLATION.md#从源码构建). The detailed guides are currently in Chinese.
 
-Open Human and configure **persona and relationship → autonomous behavior and budgets → phone connection (optional)**. Cold starts remain paused until explicitly resumed. See [configuration](docs/CONFIGURATION.md) and [usage](docs/USAGE.md).
+Start DSH, open Human, and follow **existing model → persona and budget → create and start**. The plugin prepares its data directory, private profile, and available loopback port automatically. No separate runtime installation or YAML editing is required for a fresh setup. Model import currently requires a `llm-pi-ai` route with an `apiKeyEnv` credential reference; it does not support every DSH provider configuration.
+
+Choose a persona, low/medium/high budget, optional owner name, and timezone. Enabling autonomous behavior during setup is off by default; phone binding is optional afterward. Existing installations retain their session, configuration, and binding. Later cold starts remain paused until explicitly resumed. The runtime continues to follow the DSH service lifecycle; this change does not add a resident service. See [configuration](docs/CONFIGURATION.md) and [usage](docs/USAGE.md).
 
 ## IM scope
 
@@ -101,10 +96,10 @@ This remains a test release. Complete clean-install, multiple-plugin, multiple-c
 - [Configuration](docs/CONFIGURATION.md)
 - [Usage and phone commands](docs/USAGE.md)
 - [Architecture](docs/ARCHITECTURE.md)
-- [GitHub releases and DSH plugin collections](docs/PLUGIN_SUBMISSION.md)
+- [Releases, community registration, and plugin markets](docs/PLUGIN_SUBMISSION.md)
 - [Contributing](CONTRIBUTING.md), [Security](SECURITY.md), [Changelog](CHANGELOG.md)
 
-DSH currently supports experimental custom plugin-market indexes. Preparing a bundle or adding the `dsh-plugin` topic does not imply official inclusion. See the [official market guide](https://deepseek-harness.github.io/deepseek-harness/guide/plugin-market).
+This project is being submitted as an Agent capability in the single-plugin category of the community [DSH Plugin Radar register](https://github.com/AdamPlatin123/dsh-plugin-radar/blob/main/PLUGINS.md). Inclusion is not claimed before the upstream change is merged. Community registration, independent runtime validation, and DSH custom market indexes are separate processes; none implies official endorsement. See the [submission guide](docs/PLUGIN_SUBMISSION.md) and [official market guide](https://deepseek-harness.github.io/deepseek-harness/guide/plugin-market).
 
 ## Credits and license
 

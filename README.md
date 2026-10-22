@@ -9,7 +9,7 @@
 [English](README.en.md) · [安装](docs/INSTALLATION.md) · [使用](docs/USAGE.md) · [配置](docs/CONFIGURATION.md) · [架构](docs/ARCHITECTURE.md)
 
 > [!WARNING]
-> **测试版本 · 尚未开发完成。** 当前公开版目标为 `0.7.0-beta.1`，依赖 Windows、Node.js 24+ 与 DSH `0.2.0-rc.2`。请使用独立数据目录尝试。长期稳定性、部分渠道、浏览器与外部会话的完整流程仍需继续验证；不要直接用于关键业务。
+> **测试版本 · 尚未开发完成。** 当前版本为 `0.7.0-beta.4`，依赖 Windows、Node.js 24+ 与 DSH `0.2.0-rc.2`。请使用独立数据目录尝试。长期稳定性、部分渠道、浏览器与外部会话的完整流程仍需继续验证；不要直接用于关键业务。
 
 ## 它想解决什么
 
@@ -50,25 +50,20 @@ Web 是统一管理入口，手机是同一会话的另一条通道。人格影�
 
 ## 快速开始
 
-本仓库尚不能据此认定已发布 npm 包或被插件集收录。使用本地构建的 `.tgz` 安装，完整前置条件和首次配置见 [安装指南](docs/INSTALLATION.md)。
+推荐使用 [v0.7.0-beta.4 测试发行](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.4) 的预构建组合包，一次安装 Web 插件和后台代码：
 
-在仓库根目录：
-
-```powershell
-npm install --prefix plugins/become-human-web
-npm run build --prefix plugins/become-human-web
-npm run release:package
-```
-
-根据命令输出找到 `.tgz`，再安装到已有的 DSH Web profile：
+1. 下载 [安装包 `.tgz`](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.4/dsh-become-human-web-0.7.0-beta.4.tgz) 和 [SHA-256 校验文件](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.4/dsh-become-human-web-0.7.0-beta.4.tgz.sha256)。
+2. 按 [安装指南](docs/INSTALLATION.md#使用预构建包推荐) 核对校验值，在下载目录安装到已有的 DSH Web profile：
 
 ```powershell
-npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add <安装包的实际路径.tgz>
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./dsh-become-human-web-0.7.0-beta.4.tgz
 ```
 
-安装后，先在 `$DSH_HOME/profiles/web/cordis.patch.yml` 设置 `become-human-manager` 的 `sourceHome`、`runtimeHome`、`provider` 与 `model`，再启动 DSH。源模型目前需要 `llm-pi-ai` 路由和 `apiKeyEnv` 凭据引用；不能把任意现有 DSH 模型配置都视为可直接迁入。
+npm 包尚未发布。Git 仓库和 GitHub 的源码 ZIP 不包含全部预构建产物，不能直接当作可安装组合包；开发者可按 [从源码构建](docs/INSTALLATION.md#从源码构建) 生成 `.tgz`。
 
-首次进入 Human 后，完成 **人格与关系 → 自主行为与额度 → 手机连接（可选）**。冷启动保持暂停，核对设置后手动开始。更多说明见 [配置](docs/CONFIGURATION.md) 与 [使用](docs/USAGE.md)。
+安装后启动 DSH，打开 Human，按 **选择已有模型 → 人物与额度 → 创建并启动** 完成向导。路径、内部 profile 和空闲回环端口自动准备，无需另装后台或手工填写 YAML。源模型目前需要 `llm-pi-ai` 路由和 `apiKeyEnv` 凭据引用；不能把任意现有 DSH 模型配置都视为可直接迁入。
+
+首次可选人物预设、低中高额度、主人称呼与时区；“同时开启自主学习和主动交流”默认关闭。创建后再按需连接手机、丰富人物资料。已有安装保留原会话、配置和绑定，后续冷启动仍需明确恢复。后台继续随 DSH 服务运行；本次未增加后台常驻模式。更多说明见 [配置](docs/CONFIGURATION.md) 与 [使用](docs/USAGE.md)。
 
 ## IM 适配范围
 
@@ -103,12 +98,12 @@ npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add <安装包的实际路�
 | [配置说明](docs/CONFIGURATION.md) | 人物、额度、模型、Skill、手机与工具范围 |
 | [使用指南](docs/USAGE.md) | 对话、主动行为、目标、提醒、学习和手机命令 |
 | [架构](docs/ARCHITECTURE.md) | 主会话、独立模块、上下文、能力与源码结构 |
-| [插件集接入](docs/PLUGIN_SUBMISSION.md) | GitHub Release、npm 与 DSH 自定义市场索引 |
+| [发行与社区登记](docs/PLUGIN_SUBMISSION.md) | GitHub Release、Plugin Radar 登记与自定义市场边界 |
 | [贡献指南](CONTRIBUTING.md) | 开发边界、改动与反馈 |
 | [安全说明](SECURITY.md) | 数据边界与漏洞报告 |
 | [变更记录](CHANGELOG.md) | 公开版本变化 |
 
-DSH 当前提供实验性的自定义插件市场索引。准备好 bundle 或给仓库添加 `dsh-plugin` topic，不代表获得官方收录；发布方式见 [DSH 官方市场指南](https://deepseek-harness.github.io/deepseek-harness/guide/plugin-market)。
+本项目按 Agent 能力方向向社区 [DSH Plugin Radar 登记表](https://github.com/AdamPlatin123/dsh-plugin-radar/blob/main/PLUGINS.md) 的单插件分类提交登记；上游合并前不声称已收录。社区登记、独立运行级审核与 DSH 自定义市场索引是不同流程，均不代表官方背书。详见 [提交流程](docs/PLUGIN_SUBMISSION.md) 与 [DSH 官方市场指南](https://deepseek-harness.github.io/deepseek-harness/guide/plugin-market)。
 
 ## 致谢与许可
 

@@ -163,7 +163,15 @@ export class WeixinRuntime {
   }
 
   get status() {
-    return structuredClone(this.#status);
+    // The estimate is for the currently bound Human owner only. Never borrow a
+    // different contact's newer interaction or accepted send as proof.
+    let owner;
+    try {
+      const binding = this.#harness.singleSessionIngress?.binding?.('weixin', this.#contextEnhancement?.botId ?? this.#config.botId);
+      if (binding?.enabled) owner = binding.config?.ownerId;
+    } catch { /* A disappearing binding is reported as unknown. */ }
+    return { ...structuredClone(this.#status), weixinDelivery: this.#state.deliveryHealthFor?.(owner, { scope: owner ? 'bound-owner' : 'unknown' }) ?? null,
+      weixinSendFailureOutstanding: owner ? this.#state.hasSendFailureFor?.(owner) === true : false };
   }
 
   async start(context = {}) {
@@ -354,6 +362,7 @@ export class WeixinRuntime {
   async #sendTrackedText({ toUserId, text, signal, fullText = text, chunkIndex = 0, chunkCount = 1 }) {
     const sentAt = Date.now();
     const contextToken = this.#state.contextTokenFor?.(toUserId);
+    await this.#rememberSend({ userId: toUserId, phase: 'attempt', at: sentAt });
     let result;
     try {
       result = await this.#api.sendText({
@@ -365,6 +374,7 @@ export class WeixinRuntime {
         signal,
       });
     } catch (cause) {
+      await this.#rememberSend({ userId: toUserId, phase: 'failure', code: signal?.aborted ? 'aborted' : cause?.code, providerCode: cause?.providerCode });
       if (signal?.aborted) throw cause;
       const error = weixinSendError(cause, {
         baseUrl: this.#config.baseUrl, text: fullText, chunk: text, chunkIndex, chunkCount,
@@ -376,6 +386,7 @@ export class WeixinRuntime {
       this.#logger.warn?.(`[dsh-weixin] outbound delivery failed [${failure.referenceId}]: ${failure.message}`);
       throw error;
     }
+    await this.#rememberSend({ userId: toUserId, phase: 'success' });
     if (this.#status.lastMessageError?.reason === 'WEIXIN_SEND_FAILED') {
       clearLastMessageFailure(this.#status);
     }
@@ -391,6 +402,11 @@ export class WeixinRuntime {
       this.#logger.warn?.('[dsh-weixin] failed to remember an outbound message:', error);
     }
     return result;
+  }
+
+  async #rememberSend(input) {
+    try { await this.#state.recordSend?.(input); }
+    catch { this.#logger.warn?.('[dsh-weixin] failed to persist outbound health metadata'); }
   }
 
   async presentSessionSyncApproval(target, interaction, options = {}) {

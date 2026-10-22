@@ -1,12 +1,36 @@
-# GitHub 发布与 DSH 插件集接入
+# 发行、社区登记与 DSH 插件市场
 
 [返回首页](../README.md) · [安装](INSTALLATION.md) · [架构](ARCHITECTURE.md)
 
-本页区分三件事：公开源码仓库、交付可安装 bundle、出现在某个插件集。准备好这些材料不代表已经发布或获官方背书。
+本页分别说明公开源码、Release 安装包、社区登记和自定义市场索引。社区登记不等于可安装索引，也不代表 DSH 官方背书。
 
-当前公开发行目标是 **`0.7.0-beta.1` 测试版本，尚未开发完成**。介绍页、市场卡片和 Release 应保留该状态，不标记为稳定完成版。
+当前版本是 **`0.7.0-beta.4` 测试版本，尚未开发完成**。安装入口为 [固定版本 Release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.4)，其中提供 [组合包](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.4/dsh-become-human-web-0.7.0-beta.4.tgz) 与 [SHA-256 校验文件](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.4/dsh-become-human-web-0.7.0-beta.4.tgz.sha256)。npm 包尚未发布；介绍页和社区条目继续保留测试状态。
 
-## 目前的 DSH 插件集机制
+## 提交 DSH Plugin Radar 社区登记
+
+本次登记目标为社区维护的 [AdamPlatin123/dsh-plugin-radar](https://github.com/AdamPlatin123/dsh-plugin-radar)，不是 DSH 官方商店。以其当前 [PLUGINS.md](https://github.com/AdamPlatin123/dsh-plugin-radar/blob/main/PLUGINS.md) 与 [README](https://github.com/AdamPlatin123/dsh-plugin-radar#readme) 为准：
+
+1. 给本仓库添加 `dsh-plugin` topic。
+2. Fork 上游，为 `PLUGINS.md` 的 **🔌 单插件** 表格追加一行；本项目用途属于 **Agent 能力**。若上游调整分类，按提交时的现有结构放置。
+3. 使用与仓库一致的登记名 `dsh-become-human`，写明 Release、安装方式、兼容环境和限制，向上游提交 PR。
+4. 登记运行级先填“待测”；PR 合并后再更新收录状态。作者自测不替代 Radar 的独立运行级判定。
+
+可提交的条目描述示例：
+
+```markdown
+| dsh-become-human | [liangTc/dsh-become-human](https://github.com/liangTc/dsh-become-human) | 单会话自主 Agent：人格、分层记忆、学习、目标与主动交流，Web 与一个 IM 渠道共享会话；beta.4 尚未开发完成；Windows / Node 24 / DSH 0.2.0-rc.2 web 已有作者实测，提供 Release .tgz 与校验文件 | 待测 |
+```
+
+PR 说明应注明实测限于 Windows 与 DSH `0.2.0-rc.2` 的 `web` profile：已有安装升级、真实模型、部分微信流程和本地隔离回归。不要据此声称所有渠道、干净机器、多插件共存或多日稳定性已通过。提交或被社区收录均不构成官方兼容认证；上游合并前不写“已收录”。
+
+## Release 与源码的安装边界
+
+- 普通用户下载固定版本 `.tgz` 与 `.sha256`，按 [安装指南](INSTALLATION.md#使用预构建包推荐) 校验，再执行 `dsh plugin --profile web add <本地包路径>`。
+- Git 仓库与源码 ZIP 不含 `client.js`、IM bundle 和 runtime 等完整预构建产物，需要先构建，不能直接登记为可安装的 Git bundle。
+- 当前社区登记只需仓库说明与可下载的发行包，无需为此新建 bundle 分支或发布 npm。
+- 若将来加入消费 JSON 索引的插件市场，再单独按其规范准备安装来源与固定版本；不能把 Release 下载地址伪装成 npm registry。
+
+## DSH 自定义市场机制（独立流程）
 
 截至 **2026-10-21**，DSH 官方文档描述的是实验性的**自定义插件市场**：维护者发布 JSON 索引，用户在当前 profile 添加索引源。官方文档明确默认不内置索引源；本页没有找到可以声称为“官方统一收录入口”的提交地址。[官方市场指南](https://deepseek-harness.github.io/deepseek-harness/guide/plugin-market)
 
@@ -68,7 +92,7 @@ title.en: Become Human
 description.zh: 为 DSH Web 增加统一人格、记忆、学习与主动行为的单会话 Agent。
 repository.url: https://github.com/liangTc/dsh-become-human
 repository.directory: plugins/become-human-web
-version: 0.7.0-beta.1（必须与实际 package.json 一致）
+version: 0.7.0-beta.4（必须与实际 package.json 一致）
 publishTimestamp: 实际发布时间的 Unix 秒
 source.type: git
 source.url: https://github.com/liangTc/dsh-become-human
@@ -83,6 +107,6 @@ engines.dsh: 0.2.0-rc.2
 
 ## 推荐的公开描述
 
-> Become Human 是面向 DeepSeek Harness Web 的自主 Agent 插件。它围绕一个持久会话组织人格、记忆、学习、目标、定时任务和主动交流，并通过独立运行模块控制模型调用、额度与执行边界。Web 与一个本人绑定的 IM 渠道共享会话，更换渠道会替换旧绑定；内置只读 MCP，外部 DSH 会话和浏览器操作按范围授权。当前为 0.7.0-beta.1 测试版本，尚未开发完成，完整运行要求 Windows 与 DSH 0.2.0-rc.2。
+> Become Human 是面向 DeepSeek Harness Web 的自主 Agent 插件。它围绕一个持久会话组织人格、记忆、学习、目标、定时任务和主动交流，并通过独立运行模块控制模型调用、额度与执行边界。Web 与一个本人绑定的 IM 渠道共享会话，更换渠道会替换旧绑定；内置只读 MCP，外部 DSH 会话和浏览器操作按范围授权。当前为 0.7.0-beta.4 测试版本，尚未开发完成，完整运行要求 Windows 与 DSH 0.2.0-rc.2。
 
 不建议写“官方插件”“已入插件市场”“全平台即装即用”“所有 IM 实测”“永不停机”或“拥有真实情感”。这些说法超出当前交付和验证范围。

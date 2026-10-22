@@ -1,15 +1,15 @@
 {
-  "auditDate": "2026-10-21",
+  "auditDate": "2026-10-22",
   "scope": "Actual Apache release IM host/client build inputs; external runtime dependencies are not bundled.",
   "inputsManifest": "../BUILD-MANIFEST.json",
   "metafiles": [
     {
       "name": "im-host",
-      "sha256": "f53d665a02d9def47d9565e77353bec7a55f078a147ba6d75f46623d7d1c7242"
+      "sha256": "d98b0e761ddc2371049ce1e2fa2758090167981a8081d88d284a710c0b89c294"
     },
     {
       "name": "im-client",
-      "sha256": "c78b6250c6bf4a1ae94dab0effcf5a8c0c13d0c5f1596764e079d75ddbf9c931"
+      "sha256": "2f765e473d2617c907783bff32f23828f7c4bb71edff835ecc0f9fd15d7793a1"
     }
   ],
   "packages": [

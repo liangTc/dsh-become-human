@@ -2,12 +2,42 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {spawn} from 'node:child_process';
 import {createRequire} from 'node:module';
+import {createServer} from 'node:net';
 import YAML from 'yaml';
 import {parseCredentialsDocument} from '@deepseek-ai/dsh-credentials-local';
 import {OperationsLog,operationsLogPolicy,safeOperationCode,assertOfflineStoreUnlocked,acquireRunningLock,releaseRunningLock,assertRunningLock} from './operations-log.mjs';
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+const providerFields=['apiKeyEnv','displayName','api','baseURL','models','modelOverrides','compat','defaultContextWindow','defaultMaxTokens','reasoning','thinkingBudgets'];
+export async function readSourceModelConfiguration(config){
+  const profileFile=path.join(config.sourceHome,'profiles',config.sourceProfile,'cordis.patch.yml'),homeFile=path.join(config.sourceHome,'cordis.patch.yml');
+  const entries=[];
+  for(const [index,file] of [profileFile,homeFile].entries()){
+    let text;try{text=await fs.readFile(file,'utf8');}catch(error){if(error.code==='ENOENT'&&index===1)continue;throw new Error(error.code==='ENOENT'?'SOURCE_PROFILE_NOT_FOUND':'SOURCE_MODEL_CONFIGURATION_INVALID');}
+    let rows;try{rows=YAML.parse(text)??[];}catch{throw new Error('SOURCE_MODEL_CONFIGURATION_INVALID');}
+    if(!Array.isArray(rows))throw new Error('SOURCE_MODEL_CONFIGURATION_INVALID');entries.push(...rows);
+  }
+  const latest=id=>entries.filter(row=>row?.id===id).reduce((previous,row)=>({...previous,...row}),{}),providerRow=latest('llm-pi-ai');
+  const providers=providerRow?.disabled?{}:providerRow?.config?.providers??{},configuredDefault=latest('agent-default-model')?.config;
+  if(!providers||typeof providers!=='object'||Array.isArray(providers))throw new Error('SOURCE_MODEL_CONFIGURATION_INVALID');
+  let credentialRefs=new Map();const credentialFile=path.join(config.sourceHome,'.credentials.yaml');
+  try{credentialRefs=parseCredentialsDocument(await fs.readFile(credentialFile,'utf8'),credentialFile).refs;}catch(error){if(error.code!=='ENOENT')throw new Error('SOURCE_CREDENTIALS_INVALID');}
+  const readyProviders=Object.create(null),models=[];
+  for(const [provider,original] of Object.entries(providers)){
+    if(!provider||provider.length>256)continue;
+    if(!original||typeof original!=='object'||original.apiKey||original.headers||!Array.isArray(original.models)||typeof original.apiKeyEnv!=='string'||!/^\w+$/.test(original.apiKeyEnv))continue;
+    const credentialReady=!!process.env[original.apiKeyEnv]||!!credentialRefs.get(original.apiKeyEnv),clean={};
+    for(const key of providerFields)if(original[key]!==undefined)clean[key]=structuredClone(original[key]);
+    if(credentialReady)readyProviders[provider]=clean;
+    for(const model of original.models){if(!model||typeof model.id!=='string'||!model.id||model.id.length>256||models.length>=512)continue;models.push({provider,model:model.id,providerLabel:String(original.displayName??provider).slice(0,160),modelLabel:String(model.name??model.displayName??model.id).slice(0,200),credentialReady});}
+  }
+  const preferred=models.find(route=>route.credentialReady&&route.provider===(config.provider??configuredDefault?.provider)&&route.model===(config.model??configuredDefault?.model))??models.find(route=>route.credentialReady);
+  return {providers,readyProviders,models,defaultRoute:preferred?{provider:preferred.provider,model:preferred.model}:null};
+}
+async function availablePort(){
+  return new Promise((resolve,reject)=>{const server=createServer();server.once('error',reject);server.listen({host:'127.0.0.1',port:0,exclusive:true},()=>{const address=server.address();server.close(error=>error?reject(error):resolve(address.port));});});
+}
 export class RuntimeSupervisor {
-  constructor(config){this.config=config;this.cookie=null;this.child=null;this.closed=false;this.base='http://127.0.0.1:'+config.runtimePort;this.waiting=null;this.managerBootId=crypto.randomUUID();this.startedAt=Date.now();this.workerBootId=null;this.lastExit=null;this.lastRequestError=null;this.logs=new OperationsLog(config.runtimeHome,()=>({managerBootId:this.managerBootId,workerBootId:this.workerBootId,managerPid:process.pid,workerPid:this.child?.pid??null}));}
+  constructor(config){this.config=config;this.autoPort=config.runtimePort===undefined;this.cookie=null;this.child=null;this.closed=false;this.base=config.runtimePort?'http://127.0.0.1:'+config.runtimePort:null;this.waiting=null;this.managerBootId=crypto.randomUUID();this.startedAt=Date.now();this.workerBootId=null;this.lastExit=null;this.lastRequestError=null;this.logs=new OperationsLog(config.runtimeHome,()=>({managerBootId:this.managerBootId,workerBootId:this.workerBootId,managerPid:process.pid,workerPid:this.child?.pid??null}));}
   recordLifecycle(kind,data={}){return this.logs.lifecycle(kind,data);}
   acquireRuntimeLease(){if(this.runtimeLease){assertRunningLock(this.runtimeLease);return;}this.runtimeLease=acquireRunningLock(this.config.runtimeHome);this.logs.lease=this.runtimeLease;}
   releaseRuntimeLease(){releaseRunningLock(this.runtimeLease);this.runtimeLease=null;this.logs.lease=null;}
@@ -46,15 +76,14 @@ export class RuntimeSupervisor {
     this.acquireRuntimeLease();
     if(!/^[a-zA-Z0-9_-]+$/.test(c.sourceProfile)||!/^[a-zA-Z0-9_-]+$/.test(c.runtimeProfile)||!Number.isInteger(c.runtimePort)||c.runtimePort<1024||c.runtimePort>65535)throw new Error('INVALID_RUNTIME_CONFIG');
     await fs.mkdir(c.runtimeHome,{recursive:true});if(await fs.realpath(c.runtimeHome)!==path.resolve(c.runtimeHome))throw new Error('LINKED_RUNTIME_HOME');
-    const rows=YAML.parse(await fs.readFile(path.join(c.sourceHome,'profiles',c.sourceProfile,'cordis.patch.yml'),'utf8'));
-    const providers=rows.find(r=>r.id==='llm-pi-ai')?.config?.providers??{};
-    const route=rows.find(r=>r.id==='agent-default-model')?.config;const providerId=c.provider??route?.provider,modelId=c.model??route?.model;
+    const source=await readSourceModelConfiguration(c),providers=source.providers;
+    const providerId=c.provider??source.defaultRoute?.provider,modelId=c.model??source.defaultRoute?.model;
     const original=providers[providerId];if(!original||!modelId||!original.models?.some(m=>m.id===modelId)||original.apiKey||original.headers)throw new Error('MODEL_ROUTE_REQUIRES_SETUP');
     const provider={};for(const key of ['apiKeyEnv','displayName','api','baseURL','models','modelOverrides','compat','defaultContextWindow','defaultMaxTokens','reasoning','thinkingBudgets'])if(original[key]!==undefined)provider[key]=structuredClone(original[key]);
     if(!provider.apiKeyEnv)throw new Error('MODEL_CREDENTIAL_REFERENCE_MISSING');
     provider.retryPolicy={mode:'normal',maxRetries:0};provider.timeoutMs=c.requestTimeoutMs;provider.streamIdleTimeoutMs=c.requestTimeoutMs;
-    let credentialRefs=new Map();const credentialFile=path.join(c.sourceHome,'.credentials.yaml');try{credentialRefs=parseCredentialsDocument(await fs.readFile(credentialFile,'utf8'),credentialFile).refs;}catch(e){if(e.code!=='ENOENT')throw new Error('SOURCE_CREDENTIALS_INVALID');}
-    const safeProviders={};for(const [key,value] of Object.entries(providers)){if(!value.apiKeyEnv||!/^\w+$/.test(value.apiKeyEnv)||!process.env[value.apiKeyEnv]&&!credentialRefs.has(value.apiKeyEnv)||value.apiKey||value.headers||!Array.isArray(value.models))continue;const clean={};for(const field of ['apiKeyEnv','displayName','api','baseURL','models','modelOverrides','compat','defaultContextWindow','defaultMaxTokens','reasoning','thinkingBudgets'])if(value[field]!==undefined)clean[field]=structuredClone(value[field]);clean.retryPolicy={mode:'normal',maxRetries:0};clean.timeoutMs=120000;clean.streamIdleTimeoutMs=120000;safeProviders[key]=clean;}
+    if(!source.models.some(route=>route.provider===providerId&&route.model===modelId&&route.credentialReady))throw new Error('MODEL_CREDENTIAL_MISSING');
+    const safeProviders=Object.create(null);for(const [key,value] of Object.entries(source.readyProviders)){const clean=structuredClone(value);clean.retryPolicy={mode:'normal',maxRetries:0};clean.timeoutMs=120000;clean.streamIdleTimeoutMs=120000;safeProviders[key]=clean;}
     safeProviders[providerId]=provider;this.allowedRoutes=Object.entries(safeProviders).flatMap(([provider,p])=>p.models.map(m=>({provider,model:m.id})));
     const profile=path.join(c.runtimeHome,'profiles',c.runtimeProfile);await fs.mkdir(path.join(profile,'node_modules'),{recursive:true});
     for(const [name,target] of [['dsh-become-human-web',import.meta.dirname],['dsh-become-human-runtime',path.join(import.meta.dirname,'runtime-bundle')]]){
@@ -77,6 +106,7 @@ export class RuntimeSupervisor {
       this.acquireRuntimeLease();
       this.lastError=null;this.lastRequestError=null;this.workerBootId=null;
       this.recordLifecycle('runtime-start-requested',{recoveryPolicy:'manual-paused'});
+      if(this.autoPort){this.config.runtimePort=await availablePort();this.base='http://127.0.0.1:'+this.config.runtimePort;}
       // An occupied port is never adopted: only this manager's child is trusted.
       const occupied=await fetch(this.base,{signal:AbortSignal.timeout(800)}).then(()=>true,()=>false);if(occupied)throw new Error('RUNTIME_PORT_ALREADY_IN_USE');
       await this.prepare();
