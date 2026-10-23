@@ -40,8 +40,8 @@
     },
     {
       "path": "CHANGELOG.md",
-      "bytes": 9365,
-      "sha256": "023024df1424810d549ea1538c24554a73a4b0d6a7ed6c50e6f7005e45c8d8c1"
+      "bytes": 9651,
+      "sha256": "687d177c306a46d73123cfaa78ff788d96298dd6e6da836fd024043a59f7cedd"
     },
     {
       "path": "CONTRIBUTING.md",
@@ -60,13 +60,13 @@
     },
     {
       "path": "README.en.md",
-      "bytes": 12532,
-      "sha256": "9d080436a33ffe67efdfd2d913799b77172fef7f62f8892b64c97f9e45d82906"
+      "bytes": 12385,
+      "sha256": "7b0f527668297e4f5b1d135dfbc9618e422972a1c5adbdcf176fc39c193774bc"
     },
     {
       "path": "README.md",
-      "bytes": 11585,
-      "sha256": "98a6d1f210908c8336ea3aa3dc08f1e93a3f851ee907471da779b86eae06267a"
+      "bytes": 11501,
+      "sha256": "48fcd537c8efeae8be12aa65b068002f0ad9f75683a84704596015a5d5822a70"
     },
     {
       "path": "SECURITY.md",
@@ -80,38 +80,43 @@
     },
     {
       "path": "docs/ARCHITECTURE.md",
-      "bytes": 12109,
-      "sha256": "f05621e8786b499ca792a5163a74df8b75b25e6ef9ebde9f8fd33feaf1e62230"
+      "bytes": 12130,
+      "sha256": "0851631b01c738a82de3817470648fb023c7632ece1e180c4e57808f714867e7"
     },
     {
       "path": "docs/CHARACTER_BOARD.md",
-      "bytes": 12241,
-      "sha256": "c532795c87b426ed9f2aef2ee72de37779270fc9e8a043a7779f531dd92dc476"
+      "bytes": 12258,
+      "sha256": "cb9aa87aa9d5d59bd3ed33ea3ac3da8022126c1b092a815457e2adae58b8d209"
     },
     {
       "path": "docs/CONFIGURATION.md",
-      "bytes": 20531,
-      "sha256": "fc82edb848a3b71a9385af2d4abb2fe69ae55a83ef08eba51781d0060e7b3a77"
+      "bytes": 20545,
+      "sha256": "cf5486d5001ea9cf2210b44511cd92afa807a9a340ad10132a0e7e23a36f6335"
     },
     {
       "path": "docs/INSTALLATION.md",
-      "bytes": 14416,
-      "sha256": "8fd72b7166d2f130b6776f581e4615507bb07f42fbbc5e3a81633a6793b622f2"
+      "bytes": 14522,
+      "sha256": "d77bbbaddd03857b08c525974ba6dc0ce279d6d62708ff231f1b5a371b60e1f7"
     },
     {
       "path": "docs/PLUGIN_SUBMISSION.md",
-      "bytes": 10982,
-      "sha256": "71ce90b177392bcf7b04ba1d735a88045e6706d7a59b734710f2af466be981d6"
+      "bytes": 11054,
+      "sha256": "385941181fa76d4bf993a1371f89078dc94a380498654f6ceb1da400a42dc89c"
+    },
+    {
+      "path": "docs/RELEASE_BETA5.md",
+      "bytes": 4145,
+      "sha256": "ac963c71b6e77e54f345a96a8d7bd3bd3956fcac442f509b55a8d8ace1e0defe"
     },
     {
       "path": "docs/TESTING_STATUS.md",
-      "bytes": 7327,
-      "sha256": "62907b3333add4bbbe9e17fd7eeca197d89d793da48e28fd0e02e1b67e94b1f0"
+      "bytes": 7505,
+      "sha256": "2a3294e420af140d77563b1d458b7639c29ba68677abcc71ebaf38a207b2688c"
     },
     {
       "path": "docs/USAGE.md",
-      "bytes": 15158,
-      "sha256": "af7dc1d4238d14d2beab7964b799ce88d53f984d93318b9901dba036537bc238"
+      "bytes": 15198,
+      "sha256": "cce3a8f7d1962811b99e62b36e6d36fd9ff510ba45296a10358fca7846800730"
     },
     {
       "path": "docs/assets/ASSETS.md",
@@ -155,8 +160,8 @@
     },
     {
       "path": "plugins/become-human-web/README.md",
-      "bytes": 6334,
-      "sha256": "0b6b011dec4cfaa513a003a395e26e77b3e9f961a9591bfa5e1ba14fde5feae1"
+      "bytes": 6576,
+      "sha256": "4dbdb6332f0a34b5ae190abc1cb499d009103885200e89e2fe4f552d121dd77c"
     },
     {
       "path": "plugins/become-human-web/THIRD_PARTY_NOTICES.md",
@@ -2500,8 +2505,8 @@
     },
     {
       "path": "plugins/become-human/README.md",
-      "bytes": 2121,
-      "sha256": "38aa0de6d61f32205b204f0ac366d814d787b2a4e284dc6813bda70365113b3e"
+      "bytes": 2152,
+      "sha256": "debbc3b6cc5eb4a03762a59d484cd6bbe4ce1dc3f52fa93e4c4918871bd2c091"
     },
     {
       "path": "plugins/become-human/THIRD_PARTY_NOTICES.md",

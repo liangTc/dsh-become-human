@@ -9,12 +9,12 @@
 [简体中文](README.md) · [Installation](docs/INSTALLATION.md) · [Usage](docs/USAGE.md) · [Configuration](docs/CONFIGURATION.md) · [Testing status](docs/TESTING_STATUS.md) · [Architecture](docs/ARCHITECTURE.md)
 
 > [!WARNING]
-> **Test release · Development is incomplete.** The public release remains `0.7.0-beta.4`. Development code for `0.7.0-beta.5` has been built and deployed locally by the maintainer, but has not been publicly released. Windows, Node.js 24+, and DSH `0.2.0-rc.2` are required. Complete acceptance and long-running reliability remain unverified; see [testing status](docs/TESTING_STATUS.md).
+> **Test release · Development is incomplete.** The current public test release is `0.7.0-beta.5` (GitHub Prerelease). Windows, Node.js 24+, and DSH `0.2.0-rc.2` are required. Complete acceptance and long-running reliability remain unverified, including the fresh-DSH native DeepSeek flow; see [testing status](docs/TESTING_STATUS.md).
 
 | Version | Availability and status |
 | --- | --- |
-| `0.7.0-beta.4` | Current public test release; use the Release package below |
-| `0.7.0-beta.5` | Development source, locally built and deployed; no public Release package for the new task board, statistics, personality drift, memory maintenance, or native DeepSeek compatibility |
+| `0.7.0-beta.5` | Current public test release, with a prebuilt bundle and SHA-256 file; see installation below |
+| `0.7.0-beta.4` | Historical test release; its package does not include beta.5 additions |
 
 ## What it does
 
@@ -44,7 +44,7 @@ DSH Web is the management surface. A paired phone is another channel into the sa
 
 Browser tab control and DSH session writes have integration code, are disabled by default, and require scoped configuration and per-operation approval. Their real workflows still need separate validation. Text Skills provide guidance; they do not grant arbitrary code execution or operating-system access.
 
-[Shared matters and reviews in the task board](docs/CHARACTER_BOARD.md) use the existing main session, IM binding, and execution lane. Manual focus does not start the driver; recording a goal or commitment does not dispatch it. Accepting a review does not grant permissions or retry failed work. The view shows concise intentions and evidence, not raw chain of thought or proof of consciousness. Additions marked beta.5 are not included in the public beta.4 package.
+[Shared matters and reviews in the task board](docs/CHARACTER_BOARD.md) use the existing main session, IM binding, and execution lane. Manual focus does not start the driver; recording a goal or commitment does not dispatch it. Accepting a review does not grant permissions or retry failed work. The view shows concise intentions and evidence, not raw chain of thought or proof of consciousness. Additions marked beta.5 are included in this test package and still require separate acceptance checks.
 
 ## Architecture
 
@@ -61,18 +61,18 @@ A manager bundle integrates with DSH Web. A separate runtime process owns the Hu
 
 ## Quick start
 
-Use the prebuilt bundle from the [v0.7.0-beta.4 prerelease](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.4). One `.tgz` installs both the Web plugin and its bundled runtime:
+Use the prebuilt bundle from the [v0.7.0-beta.5 prerelease](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.5). One `.tgz` installs both the Web plugin and its bundled runtime:
 
-1. Download the [installation package](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.4/dsh-become-human-web-0.7.0-beta.4.tgz) and its [SHA-256 file](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.4/dsh-become-human-web-0.7.0-beta.4.tgz.sha256).
+1. Download the [installation package](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.5/dsh-become-human-web-0.7.0-beta.5.tgz) and its [SHA-256 file](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.5/dsh-become-human-web-0.7.0-beta.5.tgz.sha256).
 2. Verify the checksum as described in the [installation guide](docs/INSTALLATION.md#使用预构建包推荐), then run this from your download directory:
 
 ```powershell
-npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./dsh-become-human-web-0.7.0-beta.4.tgz
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./dsh-become-human-web-0.7.0-beta.5.tgz
 ```
 
 The npm package is not published. The Git repository and GitHub source ZIP omit generated bundles and cannot be installed directly as a prebuilt plugin. Developers can [build a `.tgz` from source](docs/INSTALLATION.md#从源码构建). The detailed guides are currently in Chinese.
 
-Start DSH, open Human, and follow **existing model → persona and budget → create and start**. The plugin prepares its data directory, private profile, and available loopback port automatically. No separate runtime installation or YAML editing is required for a fresh setup. Public `beta.4` supports `llm-pi-ai` routes; the `beta.5` development source also supports DSH's native DeepSeek API Key adapter. Both resolve `apiKeyEnv` credential references without returning secrets to the browser. DeepSeek account authentication, inline keys, and arbitrary headers are not supported. See [model configuration](docs/CONFIGURATION.md#进程与模型配置).
+Start DSH, open Human, and follow **existing model → persona and budget → create and start**. The plugin prepares its data directory, private profile, and available loopback port automatically. No separate runtime installation or YAML editing is required for a fresh setup. `beta.5` supports `llm-pi-ai` routes and DSH's native DeepSeek API Key adapter. Both resolve `apiKeyEnv` credential references without returning secrets to the browser. DeepSeek account authentication, inline keys, and arbitrary headers are not supported. See [model configuration](docs/CONFIGURATION.md#进程与模型配置).
 
 **Native adapter validation:** beta.5 has passed local build, installed-file verification, service recovery, and read-only model catalog discovery. The complete fresh-DSH flow—configure a native key, reuse its credential, start the background runtime, and make a real request—is [pending and deferred for this update](docs/TESTING_STATUS.md#优先待测试项). Fresh-install success and native network calls have not been verified.
 

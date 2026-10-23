@@ -3,9 +3,9 @@
 [返回首页](../README.md) · [配置说明](CONFIGURATION.md) · [使用指南](USAGE.md) · [测试状态](TESTING_STATUS.md)
 
 > [!WARNING]
-> **`0.7.0-beta.4` 是测试版本，尚未开发完成。** 本页是公开发行的安装流程，不表示干净机器安装与全部能力已完成验收。
+> **`0.7.0-beta.5` 是测试版本（Prerelease），尚未开发完成。** 本页是公开发行的安装流程，不表示干净机器安装与全部能力已完成验收。
 
-`0.7.0-beta.5` 开发代码已在维护者本地构建部署，尚未公开发行；下文 Release 下载与命令示例仍指向公开 `beta.4`。使用 beta.5 新增能力需要自行构建对应开发源码，不能从 beta.4 安装包获得。
+本页下载链接与命令均指向 beta.5 组合包。历史 beta.4 包仍可查阅，但不包含 beta.5 的新增能力。原生 DeepSeek 全新安装整链仍保留待测；发布测试包不等于该流程已经通过。
 
 ## 支持范围
 
@@ -16,7 +16,7 @@
 | DeepSeek Harness | **0.2.0-rc.2**，当前代码会拒绝其他版本 |
 | DSH profile | `web` |
 | 安装单元 | `plugins/become-human-web` 生成的组合包 |
-| 模型 | 源 DSH profile 的兼容第三方模型；`beta.5` 开发版另支持 DSH 原生 DeepSeek API Key 通道 |
+| 模型 | 源 DSH profile 的兼容第三方模型或 DSH 原生 DeepSeek API Key 通道；原生全新安装整链待测 |
 
 当前实机验证环境为 **Windows + Node.js 24 + DSH `0.2.0-rc.2` 的 `web` profile**，包括已有安装升级、模型与微信流程；这不代表所有系统、干净机器或全部渠道均已验收。
 
@@ -24,7 +24,7 @@
 
 安装流程是：**安装一个组合包 → 打开 Human 完成首次设置 → 创建并启动**。组合包已经包含后台代码；插件自动准备专用运行目录和内部 profile，复用宿主的 Node 与 DSH 启动后台，无需另装第二套 Human 程序。
 
-安装入口为 [v0.7.0-beta.4 测试发行](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.4) 的预构建 `.tgz` 与 SHA-256 文件。npm 包尚未发布；社区登记的提交或合并不替代本页的版本与安装要求。
+安装入口为 [v0.7.0-beta.5 测试发行](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.5) 的预构建 `.tgz` 与 SHA-256 文件。npm 包尚未发布；社区登记的提交或合并不替代本页的版本与安装要求。
 
 ## 1. 准备 DSH 与模型
 
@@ -36,7 +36,7 @@ npx @deepseek-ai/dsh@0.2.0-rc.2 web
 
 通过 DSH 设置 → 模型，配置可用的模型 API。Human 首次设置会列出兼容的现有模型，选择后自动保存，不必手工抄写 Provider ID 和 Model ID。选择和初始化不会额外发起模型测试调用；首次真正聊天或执行已开启的自主任务时才产生相应模型请求。
 
-**原生 DeepSeek 兼容属于 `0.7.0-beta.5` 开发版，公开的 `beta.4` 安装包尚不包含。** 开发版支持以下两类来源：
+**原生 DeepSeek 兼容随 `0.7.0-beta.5` 测试包交付，完整新装流程仍待验收。** 当前支持以下两类来源：
 
 | DSH 中的来源 | Human 的读取方式 |
 | --- | --- |
@@ -47,7 +47,7 @@ npx @deepseek-ai/dsh@0.2.0-rc.2 web
 
 当前未接入 DeepSeek 账号登录通道，不导入内联 `apiKey` 或任意自定义 `headers`。原生通道使用官方 Messages 协议，默认地址为 `https://api.deepseek.com/anthropic`；不要为它填写 OpenAI Chat Completions 地址。地址可通过原生配置的 `baseURL` 或宿主进程环境变量 `DEEPSEEK_BASE_URL` 指定，不能通过 `.env` 设置该地址。后台沿用 Human 的准入、超时与取消控制，并将适配器自动重试次数设为 `0`，避免隐藏重试增加实际调用。模型配置字段见 [DSH 模型配置指南](https://deepseek-harness.github.io/deepseek-harness/guide/providers)。
 
-**原生通道验收尚未完成。** beta.5 已通过语法检查、本地构建、179 个安装文件一致性核对、服务恢复和只读模型目录发现；源 DSH 尚未配置原生凭据。全新安装后“配置 Key → 发现可用原生模型 → 凭据复用 → 后台启动 → 真实模型请求”整链流程已列入[优先待测试项](TESTING_STATUS.md#优先待测试项)，本轮暂缓。目录中存在模型不等于凭据可用，后台能启动也不等于真实网络请求成功。
+**原生通道验收尚未完成。** beta.5 已有语法检查、本地构建、已有环境安装一致性核对、服务恢复和只读模型目录发现记录；此前 179 个文件属于历史部署快照，重新打包后的清单以实际 Release 包为准。已检查的源 DSH 尚未配置原生凭据。全新安装后“配置 Key → 发现可用原生模型 → 凭据复用 → 后台启动 → 真实模型请求”整链流程已列入[优先待测试项](TESTING_STATUS.md#优先待测试项)，本轮暂缓。目录中存在模型不等于凭据可用，后台能启动也不等于真实网络请求成功。
 
 完成后关闭该次 DSH 进程，再安装组合包。默认 `$DSH_HOME` 是用户主目录下的 `.dsh`；如使用了自定义值，后续命令必须保持一致。
 
@@ -55,16 +55,16 @@ npx @deepseek-ai/dsh@0.2.0-rc.2 web
 
 ### 使用预构建包（推荐）
 
-从 [v0.7.0-beta.4 Release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.4) 下载以下两个附件，并保存到同一目录：
+从 [v0.7.0-beta.5 Release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.5) 下载以下两个附件，并保存到同一目录：
 
-- [dsh-become-human-web-0.7.0-beta.4.tgz](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.4/dsh-become-human-web-0.7.0-beta.4.tgz)
-- [dsh-become-human-web-0.7.0-beta.4.tgz.sha256](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.4/dsh-become-human-web-0.7.0-beta.4.tgz.sha256)
+- [dsh-become-human-web-0.7.0-beta.5.tgz](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.5/dsh-become-human-web-0.7.0-beta.5.tgz)
+- [dsh-become-human-web-0.7.0-beta.5.tgz.sha256](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.5/dsh-become-human-web-0.7.0-beta.5.tgz.sha256)
 
 在该目录打开 PowerShell，校验后再安装：
 
 ```powershell
-$humanExpectedSha = ((Get-Content -LiteralPath './dsh-become-human-web-0.7.0-beta.4.tgz.sha256' -Raw).Trim() -split '\s+')[0]
-$humanActualSha = (Get-FileHash -LiteralPath './dsh-become-human-web-0.7.0-beta.4.tgz' -Algorithm SHA256).Hash
+$humanExpectedSha = ((Get-Content -LiteralPath './dsh-become-human-web-0.7.0-beta.5.tgz.sha256' -Raw).Trim() -split '\s+')[0]
+$humanActualSha = (Get-FileHash -LiteralPath './dsh-become-human-web-0.7.0-beta.5.tgz' -Algorithm SHA256).Hash
 if ($humanExpectedSha -notmatch '^[a-fA-F0-9]{64}$' -or $humanActualSha -ine $humanExpectedSha) {
   throw '安装包校验失败，请重新核对下载来源和文件。'
 }
@@ -77,25 +77,25 @@ if ($humanExpectedSha -notmatch '^[a-fA-F0-9]{64}$' -or $humanActualSha -ine $hu
 下载或克隆 [liangTc/dsh-become-human](https://github.com/liangTc/dsh-become-human)，进入仓库根目录。
 
 ```powershell
-git clone --branch v0.7.0-beta.4 --single-branch https://github.com/liangTc/dsh-become-human.git
+git clone --branch v0.7.0-beta.5 --single-branch https://github.com/liangTc/dsh-become-human.git
 cd dsh-become-human
 npm install --prefix plugins/become-human-web
 npm run build --prefix plugins/become-human-web
 npm run release:package
 ```
 
-构建所需的本地依赖由 `package.json` 声明，主构建重建 IM 和 Human Web 客户端，并把同仓库的运行模块复制到分发包中。最终得到类似 `dsh-become-human-web-0.7.0-beta.4.tgz` 的文件；**以命令实际输出路径为准**。
+构建所需的本地依赖由 `package.json` 声明，主构建重建 IM 和 Human Web 客户端，并把同仓库的运行模块复制到分发包中。最终得到类似 `dsh-become-human-web-0.7.0-beta.5.tgz` 的文件；**以命令实际输出路径为准**。
 
 定时规则产物随仓库提供，需要修改日历生成逻辑时，再按 [架构说明](ARCHITECTURE.md#开发与构建边界) 重新生成。`npm run release:source` 可另外导出干净源码，不会自动上传或发布。
 
-以上命令构建公开 beta.4 标签。需要开发版时，将克隆命令改为 `git clone https://github.com/liangTc/dsh-become-human.git` 并在构建前核对源码中的版本；开发分支不承诺与公开 Release 相同的验收状态。以实际生成的 `.tgz` 文件名安装，不要混用不同版本的校验文件。
+以上命令构建公开 beta.5 标签。需要后续开发代码时，将克隆命令改为 `git clone https://github.com/liangTc/dsh-become-human.git` 并在构建前核对源码中的版本；开发分支不承诺与公开 Release 相同的验收状态。以实际生成的 `.tgz` 文件名安装，不要混用不同版本的校验文件。
 
 ## 3. 安装到 web profile
 
 在安装包所在目录执行，文件名替换为实际文件名：
 
 ```powershell
-npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./dsh-become-human-web-0.7.0-beta.4.tgz
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./dsh-become-human-web-0.7.0-beta.5.tgz
 ```
 
 这是 DSH 官方组合包安装路径，会更新 profile 的依赖与 bundle 列表。不要用普通 `npm install` 代替 profile 注册，也不要只复制 `manager.mjs`。[官方打包与安装说明](https://deepseek-harness.github.io/deepseek-harness/develop/basic/publish) 说明了 `.tgz`、本地目录和 profile 的区别。
@@ -164,7 +164,7 @@ npx @deepseek-ai/dsh@0.2.0-rc.2 web --no-open
 | --- | --- |
 | `UNSUPPORTED_DSH_VERSION` | 启动的 DSH 是否精确为 `0.2.0-rc.2` |
 | `UNSUPPORTED_KEY_PLATFORM` | 当前完整运行模块依赖 Windows DPAPI |
-| `MODEL_ROUTE_REQUIRES_SETUP` | 是否已在源 DSH 中配置兼容的模型；`beta.5` 开发版支持原生 DeepSeek API Key 与第三方模型 |
+| `MODEL_ROUTE_REQUIRES_SETUP` | 是否已在源 DSH 中配置兼容的模型；`beta.5` 支持原生 DeepSeek API Key 与第三方模型 |
 | `MODEL_CREDENTIAL_REFERENCE_MISSING` / `MODEL_CREDENTIAL_MISSING` | 路由的 `apiKeyEnv` 引用及源凭据或环境变量是否可用；原生 DeepSeek 默认引用 `DEEPSEEK_API_KEY` |
 | `SOURCE_NATIVE_MODEL_CONFIGURATION_INVALID` | 原生 DeepSeek API Key 配置是否包含不支持的内联密钥、headers 或无效模型字段；在 DSH 中修正后重新检查 |
 | `SOURCE_NATIVE_ADAPTER_UNSUPPORTED` | 当前安装的 DSH 原生适配器合同是否兼容；使用本页指定的 DSH 版本 |

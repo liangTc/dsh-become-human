@@ -1,22 +1,22 @@
 # Become Human · DSH Web 插件
 
-> **0.7.0-beta.5 · 本地已构建部署，尚未公开发行 · 测试版本，尚未开发完成。** 当前公开 Release 为 beta.4。面向 Windows、Node.js 24+、DeepSeek Harness 0.2.0-rc.2 的 web profile。完整验收边界见[测试状态](https://github.com/liangTc/dsh-become-human/blob/main/docs/TESTING_STATUS.md)。
+> **0.7.0-beta.5 · 测试发行（Prerelease），尚未开发完成。** 面向 Windows、Node.js 24+、DeepSeek Harness 0.2.0-rc.2 的 web profile。完整验收边界见[测试状态](https://github.com/liangTc/dsh-become-human/blob/main/docs/TESTING_STATUS.md)。
 
 为 DSH Web 增加一个拥有统一人格、记忆、学习与主动行为的 Human。管理插件嵌入 Web，独立运行模块处理事件循环；一个 Human 只有一个持久主会话，同时只绑定一个有效 IM 渠道。
 
 ## 安装
 
-使用预构建 `.tgz`，一次安装 Web 插件及其后台代码。当前公开 Release 为 `beta.4`；本页所述 `beta.5` 新兼容尚未公开发行，需使用维护者提供或自行构建的开发包。npm 包尚未发布。公开版安装示例：
+从 [v0.7.0-beta.5 测试发行](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.5) 下载[预构建 `.tgz`](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.5/dsh-become-human-web-0.7.0-beta.5.tgz) 和 [SHA-256 校验文件](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.5/dsh-become-human-web-0.7.0-beta.5.tgz.sha256)，核对后一次安装 Web 插件及其后台代码。npm 包尚未发布。安装示例：
 
 ```powershell
-npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./dsh-become-human-web-0.7.0-beta.4.tgz
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./dsh-become-human-web-0.7.0-beta.5.tgz
 ```
 
 安装后启动 DSH，进入 Human，按“选择已有模型 → 人物与额度 → 创建并启动”完成首次设置。路径、私有 profile 和内部空闲端口自动准备，无需另装后台或手工编辑 YAML。模型凭据通过 DSH 的 apiKeyEnv 引用解析；向导不接收明文密钥。详见 [安装与升级](https://github.com/liangTc/dsh-become-human/blob/main/docs/INSTALLATION.md)。单独安装内部 runtime 不属于支持方式。
 
-公开 `beta.4` 使用 `llm-pi-ai` 兼容路由；本 `beta.5` 开发代码另支持 DSH 原生 DeepSeek API Key 通道，模型列表会标明来源。尚不支持 DeepSeek 账号登录、内联密钥或任意 headers；选择和初始化不额外调用模型。新 DSH 未配置 API 时，先在宿主模型设置中完成，再回 Human 点击“重新检查”。
+`beta.5` 测试包支持 `llm-pi-ai` 兼容路由和 DSH 原生 DeepSeek API Key 通道，模型列表会标明来源。尚不支持 DeepSeek 账号登录、内联密钥或任意 headers；选择和初始化不额外调用模型。新 DSH 未配置 API 时，先在宿主模型设置中完成，再回 Human 点击“重新检查”。
 
-原生兼容已完成本地构建、179 个安装文件核对、服务恢复与只读模型目录发现。源 DSH 尚未配置原生凭据，全新安装后的“配置 Key → 凭据复用 → 后台启动 → 真实请求”完整流程仍待测试，本轮暂缓；不将目录发现视为真实调用成功。
+原生兼容已有本地构建、已有环境安装核对、服务恢复与只读模型目录发现记录。此前 179 个文件属于历史部署快照，本次包清单以实际 Release 附件为准。已检查的源 DSH 尚未配置原生凭据，全新安装后的“配置 Key → 凭据复用 → 后台启动 → 真实请求”完整流程仍待测试，本轮暂缓；不将目录发现视为真实调用成功。
 
 首次自主行为默认关闭，可在创建前明确勾选；手机连接在创建后按需设置。已有安装保留会话、配置与绑定。后台继续由宿主 DSH 管理，重启后仍保持暂停；本次未增加后台常驻功能。
 

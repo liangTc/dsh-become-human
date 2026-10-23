@@ -9,12 +9,12 @@
 [English](README.en.md) · [安装](docs/INSTALLATION.md) · [使用](docs/USAGE.md) · [配置](docs/CONFIGURATION.md) · [测试状态](docs/TESTING_STATUS.md) · [架构](docs/ARCHITECTURE.md)
 
 > [!WARNING]
-> **测试版本 · 尚未开发完成。** 当前公开发行是 `0.7.0-beta.4`；`0.7.0-beta.5` 开发代码已在维护者本地构建并部署，尚未公开发行。依赖 Windows、Node.js 24+ 与 DSH `0.2.0-rc.2`。完整验收与长期稳定性尚未完成，具体边界见[测试状态](docs/TESTING_STATUS.md)。
+> **测试版本 · 尚未开发完成。** 当前公开测试发行是 `0.7.0-beta.5`（GitHub Prerelease）。依赖 Windows、Node.js 24+ 与 DSH `0.2.0-rc.2`。完整验收与长期稳定性尚未完成，原生 DeepSeek 全新安装整链仍待测试，具体边界见[测试状态](docs/TESTING_STATUS.md)。
 
 | 版本 | 获取方式与状态 |
 | --- | --- |
-| `0.7.0-beta.4` | 当前公开测试发行，使用下方 Release 安装包 |
-| `0.7.0-beta.5` | 开发源码；本地已构建部署，任务看板、统计、人格偏移、记忆整理与原生 DeepSeek 兼容尚未提供公开 Release 包 |
+| `0.7.0-beta.5` | 当前公开测试发行，提供预构建组合包及 SHA-256；见下方安装步骤 |
+| `0.7.0-beta.4` | 历史测试发行；旧包不包含 beta.5 新增能力 |
 
 ## 它想解决什么
 
@@ -44,7 +44,7 @@ Web 是统一管理入口，手机是同一会话的另一条通道。人格影�
 
 浏览器标签页控制与 DSH 会话写入已有接入代码，默认关闭并按操作审批，真实使用前需要单独配置和验证。文本 Skill 可自行添加，但不授予任意代码执行或系统权限。
 
-[任务看板中的关注与反思](docs/CHARACTER_BOARD.md)沿用原唯一会话、IM 绑定与执行通道。手动关注不会启动驱动，目标或承诺入卡不等于执行，采纳反思不扩大权限；不展示原始内部推理，也不证明意识。表中标为 beta.5 的新增能力不包含在公开 beta.4 安装包中。
+[任务看板中的关注与反思](docs/CHARACTER_BOARD.md)沿用原唯一会话、IM 绑定与执行通道。手动关注不会启动驱动，目标或承诺入卡不等于执行，采纳反思不扩大权限；不展示原始内部推理，也不证明意识。表中标为 beta.5 的新增能力随本次测试包交付，仍需按测试清单分别验收。
 
 ## 运行方式
 
@@ -61,18 +61,18 @@ Web 是统一管理入口，手机是同一会话的另一条通道。人格影�
 
 ## 快速开始
 
-推荐使用 [v0.7.0-beta.4 测试发行](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.4) 的预构建组合包，一次安装 Web 插件和后台代码：
+推荐使用 [v0.7.0-beta.5 测试发行](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.5) 的预构建组合包，一次安装 Web 插件和后台代码：
 
-1. 下载 [安装包 `.tgz`](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.4/dsh-become-human-web-0.7.0-beta.4.tgz) 和 [SHA-256 校验文件](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.4/dsh-become-human-web-0.7.0-beta.4.tgz.sha256)。
+1. 下载 [安装包 `.tgz`](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.5/dsh-become-human-web-0.7.0-beta.5.tgz) 和 [SHA-256 校验文件](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.5/dsh-become-human-web-0.7.0-beta.5.tgz.sha256)。
 2. 按 [安装指南](docs/INSTALLATION.md#使用预构建包推荐) 核对校验值，在下载目录安装到已有的 DSH Web profile：
 
 ```powershell
-npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./dsh-become-human-web-0.7.0-beta.4.tgz
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./dsh-become-human-web-0.7.0-beta.5.tgz
 ```
 
 npm 包尚未发布。Git 仓库和 GitHub 的源码 ZIP 不包含全部预构建产物，不能直接当作可安装组合包；开发者可按 [从源码构建](docs/INSTALLATION.md#从源码构建) 生成 `.tgz`。
 
-安装后启动 DSH，打开 Human，按 **选择已有模型 → 人物与额度 → 创建并启动** 完成向导。路径、内部 profile 和空闲回环端口自动准备，无需另装后台或手工填写 YAML。公开 `beta.4` 支持 `llm-pi-ai` 路由；`beta.5` 开发代码另支持 DSH 原生 DeepSeek API Key 通道。两者通过 `apiKeyEnv` 引用解析凭据，不回传密钥；尚不支持 DeepSeek 账号登录、内联密钥或任意 headers。具体支持范围见 [模型配置](docs/CONFIGURATION.md#进程与模型配置)。
+安装后启动 DSH，打开 Human，按 **选择已有模型 → 人物与额度 → 创建并启动** 完成向导。路径、内部 profile 和空闲回环端口自动准备，无需另装后台或手工填写 YAML。`beta.5` 支持 `llm-pi-ai` 路由及 DSH 原生 DeepSeek API Key 通道。两者通过 `apiKeyEnv` 引用解析凭据，不回传密钥；尚不支持 DeepSeek 账号登录、内联密钥或任意 headers。具体支持范围见 [模型配置](docs/CONFIGURATION.md#进程与模型配置)。
 
 **原生通道验证边界：** beta.5 已完成本地构建、安装核对、服务恢复和只读模型目录发现。全新 DSH 安装后配置原生 Key、复用凭据、启动后台并完成真实请求的整链测试已列入[待测试清单](docs/TESTING_STATUS.md#优先待测试项)，本轮暂缓；不能据此认定全新安装或原生网络调用已通过。
 
