@@ -8,7 +8,7 @@ const time=(value:any)=>value?new Date(value).toLocaleString('zh-CN',{hour12:fal
 const print=(value:any)=>typeof value==='string'?value:JSON.stringify(value,null,2);
 const previewStyle:any={whiteSpace:'pre-wrap',overflowWrap:'anywhere',maxHeight:'none'};
 const fieldLabels:Record<string,string>={url:'网页地址',sessionId:'DSH 会话 ID',targetId:'浏览器标签页 ID',expectedOrigin:'目标页面当前来源',text:'文本内容',selector:'元素 CSS 选择器',replace:'替换输入框已有文字',limit:'最多读取条数',beforeSeq:'读取此序号之前的消息',throughSeq:'截至此消息序号',maxChars:'最多读取字符数',title:'报告标题',noteIds:'学习笔记 ID'};
-const fieldHints:Record<string,string>={expectedOrigin:'填写当前页面的协议、域名与端口，例如 https://example.com。执行前会核对，页面已变化时停止操作。',targetId:'使用浏览器工具返回的精确标签页 ID，并先在“工具与连接”中授权。',sessionId:'填写已在“工具与连接”中明确授权的外部 DSH 会话 ID。',selector:'需要唯一匹配一个可见元素；匹配不到或出现多个结果时停止操作。'};
+const fieldHints:Record<string,string>={expectedOrigin:'填写当前页面的协议、域名与端口，例如 https://example.com。执行前会核对，页面已变化时停止操作。',targetId:'使用浏览器工具返回的精确标签页 ID，并先在“工具与连接”中授权。',sessionId:'填写当前授权范围内的外部 DSH 会话 ID；可先用会话列表工具查看。授权全部会话时无需逐个添加 ID。',selector:'需要唯一匹配一个可见元素；匹配不到或出现多个结果时停止操作。'};
 const schemaFields=(schema:any)=>Object.entries(schema?.properties??{}) as [string,any][];
 const supported=(schema:any):boolean=>schema?.type==='object'&&schemaFields(schema).every(([,field])=>['string','integer','number','boolean','object'].includes(field.type)||field.type==='array'&&field.items?.type==='string'||Array.isArray(field.enum));
 const initialInput=(schema:any)=>Object.fromEntries(schemaFields(schema).filter(([,field])=>field.default!==undefined||field.type==='boolean').map(([key,field])=>[key,field.default??false]));
@@ -109,7 +109,7 @@ function ToolJob({row,api,busy,ui,onChanged}:any){
   </>;
 }
 
-function ToolJobDetail({id,api,busy,ui,nonce,onChanged,onClose}:any){
+export function ToolJobDetail({id,api,busy,ui,nonce,onChanged,onClose}:any){
   const {Detail,Button,ReadState,useRead}=ui,result=useRead(api,{kind:'tool-job',jobId:id},nonce);
   return <Detail title="工具任务 · 目标、批准与回执" onClose={onClose}><Button disabled={busy} onClick={onChanged}>刷新当前任务</Button><ReadState result={result}>{(row:any)=><ToolJob key={row.id+':'+row.version+':'+row.digest} row={row} {...{api,busy,ui,onChanged}}/>}</ReadState></Detail>;
 }

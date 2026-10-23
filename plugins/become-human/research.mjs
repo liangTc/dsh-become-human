@@ -73,7 +73,11 @@ export function researchQueryPlan(query){
   const specific=words.filter(word=>profile.identifiers.includes(word.toLowerCase()));
   let refined,reason;
   const precise=specific.find(word=>/[a-z][A-Z]|[A-Za-z]\d/u.test(word));
-  if(precise){
+  if(profile.httpStatusCodes.length){
+    const codes=profile.httpStatusCodes.map(code=>'"'+code+'"'),context=words.filter(word=>!/^https?$/iu.test(word)).slice(0,4);
+    refined=['HTTP',...codes,...context,'specification'].join(' ');reason='http-status-primary-source';
+    if(refined.length>240)refined=['HTTP',...codes,'specification'].join(' ');
+  }else if(precise){
     refined=[...specific.filter(word=>word!==precise).slice(0,3),'"'+precise+'"','specification'].join(' ');reason='identifier-primary-source';
   }else if(specific.length){refined=original+' primary source';reason='topic-primary-source';
   }else if(/[\u4e00-\u9fff]/u.test(original)&&words.length){refined=words.slice(0,5).join(' ');reason='compact-public-keywords';}
@@ -81,6 +85,10 @@ export function researchQueryPlan(query){
   const plan=[{query:original,reason:'original-query'}];
   if(refined&&refined!==original&&refined.length<=240)plan.push({query:searchQuery(refined),reason});
   return plan.slice(0,2);
+}
+export function adequateResearchResults(ranked){
+  const first=ranked?.[0];
+  return !!first&&(first.relevance.identifierCount?first.relevance.identifierHits===first.relevance.identifierCount:first.relevance.matchedCount/Math.max(1,first.relevance.termCount)>=.3&&ranked.length>=2);
 }
 export async function searchPublicWeb(query,settings,signal,{question=''}={}){
   const originalQuery=searchQuery(query),plan=researchQueryPlan(originalQuery),trace=[],candidates=new Map();let metadata,discarded=0;
@@ -97,9 +105,7 @@ export async function searchPublicWeb(query,settings,signal,{question=''}={}){
     trace.push({step:index+1,query:step.query,reason:step.reason,state:ranked.length?'results':'no-relevant-results',code:ranked.length?null:found.parsed.length?'SEARCH_RESULTS_OFF_TOPIC':'SEARCH_NO_RESULTS',parsedCount:found.parsed.length,relevantCount:ranked.length,searchedAt:found.searchedAt});
     const {parsed,...current}=found;metadata=current;
     for(const row of ranked){const candidate={...row,searchContext:{query:step.query,provider:found.provider,searchedAt:found.searchedAt,step:index+1}};const prior=candidates.get(row.url);if(!prior||candidate.relevance.score>prior.relevance.score)candidates.set(row.url,candidate);}
-    const first=ranked[0];
-    const adequate=first&&(first.relevance.identifierCount?first.relevance.identifierHits===first.relevance.identifierCount:first.relevance.matchedCount/Math.max(1,first.relevance.termCount)>=.3&&ranked.length>=2);
-    if(adequate)break;
+    if(adequateResearchResults(ranked))break;
   }
   const results=[...candidates.values()].sort((a,b)=>b.relevance.identifierHits-a.relevance.identifierHits||b.relevance.score-a.relevance.score).slice(0,6);
   if(!results.length)throw Object.assign(new Error(trace.some(s=>s.parsedCount)?'SEARCH_RESULTS_OFF_TOPIC':'SEARCH_NO_RESULTS'),{searchTrace:trace});

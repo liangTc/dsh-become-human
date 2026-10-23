@@ -1,6 +1,7 @@
 import {createHash} from 'node:crypto';
 import {contextMessages,personaPolicy,contextPolicy} from './context.mjs';
 import {plain,validateCapabilityInput} from './capability-schema.mjs';
+import {boardDialogueAvailable,boardDialoguePolicy,requestedBoard,boardOperationKey,runBoardRequest} from './cognition-dialogue.mjs';
 
 const fail=code=>{throw Object.assign(new Error(code),{code});};
 const textOf=message=>(message?.content??[]).filter(item=>item.type==='text').map(item=>item.text??'').join('');
@@ -66,21 +67,35 @@ export async function capabilityDialogue(agent,signal,{turn,epoch,lane='foregrou
     if(domain.persona(id).version!==personaVersion)fail('STALE_PERSONA');
   };
   valid();
-  if(!tools||typeof tools.contextCatalog!=='function'){const response=await request(agent,signal,{turn,epoch,lane,admittedIds,messages});valid();return response;}
-  const configured=tools.configuration(id).limits?.maxToolCallsPerTurn;
+  const hasTools=!!tools&&typeof tools.contextCatalog==='function',hasBoard=boardDialogueAvailable(agent.factory.cognition)&&admittedIds.length>0;
+  if(!hasTools&&!hasBoard){const response=await request(agent,signal,{turn,epoch,lane,admittedIds,messages});valid();return response;}
+  const configured=hasTools?tools.configuration(id).limits?.maxToolCallsPerTurn:undefined;
   const maxCalls=Number.isSafeInteger(configured)?Math.max(1,Math.min(4,configured)):2;
-  let catalog=tools.contextCatalog(id,'owner');
-  if(!catalog.length){const response=await request(agent,signal,{turn,epoch,lane,admittedIds,messages});valid();return response;}
-  const observations=[],seen=new Map();let calls=0,response;
+  let catalog=hasTools?tools.contextCatalog(id,'owner'):[];
+  if(!catalog.length&&!hasBoard){const response=await request(agent,signal,{turn,epoch,lane,admittedIds,messages});valid();return response;}
+  const observations=[],boardObservations=[],seen=new Map(),seenBoard=new Map();let calls=0,response;
   while(true){
-    valid();catalog=tools.contextCatalog(id,'owner');
-    const assembled=contextMessages(agent,lane,initial.system+policy(calls,maxCalls),{...initial.data,capabilityCatalog:calls<maxCalls?catalog:[],capabilityObservations:observations,capabilityLimits:{maximum:maxCalls,used:calls,remaining:Math.max(0,maxCalls-calls)}});
+    valid();catalog=hasTools?tools.contextCatalog(id,'owner'):[];
+    const assembled=contextMessages(agent,lane,initial.system+policy(calls,maxCalls)+(hasBoard?boardDialoguePolicy(calls,maxCalls):''),{...initial.data,capabilityCatalog:calls<maxCalls?catalog:[],capabilityObservations:observations,...(hasBoard?{boardAvailable:calls<maxCalls,boardObservations}:{}),capabilityLimits:{maximum:maxCalls,used:calls,remaining:Math.max(0,maxCalls-calls),sharedWithBoard:hasBoard}});
     // contextMessages deliberately creates a fresh non-enumerable contextReport
     // for the actual catalog/results; never lose it by spreading this array.
     response=await request(agent,signal,{turn,epoch,lane,admittedIds,messages:assembled});valid();
-    const call=requestedCapability(response.text);if(!call)return response;
+    const board=requestedBoard(response.text),call=requestedCapability(response.text);if(!board&&!call)return response;
     if(calls>=maxCalls)return {...response,text:'这一轮的工具步骤已经用完了，现有结果还不足以继续确认。可以在 Web 查看本轮任务和已取得的结果。'};
     const step=++calls;
+    if(board){
+      if(!hasBoard||board.invalid){boardObservations.push({step,status:'rejected',code:hasBoard?'INVALID_BOARD_REQUEST':'BOARD_UNAVAILABLE',untrusted:true});continue;}
+      try{
+        const key=boardOperationKey(board);let receipt=board.op==='read'?null:seenBoard.get(key);
+        if(!receipt){valid();receipt=runBoardRequest(agent,board,{admittedIds,step,valid});if(board.op!=='read')seenBoard.set(key,receipt);}
+        valid();boardObservations.push({step,op:board.op,...receipt,untrusted:true,automaticMemoryWrite:false});
+        journal.audit(id,'board-dialogue-observed',{turn,op:board.op,matterId:receipt.result?.item?.id??null,status:receipt.status,lane:'foreground',origin:'agent'});
+      }catch(error){
+        valid();const code=codeOf(error);if((fatal(code)&&code!=='STALE_MATTER')||typeof error?.code==='string'&&error.code.startsWith('ERR_SQLITE'))throw error;
+        boardObservations.push({step,op:board.op,status:'rejected',code,untrusted:true});
+      }
+      continue;
+    }
     if(call.invalid){observations.push({step,status:'rejected',code:'INVALID_CAPABILITY_REQUEST',untrusted:true});continue;}
     const entry=catalog.find(item=>item.id===call.tool);
     if(!entry){observations.push({step,tool:call.tool.slice(0,128),status:'rejected',code:'CAPABILITY_DISABLED',untrusted:true});continue;}

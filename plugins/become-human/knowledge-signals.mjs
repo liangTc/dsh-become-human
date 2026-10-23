@@ -27,10 +27,27 @@ export function retrievalTerms(value,{expand=true,limit=40}={}){
 }
 
 export function questionSignals(query){
-  const text=String(query??'').normalize('NFKC'),terms=retrievalTerms(text,{expand:false,limit:40});
-  const identifiers=[...new Set((text.match(/[A-Za-z][A-Za-z0-9_.+-]{1,}/g)??[]).filter(word=>/[a-z][A-Z]|[A-Za-z]\d|^[A-Z]{2,8}$/u.test(word)).map(normalized))].slice(0,8);
-  return {terms,identifiers};
+  const text=String(query??'').normalize('NFKC'),codes=[];
+  // Numeric values are normally omitted from lexical retrieval. Preserve only
+  // explicitly named HTTP response codes; years, prices and other bare values
+  // must not become an exact-identifier requirement for an unrelated lookup.
+  if(/\bhttps?(?:\/\d(?:\.\d)?)?\b/iu.test(text)){
+    let previous=null;
+    for(const match of text.matchAll(/\b[1-5]\d{2}\b/gu)){
+      const code=match[0],at=match.index,before=text.slice(Math.max(0,at-100),at),after=text.slice(at+code.length);
+      const money=/(?:[$￥¥€£]\s*|(?:价格|费用|预算|金额|cost|price|budget)\s*[:：]?\s*)$/iu.test(before)||/^[.,]\d/u.test(after)||/^\s*(?:万元|千元|元|块|美元|人民币|日元|欧元|英镑|港元|港币|澳元|加元|usd\b|cny\b|rmb\b|dollars?\b|euros?\b|eur\b|gbp\b|円|yen\b|%)/iu.test(after);
+      const direct=/\bhttp(?:\/\d(?:\.\d)?)?(?:\s+(?:(?:response\s+)?status(?:\s+codes?)?|responses?(?:\s+codes?)?))?\s*[:：-]?\s*$/iu.test(before);
+      const named=/(?:状态码|响应状态(?:码)?|响应码|status(?:\s+codes?)?)\s*[:：-]?\s*$/iu.test(before)||/^\s*(?:状态码|响应状态|响应码|status(?:\s+code)?\b|No\s+Content\b|Not\s+Modified\b)/iu.test(after);
+      const listed=previous&&/^\s*(?:[/,，、和与或-]|and|or|vs\.?)?\s*$/iu.test(text.slice(previous.end,at));
+      if(!money&&(direct||named||listed)){codes.push(code);previous={end:at+code.length};}
+    }
+  }
+  const httpStatusCodes=[...new Set(codes)].slice(0,8),terms=[...new Set([...httpStatusCodes,...retrievalTerms(text,{expand:false,limit:40})])].slice(0,40);
+  const identifiers=[...new Set([...httpStatusCodes,...(text.match(/[A-Za-z][A-Za-z0-9_.+-]{1,}/g)??[]).filter(word=>/[a-z][A-Z]|[A-Za-z]\d|^[A-Z]{2,8}$/u.test(word)).map(normalized)])].slice(0,8);
+  return {terms,identifiers,httpStatusCodes};
 }
+
+const signalMatch=(value,term)=>/^\d+$/u.test(term)?new RegExp('(?:^|[^a-z0-9])'+term+'(?:$|[^a-z0-9])','u').test(value):value.includes(term);
 
 export function sourceSignals(row={}){
   let u;try{u=new URL(row.url);}catch{return {type:'unknown',primaryCandidate:false,authorityVerified:false};}
@@ -46,11 +63,11 @@ export function sourceSignals(row={}){
 export function scoreResearchResult(query,row,{question=''}={}){
   const profile=questionSignals(query),terms=profile.terms,title=normalized(row.title),snippet=normalized(row.snippet),url=normalized(row.url);
   const identifiers=[...new Set([...profile.identifiers,...questionSignals(question).identifiers])].slice(0,8);
-  const hits=terms.filter(term=>title.includes(term)||snippet.includes(term)||url.includes(term));
-  const identifierHits=identifiers.filter(term=>title.includes(term)||snippet.includes(term)||url.includes(term));
+  const hits=terms.filter(term=>signalMatch(title,term)||signalMatch(snippet,term)||signalMatch(url,term));
+  const identifierHits=identifiers.filter(term=>signalMatch(title,term)||signalMatch(snippet,term)||signalMatch(url,term));
   const extra=retrievalTerms(question,{expand:false,limit:24}).filter(term=>!terms.includes(term)),questionHits=extra.filter(term=>title.includes(term)||snippet.includes(term));
   const signals=sourceSignals(row),specific=identifiers.length>0;
-  const score=hits.reduce((sum,term)=>sum+(title.includes(term)?3:0)+(snippet.includes(term)?1:0)+(url.includes(term)?1:0),0)+identifierHits.length*5+Math.min(3,questionHits.length)+(signals.primaryCandidate?2:0);
+  const score=hits.reduce((sum,term)=>sum+(signalMatch(title,term)?3:0)+(signalMatch(snippet,term)?1:0)+(signalMatch(url,term)?1:0),0)+identifierHits.length*5+Math.min(3,questionHits.length)+(signals.primaryCandidate?2:0);
   return {...row,sourceSignals:signals,relevance:{version:1,score,matchedCount:hits.length,termCount:terms.length,identifierHits:identifierHits.length,identifierCount:identifiers.length,questionMatchedCount:questionHits.length,lexicalOnly:true,specificQuestion:specific},_relevant:!terms.length||hits.length>0};
 }
 

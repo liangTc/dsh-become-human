@@ -41,7 +41,7 @@ export function validateBridgeInput(operation,input){
 export function registerBridgeCapabilities(registry,{request,status}={}){
   if(typeof registry?.register!=='function'||typeof request!=='function')fail('INVALID_CAPABILITY_BRIDGE');
   const sessionProperties={sessionId:idSchema},entries=[
-    ['dsh-session-list','列出明确授权的其他 DSH 会话，不激活 Agent',schema({limit:{type:'integer',minimum:1,maximum:100}}),'read','dsh-session',()=>({kind:'dsh-session',access:'allowlist'}),10000,64000,true],
+    ['dsh-session-list','列出读取授权范围内的其他 DSH 会话，支持指定会话或 Host 可见的全部普通会话，不激活 Agent',schema({limit:{type:'integer',minimum:1,maximum:100}}),'read','dsh-session',()=>({kind:'dsh-session',access:'configured-visible-sessions'}),10000,64000,true],
     ['dsh-session-read','读取指定 DSH 会话的可见聊天文本，不读取推理或激活 Agent',schema({...sessionProperties,limit:{type:'integer',minimum:1,maximum:50},beforeSeq:{type:'integer',minimum:0},throughSeq:{type:'integer',minimum:-1}},['sessionId']),'read','dsh-session',input=>({kind:'dsh-session',sessionId:input.sessionId}),15000,96000,true],
     ['dsh-session-prompt','向指定其他 DSH 会话排队发送任务；可能启动独立模型工作，回执仅表示接收',schema({...sessionProperties,text:{type:'string',minLength:1,maxLength:12000}},['sessionId','text']),'write','dsh-session',input=>({kind:'dsh-session',sessionId:input.sessionId,externalModel:true}),15000,8000,false],
     ['dsh-session-cancel','请求取消指定其他 DSH 会话当前工作，保留其待处理队列',schema(sessionProperties,['sessionId']),'write','dsh-session',input=>({kind:'dsh-session',sessionId:input.sessionId}),10000,8000,false],
@@ -54,7 +54,7 @@ export function registerBridgeCapabilities(registry,{request,status}={}){
   ];
   const disposers=[];
   for(const [id,description,inputSchema,effect,backend,scope,timeoutMs,maxResultBytes,retrySafe] of entries){
-    const dispose=registry.register(id,{version:1,externalModel:id==='dsh-session-prompt',description,inputSchema,effect,backend,scope,scopeDescription:backend==='dsh-session'?'明确授权的其他 DSH 会话；排除 Human 主会话':'本机 CDP 端点内明确授权的来源和标签页',timeoutMs,maxResultBytes,retrySafe,autonomous:false,enabledWhen:[backend==='dsh-session'?(effect==='write'?'bridge.sessionWriteEnabled':'bridge.sessionReadEnabled'):'bridge.browser.enabled'],
+    const dispose=registry.register(id,{version:1,externalModel:id==='dsh-session-prompt',description,inputSchema,effect,backend,scope,scopeDescription:backend==='dsh-session'?'分别按读取/使用授权范围校验 Host 当前可见的普通会话；排除 Human 主会话及子 Agent，写操作仍逐笔审批':'本机 CDP 端点内明确授权的来源和标签页',timeoutMs,maxResultBytes,retrySafe,autonomous:false,enabledWhen:[backend==='dsh-session'?(effect==='write'?'bridge.sessionWriteEnabled':'bridge.sessionReadEnabled'):'bridge.browser.enabled'],
       validate:input=>validateBridgeInput(id,input),
       execute:(input,signal,context)=>request(id,validateBridgeInput(id,input),{signal,context}),
       ...(typeof status==='function'?{status:()=>status(backend)}:{}),

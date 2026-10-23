@@ -4,35 +4,11 @@ import {spawn} from 'node:child_process';
 import {createRequire} from 'node:module';
 import {createServer} from 'node:net';
 import YAML from 'yaml';
-import {parseCredentialsDocument} from '@deepseek-ai/dsh-credentials-local';
+import {readSourceModelConfiguration} from './source-models.mjs';
+import {readSourceCredentialReferences} from './source-credentials.mjs';
+export {readSourceModelConfiguration} from './source-models.mjs';
 import {OperationsLog,operationsLogPolicy,safeOperationCode,assertOfflineStoreUnlocked,acquireRunningLock,releaseRunningLock,assertRunningLock} from './operations-log.mjs';
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-const providerFields=['apiKeyEnv','displayName','api','baseURL','models','modelOverrides','compat','defaultContextWindow','defaultMaxTokens','reasoning','thinkingBudgets'];
-export async function readSourceModelConfiguration(config){
-  const profileFile=path.join(config.sourceHome,'profiles',config.sourceProfile,'cordis.patch.yml'),homeFile=path.join(config.sourceHome,'cordis.patch.yml');
-  const entries=[];
-  for(const [index,file] of [profileFile,homeFile].entries()){
-    let text;try{text=await fs.readFile(file,'utf8');}catch(error){if(error.code==='ENOENT'&&index===1)continue;throw new Error(error.code==='ENOENT'?'SOURCE_PROFILE_NOT_FOUND':'SOURCE_MODEL_CONFIGURATION_INVALID');}
-    let rows;try{rows=YAML.parse(text)??[];}catch{throw new Error('SOURCE_MODEL_CONFIGURATION_INVALID');}
-    if(!Array.isArray(rows))throw new Error('SOURCE_MODEL_CONFIGURATION_INVALID');entries.push(...rows);
-  }
-  const latest=id=>entries.filter(row=>row?.id===id).reduce((previous,row)=>({...previous,...row}),{}),providerRow=latest('llm-pi-ai');
-  const providers=providerRow?.disabled?{}:providerRow?.config?.providers??{},configuredDefault=latest('agent-default-model')?.config;
-  if(!providers||typeof providers!=='object'||Array.isArray(providers))throw new Error('SOURCE_MODEL_CONFIGURATION_INVALID');
-  let credentialRefs=new Map();const credentialFile=path.join(config.sourceHome,'.credentials.yaml');
-  try{credentialRefs=parseCredentialsDocument(await fs.readFile(credentialFile,'utf8'),credentialFile).refs;}catch(error){if(error.code!=='ENOENT')throw new Error('SOURCE_CREDENTIALS_INVALID');}
-  const readyProviders=Object.create(null),models=[];
-  for(const [provider,original] of Object.entries(providers)){
-    if(!provider||provider.length>256)continue;
-    if(!original||typeof original!=='object'||original.apiKey||original.headers||!Array.isArray(original.models)||typeof original.apiKeyEnv!=='string'||!/^\w+$/.test(original.apiKeyEnv))continue;
-    const credentialReady=!!process.env[original.apiKeyEnv]||!!credentialRefs.get(original.apiKeyEnv),clean={};
-    for(const key of providerFields)if(original[key]!==undefined)clean[key]=structuredClone(original[key]);
-    if(credentialReady)readyProviders[provider]=clean;
-    for(const model of original.models){if(!model||typeof model.id!=='string'||!model.id||model.id.length>256||models.length>=512)continue;models.push({provider,model:model.id,providerLabel:String(original.displayName??provider).slice(0,160),modelLabel:String(model.name??model.displayName??model.id).slice(0,200),credentialReady});}
-  }
-  const preferred=models.find(route=>route.credentialReady&&route.provider===(config.provider??configuredDefault?.provider)&&route.model===(config.model??configuredDefault?.model))??models.find(route=>route.credentialReady);
-  return {providers,readyProviders,models,defaultRoute:preferred?{provider:preferred.provider,model:preferred.model}:null};
-}
 async function availablePort(){
   return new Promise((resolve,reject)=>{const server=createServer();server.once('error',reject);server.listen({host:'127.0.0.1',port:0,exclusive:true},()=>{const address=server.address();server.close(error=>error?reject(error):resolve(address.port));});});
 }
@@ -76,23 +52,31 @@ export class RuntimeSupervisor {
     this.acquireRuntimeLease();
     if(!/^[a-zA-Z0-9_-]+$/.test(c.sourceProfile)||!/^[a-zA-Z0-9_-]+$/.test(c.runtimeProfile)||!Number.isInteger(c.runtimePort)||c.runtimePort<1024||c.runtimePort>65535)throw new Error('INVALID_RUNTIME_CONFIG');
     await fs.mkdir(c.runtimeHome,{recursive:true});if(await fs.realpath(c.runtimeHome)!==path.resolve(c.runtimeHome))throw new Error('LINKED_RUNTIME_HOME');
-    const source=await readSourceModelConfiguration(c),providers=source.providers;
+    const source=await readSourceModelConfiguration(c);
     const providerId=c.provider??source.defaultRoute?.provider,modelId=c.model??source.defaultRoute?.model;
-    const original=providers[providerId];if(!original||!modelId||!original.models?.some(m=>m.id===modelId)||original.apiKey||original.headers)throw new Error('MODEL_ROUTE_REQUIRES_SETUP');
-    const provider={};for(const key of ['apiKeyEnv','displayName','api','baseURL','models','modelOverrides','compat','defaultContextWindow','defaultMaxTokens','reasoning','thinkingBudgets'])if(original[key]!==undefined)provider[key]=structuredClone(original[key]);
+    const selected=source.models.find(route=>route.provider===providerId&&route.model===modelId);
+    if(!selected)throw new Error('MODEL_ROUTE_REQUIRES_SETUP');
+    if(!selected.credentialReady)throw new Error('MODEL_CREDENTIAL_MISSING');
+    const native=selected.adapter==='deepseek-native';
+    const original=(native?source.nativeProviders:source.providers)[providerId];
+    if(!original||!original.models?.some(m=>m.id===modelId))throw new Error('MODEL_ROUTE_REQUIRES_SETUP');
+    const provider=structuredClone(original);
     if(!provider.apiKeyEnv)throw new Error('MODEL_CREDENTIAL_REFERENCE_MISSING');
-    provider.retryPolicy={mode:'normal',maxRetries:0};provider.timeoutMs=c.requestTimeoutMs;provider.streamIdleTimeoutMs=c.requestTimeoutMs;
-    if(!source.models.some(route=>route.provider===providerId&&route.model===modelId&&route.credentialReady))throw new Error('MODEL_CREDENTIAL_MISSING');
+    provider.retryPolicy={mode:'normal',maxRetries:0};if(!native)provider.timeoutMs=c.requestTimeoutMs;provider.streamIdleTimeoutMs=c.requestTimeoutMs;
     const safeProviders=Object.create(null);for(const [key,value] of Object.entries(source.readyProviders)){const clean=structuredClone(value);clean.retryPolicy={mode:'normal',maxRetries:0};clean.timeoutMs=120000;clean.streamIdleTimeoutMs=120000;safeProviders[key]=clean;}
-    safeProviders[providerId]=provider;this.allowedRoutes=Object.entries(safeProviders).flatMap(([provider,p])=>p.models.map(m=>({provider,model:m.id})));
+    const safeNativeProviders=Object.create(null);for(const [key,value] of Object.entries(source.readyNativeProviders)){const clean=structuredClone(value);clean.retryPolicy={mode:'normal',maxRetries:0};clean.streamIdleTimeoutMs=120000;safeNativeProviders[key]=clean;}
+    (native?safeNativeProviders:safeProviders)[providerId]=provider;
+    const readyRoutes=source.models.filter(route=>route.credentialReady),seen=new Set();
+    this.modelCapabilities=readyRoutes.filter(route=>{const key=JSON.stringify([route.provider,route.model]);if(seen.has(key))return false;seen.add(key);return true;}).map(({provider,model,adapter,reasoningEfforts})=>({provider,model,adapter,...(reasoningEfforts?{reasoningEfforts}: {})}));
+    this.allowedRoutes=this.modelCapabilities.map(({provider,model})=>({provider,model}));
     const profile=path.join(c.runtimeHome,'profiles',c.runtimeProfile);await fs.mkdir(path.join(profile,'node_modules'),{recursive:true});
     for(const [name,target] of [['dsh-become-human-web',import.meta.dirname],['dsh-become-human-runtime',path.join(import.meta.dirname,'runtime-bundle')]]){
       const link=path.join(profile,'node_modules',name);
       try{await fs.symlink(target,link,'junction');}catch(e){if(e.code!=='EEXIST')throw e;const existing=await fs.lstat(link);if(!existing.isSymbolicLink())throw new Error('PROFILE_PACKAGE_CONFLICT');if(await fs.realpath(link)!==await fs.realpath(target)){await fs.unlink(link);await fs.symlink(target,link,'junction');}}
     }
     await fs.writeFile(path.join(profile,'package.json'),JSON.stringify({name:'become-human-private-runtime',private:true,type:'module',dsh:{profile:{bundles:['@deepseek-ai/dsh-base','@deepseek-ai/dsh-web-app','dsh-become-human-runtime']}}},null,2));
-    const patch=[{id:'llm-pi-ai',config:{providers:safeProviders}},{id:'agent-default-model',config:{provider:providerId,model:modelId}},{id:'become-human',config:{provider:providerId,model:modelId,allowedRoutes:this.allowedRoutes,tokenBudget:c.tokenBudget,localQuotaEnabled:c.localQuotaEnabled,budgetRound:c.budgetRound,maxTokens:c.maxTokens,maxCycles:c.maxCycles,intervalMs:c.intervalMs,requestTimeoutMs:c.requestTimeoutMs,interactiveOnly:c.interactiveOnly}},...['hmr','session-title-llm','session-log-deepseek','session-log-download','plugin-package-inventory-deepseek','desktop-product-telemetry','product-analytics','session-telemetry-otel','ui-settings-account','account-controller'].map(id=>({id,disabled:true}))];
-    await fs.writeFile(path.join(profile,'cordis.patch.yml'),YAML.stringify(patch));await fs.writeFile(path.join(c.runtimeHome,'runtime-selection.json'),JSON.stringify({provider:providerId,model:modelId,apiKeyEnv:provider.apiKeyEnv,apiKeyEnvs:[...new Set(Object.values(safeProviders).map(p=>p.apiKeyEnv))]}));
+    const patch=[{id:'llm-pi-ai',config:{providers:safeProviders}},{id:'llm-deepseek',name:'@deepseek-ai/dsh-llm-deepseek-api-key',disabled:!safeNativeProviders['deepseek-official'],config:safeNativeProviders['deepseek-official']??{}},{id:'agent-default-model',config:{provider:providerId,model:modelId}},{id:'become-human',config:{provider:providerId,model:modelId,allowedRoutes:this.allowedRoutes,modelCapabilities:this.modelCapabilities,tokenBudget:c.tokenBudget,localQuotaEnabled:c.localQuotaEnabled,budgetRound:c.budgetRound,maxTokens:c.maxTokens,maxCycles:c.maxCycles,intervalMs:c.intervalMs,requestTimeoutMs:c.requestTimeoutMs,interactiveOnly:c.interactiveOnly}},...['hmr','session-title-llm','session-log-deepseek','session-log-download','plugin-package-inventory-deepseek','desktop-product-telemetry','product-analytics','session-telemetry-otel','ui-settings-account','account-controller'].map(id=>({id,disabled:true}))];
+    await fs.writeFile(path.join(profile,'cordis.patch.yml'),YAML.stringify(patch));await fs.writeFile(path.join(c.runtimeHome,'runtime-selection.json'),JSON.stringify({provider:providerId,model:modelId,apiKeyEnv:provider.apiKeyEnv,apiKeyEnvs:[...new Set([...Object.values(safeProviders),...Object.values(safeNativeProviders)].map(p=>p.apiKeyEnv))]}));
     this.selection={provider:providerId,model:modelId};
   }
   async start(){
@@ -114,7 +98,17 @@ export class RuntimeSupervisor {
       await fs.unlink(launchFile).catch(error=>{if(error.code!=='ENOENT')throw error;});
       const require=createRequire(import.meta.url),dshManifest=require.resolve('@deepseek-ai/dsh/package.json');
       const dshEntry=path.join(path.dirname(dshManifest),JSON.parse(await fs.readFile(dshManifest,'utf8')).bin.dsh);
-      const child=spawn(process.execPath,[path.join(import.meta.dirname,'worker.mjs')],{windowsHide:true,stdio:['ignore','pipe','pipe','ipc'],env:{...process.env,BH_DSH_ENTRY:dshEntry,BH_RUNTIME_HOME:this.config.runtimeHome,BH_SOURCE_HOME:this.config.sourceHome,BH_RUNTIME_PROFILE:this.config.runtimeProfile,BH_RUNTIME_PORT:String(this.config.runtimePort)}});this.child=child;this.installCapabilityBridge(child);
+      const selection=JSON.parse(await fs.readFile(path.join(this.config.runtimeHome,'runtime-selection.json'),'utf8'));
+      const credentials=await readSourceCredentialReferences(this.config,selection.apiKeyEnvs);
+      if(!credentials.get(selection.apiKeyEnv))throw new Error('MODEL_CREDENTIAL_MISSING');
+      const childEnv={...process.env};
+      for(const ref of selection.apiKeyEnvs){
+        // Remove inherited, possibly materialized .env values before applying
+        // the source's resolved precedence. Values never enter a disk record.
+        for(const key of Object.keys(childEnv))if(process.platform==='win32'?key.toUpperCase()===ref.toUpperCase():key===ref)delete childEnv[key];
+        if(credentials.has(ref))childEnv[ref]=credentials.get(ref);
+      }
+      const child=spawn(process.execPath,[path.join(import.meta.dirname,'worker.mjs')],{windowsHide:true,stdio:['ignore','pipe','pipe','ipc'],env:{...childEnv,BH_DSH_ENTRY:dshEntry,BH_RUNTIME_HOME:this.config.runtimeHome,BH_RUNTIME_PROFILE:this.config.runtimeProfile,BH_RUNTIME_PORT:String(this.config.runtimePort)}});this.child=child;this.installCapabilityBridge(child);
       startingChild=child;
       this.recordLifecycle('worker-spawned',{runtimePort:this.config.runtimePort});
       await fs.writeFile(path.join(this.config.runtimeHome,'manager-process.json'),JSON.stringify({managerPid:process.pid,workerPid:child.pid,runtimePort:this.config.runtimePort,source:'manager-owned child process'}));

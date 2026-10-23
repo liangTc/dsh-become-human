@@ -1,3 +1,4 @@
+import {isDispatchedAttempt,reportedTokenBreakdown} from './usage-statistics.mjs';
 const parse=value=>{try{return JSON.parse(value);}catch{return null;}};
 const fail=code=>{throw new Error(code);};
 
@@ -15,17 +16,20 @@ export function usageSummary(journal,id,input={}){
   journal.assertAdmitted(id);const now=Date.now(),since=input.since??Math.floor(now/86400000)*86400000,until=input.until??now;
   if(!Number.isSafeInteger(since)||!Number.isSafeInteger(until)||since<0||until<since||until-since>93*86400000)fail('INVALID_USAGE_QUERY');
   const prices=journal.value(id,'usagePrices',[]),groups=new Map();
-  for(const row of journal.db.prepare('SELECT a.request,a.config,a.usage,a.usage_confidence,a.state,r.amount FROM attempt a LEFT JOIN reservation r ON r.id=a.id WHERE a.agent=? AND a.started>=? AND a.started<=? ORDER BY a.started').all(id,since,until)){
-    const config=parse(row.config)??{},request=parse(row.request)??{},usage=parse(row.usage),lane=request.lane==='foreground'?'owner':'autonomous';
+  for(const row of journal.db.prepare('SELECT a.request,a.config,a.usage,a.usage_confidence,a.state,r.amount,r.status AS reservationStatus FROM attempt a LEFT JOIN reservation r ON r.id=a.id AND r.agent=a.agent WHERE a.agent=? AND a.started>=? AND a.started<? ORDER BY a.started').all(id,since,until)){
+    if(!isDispatchedAttempt(row))continue;
+    const config=parse(row.config)??{},request=parse(row.request)??{},usage=reportedTokenBreakdown(row),lane=request.lane==='foreground'||request.budgetClass==='foreground'||!request.lane&&request.admittedIds?.length?'owner':'autonomous';
     const key=JSON.stringify([config.provider??'unknown',config.model??'unknown',lane]);let item=groups.get(key);
-    if(!item){item={provider:config.provider??'unknown',model:config.model??'unknown',lane,requests:0,reportedTokens:0,unknownUsageRequests:0,conservativeAdmission:0,failedRequests:0,estimatedCost:null,currency:null};groups.set(key,item);}
+    if(!item){item={provider:config.provider??'unknown',model:config.model??'unknown',lane,requests:0,reportedTokens:0,unknownUsageRequests:0,conservativeAdmission:0,failedRequests:0,estimatedCost:null,currency:null,pricedRequests:0};groups.set(key,item);}
     item.requests++;item.conservativeAdmission+=row.amount??0;if(['failed','validation-rejected','output-limit','interrupted'].includes(row.state))item.failedRequests++;
-    if(row.usage_confidence==='reported'&&usage){
-      item.reportedTokens+=usage.totalTokens??0;const price=prices.find(p=>p.provider===item.provider&&p.model===item.model);
-      if(price){const output=usage.outputTokens??0,cacheRead=usage.cacheReadTokens??0,cacheWrite=usage.cacheWriteTokens??0,input=usage.totalTokens===undefined?usage.inputTokens??0:Math.max(0,usage.totalTokens-output-cacheRead-cacheWrite);item.estimatedCost=(item.estimatedCost??0)+(input*price.inputPerMillion+output*price.outputPerMillion+cacheRead*price.cacheReadPerMillion+cacheWrite*price.cacheWritePerMillion)/1000000+price.perRequest;item.currency=price.currency;}
+    if(usage){
+      item.reportedTokens+=usage.total;const price=prices.find(p=>p.provider===item.provider&&p.model===item.model);
+      if(price&&[['input','inputPerMillion'],['output','outputPerMillion'],['cacheRead','cacheReadPerMillion'],['cacheWrite','cacheWritePerMillion']].every(([field,rate])=>usage[field]!==null||price[rate]===0)){
+        item.estimatedCost=(item.estimatedCost??0)+((usage.input??0)*price.inputPerMillion+(usage.output??0)*price.outputPerMillion+(usage.cacheRead??0)*price.cacheReadPerMillion+(usage.cacheWrite??0)*price.cacheWritePerMillion)/1000000+price.perRequest;item.currency=price.currency;item.pricedRequests++;
+      }
     }else item.unknownUsageRequests++;
   }
-  const items=[...groups.values()];return {since,until,timeBasis:'UTC day by default',items,prices,requests:items.reduce((n,x)=>n+x.requests,0),reportedTokens:items.reduce((n,x)=>n+x.reportedTokens,0),unknownUsageRequests:items.reduce((n,x)=>n+x.unknownUsageRequests,0),conservativeAdmission:items.reduce((n,x)=>n+x.conservativeAdmission,0),costScope:'User-supplied prices and provider-reported usage only; not an invoice. Unknown usage, subscription and external tool fees are not inferred.'};
+  const items=[...groups.values()].map(({pricedRequests,...item})=>({...item,estimatedCost:pricedRequests===item.requests?item.estimatedCost:null}));return {since,until,timeBasis:'UTC day by default; half-open range; locally dispatched requests only',items,prices,requests:items.reduce((n,x)=>n+x.requests,0),reportedTokens:items.reduce((n,x)=>n+x.reportedTokens,0),unknownUsageRequests:items.reduce((n,x)=>n+x.unknownUsageRequests,0),conservativeAdmission:items.reduce((n,x)=>n+x.conservativeAdmission,0),costScope:'User-supplied prices and complete provider-reported usage only; not an invoice. Unknown usage, subscription and external tool fees are not inferred.'};
 }
 
 export function readiness(factory,id){

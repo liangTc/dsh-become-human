@@ -31,7 +31,8 @@ export class ToolExecutor {
     const definition={id:name,title:adapter.title??name,description:adapter.description,version:adapter.version??1,inputSchema:structuredClone(adapter.inputSchema),effect:adapter.effect,sideEffects:adapter.effect==='write',backend:adapter.backend??'local',scope:typeof adapter.scope==='function'?(adapter.scopeDescription??'specific-target'):adapter.scope??'explicit-input',timeoutMs:adapter.timeoutMs??60000,maxResultBytes:adapter.maxResultBytes??32768,retrySafe:adapter.effect==='read'&&adapter.retrySafe!==false,autonomous:adapter.effect==='read'&&adapter.autonomous===true,enabledWhen:adapter.enabledWhen??[],externalModel:adapter.externalModel===true,independentSession:false};
     if(!Number.isSafeInteger(definition.timeoutMs)||definition.timeoutMs<1000||definition.timeoutMs>120000||!Number.isSafeInteger(definition.maxResultBytes)||definition.maxResultBytes<1024||definition.maxResultBytes>131072||!Array.isArray(definition.enabledWhen)||definition.enabledWhen.some(path=>typeof path!=='string'||path.length>100))fail('INVALID_TOOL_ADAPTER');
     definition.outputSchema=adapter.outputSchema?structuredClone(adapter.outputSchema):null;
-    this.registry.set(name,Object.freeze({...adapter,definition,definitionHash:hash(definition)}));return ()=>{this.registry.delete(name);for(const execution of this.executions.values())if(execution.tool===name)execution.controller.abort(new Error('CAPABILITY_DEFINITION_CHANGED'));};
+    const registered=Object.freeze({...adapter,definition,definitionHash:hash(definition)});this.registry.set(name,registered);
+    return ()=>{if(this.registry.get(name)!==registered)return;this.registry.delete(name);for(const execution of this.executions.values())if(execution.adapter===registered)execution.controller.abort(new Error('CAPABILITY_DEFINITION_CHANGED'));};
   }
   configuration(agent){
     this.journal.assertAdmitted(agent);
@@ -43,6 +44,7 @@ export class ToolExecutor {
     const current=this.configuration(agent);if(expectedRevision!==current.revision)fail('STALE_CAPABILITY_SETTINGS');
     const next=validateCapabilitySettings(settings);if(!this.journal.safety)fail('SIGNED_CONTROL_REQUIRED');
     await this.journal.safety.prepare('capability-policy:'+randomUUID(),'human-capability-policy',{agent,revision:current.revision+1,settings:next});
+    for(const execution of this.executions.values())if(execution.agent===agent&&execution.policyRevision!==current.revision+1)execution.controller.abort(new Error('CAPABILITY_POLICY_CHANGED'));
     this.journal.put(agent,'humanCapabilitySettings',next);this.journal.audit(agent,'capability-configured',{revision:current.revision+1});return this.configuration(agent);
   }
   enabled(adapter,agent){const settings=this.configuration(agent);return adapter.definition.enabledWhen.every(path=>at(settings,path)===true)&&adapter.available?.()!==false;}
@@ -92,6 +94,10 @@ export class ToolExecutor {
     const approval=this.journal.safety?.rows?.findLast(record=>record.id===meta.approval_key&&record.kind==='human-capability-approved'),data=approval&&parse(approval.data);
     if(!data||data.agent!==row.agent||data.jobId!==row.id||data.digest!==meta.digest||data.definitionHash!==adapter.definitionHash||data.policyRevision!==policy.revision||data.expires!==meta.approval_expires)fail('CAPABILITY_APPROVAL_INVALID');
   }
+  checkReadPolicy(row,adapter){
+    if(adapter.effect!=='read')return;
+    const meta=this.metadata(row.id);if(!meta||meta.policy_revision!==this.configuration(row.agent).revision)fail('CAPABILITY_POLICY_CHANGED');
+  }
   async execute(agent,id,{signal,valid}){
     let row=this.get(agent,id);if(!['queued','suspended'].includes(row.status))fail('TOOL_JOB_NOT_EXECUTABLE');valid();if(this.inflight.size)fail('CAPABILITY_BUSY');let adapter,dispatched=false;
     try{
@@ -99,17 +105,18 @@ export class ToolExecutor {
       adapter=this.registry.get(row.tool);if(!adapter)fail('TOOL_ADAPTER_UNAVAILABLE');if(!this.enabled(adapter,agent))fail('CAPABILITY_DISABLED');
       this.checkPreview(row);validateCapabilityInput(adapter.definition.inputSchema,row.input);
       if(row.capabilitySnapshot?.definitionHash&&row.capabilitySnapshot.definitionHash!==adapter.definitionHash)fail('CAPABILITY_DEFINITION_CHANGED');
+      this.checkReadPolicy(row,adapter);
       if(adapter.effect==='write')this.checkApproval(row,adapter);
       const policy=this.configuration(agent),controller=new AbortController(),requestSignal=AbortSignal.any([signal,controller.signal,AbortSignal.timeout(Math.min(adapter.definition.timeoutMs,policy.limits.timeoutMs))]);
-      this.executions.set(id,{tool:row.tool,controller});
-      this.update(row,'running');row=this.get(agent,id);this.inflight.add(id);valid();requestSignal.throwIfAborted();
-      const guarded=()=>{valid();requestSignal.throwIfAborted();if(adapter.effect==='write'){this.checkPreview(row);this.checkApproval(row,adapter);}};
-      dispatched=true;let result=await adapter.execute(row.input,requestSignal,{agent,jobId:id,requestId:row.request_id,origin:row.origin,taskId:row.taskId,prepared:row.prepared,policyRevision:policy.revision,approvalExpires:row.approvalExpires,valid:guarded});requestSignal.throwIfAborted();valid();
+      this.executions.set(id,{tool:row.tool,adapter,agent,policyRevision:policy.revision,controller});
+      this.update(row,'running');row=this.get(agent,id);this.inflight.add(id);
+      const guarded=()=>{valid();requestSignal.throwIfAborted();this.checkReadPolicy(row,adapter);if(adapter.effect==='write'){this.checkPreview(row);this.checkApproval(row,adapter);}};
+      guarded();dispatched=true;let result=await adapter.execute(row.input,requestSignal,{agent,jobId:id,requestId:row.request_id,origin:row.origin,taskId:row.taskId,prepared:row.prepared,policyRevision:policy.revision,approvalExpires:row.approvalExpires,valid:guarded});guarded();
       if(adapter.outputSchema)result=validateCapabilityInput(adapter.outputSchema,result);
       const resultLimit=Math.min(adapter.definition.maxResultBytes,policy.limits.maxResultBytes);
       if(adapter.effect==='read')result=boundedReadResult(result,resultLimit);
       else if(Buffer.byteLength(JSON.stringify(result??null))>resultLimit)fail('CAPABILITY_RESULT_TOO_LARGE');
-      this.journal.transaction(()=>{valid();if(adapter.backend==='public-read'&&result?.digest)this.db.prepare('INSERT INTO human_page_snapshot VALUES(?,?,?,?,?) ON CONFLICT(agent,url) DO UPDATE SET digest=excluded.digest,fetched=excluded.fetched,job=excluded.job').run(agent,row.input.url,result.digest,result.fetchedAt,row.id);this.update(row,'completed',{result:result??{completed:true}});});
+      this.journal.transaction(()=>{guarded();if(adapter.backend==='public-read'&&result?.digest)this.db.prepare('INSERT INTO human_page_snapshot VALUES(?,?,?,?,?) ON CONFLICT(agent,url) DO UPDATE SET digest=excluded.digest,fetched=excluded.fetched,job=excluded.job').run(agent,row.input.url,result.digest,result.fetchedAt,row.id);this.update(row,'completed',{result:result??{completed:true}});});
     }catch(error){
       const code=codeOf(error),writing=(adapter?.effect??row.capabilitySnapshot?.effect)==='write';
       if(writing&&dispatched)this.update(row,'unknown',{error:code==='CAPABILITY_OUTCOME_UNKNOWN'?code:'CAPABILITY_OUTCOME_UNKNOWN:'+code});

@@ -5,7 +5,7 @@ import {DEFAULT_PERSONA_CORE} from './persona-profile.mjs';
 const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const TYPES=['identity','working','episode','fact','goal','skill'];
 const coreDefault=DEFAULT_PERSONA_CORE;
-const defaults={verbosity:.5,humor:.2};
+
 const secret=text=>/(?:sk-[a-z0-9]{16,}|(?:api.?key|password|密码|令牌|token)\s*[:=]\s*\S{8,})/i.test(text);
 export class DomainMemory {
   constructor(journal,{clock=()=>Date.now()}={}){
@@ -20,7 +20,7 @@ export class DomainMemory {
   }
   now(agent){const time=Math.max(this.clock(),this.journal.value(agent,'timeHighWater',0));this.journal.put(agent,'timeHighWater',time);return time;}
   ensurePersona(agent){
-    if(!this.journal.value(agent,'personaState',null))this.journal.put(agent,'personaState',{version:1,core:this.journal.value(agent,'persona',coreDefault),coreHash:digest(this.journal.value(agent,'persona',coreDefault)),baseline:{...defaults},tendencies:{...defaults},temporary:null,autoEnabled:[],created:this.clock()});
+    if(!this.journal.value(agent,'personaState',null))this.journal.put(agent,'personaState',{version:1,core:this.journal.value(agent,'persona',coreDefault),coreHash:digest(this.journal.value(agent,'persona',coreDefault)),created:this.clock()});
   }
   source(agent,{id,body,kind='user',namespace='real',root=id,occurred=this.clock()}){
     this.journal.assertAdmitted(agent);
@@ -71,7 +71,6 @@ export class DomainMemory {
     }
     this.save(agent,{type:'episode',payload:{userSaid:body},refs:[message.id],confidence:1});
     for(const preference of preferenceStatements(body))this.save(agent,{type:'fact',payload:{entity:'user',predicate:'preference',...preference},refs:[message.id]});
-    if(/(?:今天|这次|现在).*(?:简短|简洁)/.test(body)){this.ensurePersona(agent);const state=this.persona(agent);state.temporary={tone:'concise',verbosity:.2,refs:[message.id],expires:Math.floor((time+8*3600000)/86400000)*86400000+86400000-8*3600000};state.version++;this.journal.put(agent,'personaState',state);}
     this.journal.put(agent,'observed:'+message.id,true);
   }
   repairPreferenceSlots(agent){
@@ -117,41 +116,19 @@ export class DomainMemory {
   forgetRecord(agent,id){
     const row=this.db.prepare("SELECT * FROM memory_record WHERE id=? AND agent=? AND status='active'").get(id,agent);if(!row)throw new Error('MEMORY_NOT_FOUND');
     this.journal.transaction(()=>{for(const root of JSON.parse(row.roots))this.db.prepare('INSERT OR IGNORE INTO extraction_block VALUES(?,?,?)').run(agent,root,digest(JSON.parse(row.payload)));this.invalidate(id);this.db.prepare("UPDATE memory_record SET payload='null',status='deleted',version=version+1 WHERE id=?").run(id);});
-    const affected=this.db.prepare("SELECT * FROM persona_change WHERE agent=? AND status='active'").all(agent).filter(c=>JSON.parse(c.roots).some(r=>JSON.parse(row.roots).includes(r)));if(affected.length){const state=this.persona(agent);for(const c of affected){state.tendencies[c.field]=state.baseline[c.field];this.db.prepare("UPDATE persona_change SET status='invalid' WHERE id=?").run(c.id);}state.version++;this.journal.put(agent,'personaState',state);}
+    this.development?.reconcile(agent);
   }
   persona(agent){
-    this.ensurePersona(agent);const state=this.journal.value(agent,'personaState',null),now=this.now(agent);
-    let changed=false;
-    for(const change of this.db.prepare("SELECT id,field,roots FROM persona_change WHERE agent=? AND status='active'").all(agent))if(JSON.parse(change.roots).some(id=>!this.sourceUsable(agent,id))){state.tendencies[change.field]=state.baseline[change.field];this.db.prepare("UPDATE persona_change SET status='invalid' WHERE id=?").run(change.id);changed=true;}
-    if(state.temporary&&(state.temporary.expires<=now||state.temporary.refs.some(id=>!this.db.prepare("SELECT 1 FROM source_record WHERE id=? AND status='active'").get(id)||!this.sourceUsable(agent,id)))){state.temporary=null;changed=true;}
-    if(changed){state.version++;this.journal.put(agent,'personaState',state);}
-    return state;
+    this.ensurePersona(agent);const state=this.journal.value(agent,'personaState',null),development=this.development?.snapshot(agent);
+    return {version:state.version,core:state.core,coreHash:state.coreHash,created:state.created,developmentVersion:development?.version??1,development:{version:development?.version??1,enabled:development?.settings.enabled??false,traits:this.development?.context(agent)??[]}};
   }
-  setCore(agent,text){if(typeof text!=='string'||!text.trim()||text.length>512)throw new Error('INVALID_PERSONA');const s=this.persona(agent);s.core=text.trim();s.coreHash=digest(s.core);s.version++;this.journal.put(agent,'persona',s.core);this.journal.put(agent,'personaState',s);}
-  enableAuto(agent,fields){if(!Array.isArray(fields)||fields.some(f=>!Object.hasOwn(defaults,f)))throw new Error('INVALID_PERSONA_FIELD');const s=this.persona(agent);s.autoEnabled=[...new Set(fields)];s.version++;this.journal.put(agent,'personaState',s);}
-  applyEligibleEvidence(agent){
-    for(const field of this.persona(agent).autoEnabled){
-      const used=new Set(this.db.prepare('SELECT roots FROM persona_change WHERE agent=? AND field=?').all(agent,field).flatMap(r=>JSON.parse(r.roots)));
-      const pattern=field==='verbosity'?/简洁|简短|详细|详尽/:/幽默|笑话|严肃/;
-      const roots=this.db.prepare("SELECT * FROM source_record WHERE agent=? AND kind='user' AND namespace='real' AND status='active' ORDER BY occurred").all(agent).filter(s=>s.id===s.root&&!used.has(s.id)&&!developmentInput(s.body)&&pattern.test(s.body));
-      if(roots.length<3)continue;const selected=[roots[0],...roots.slice(-2)];if(new Set(selected.map(s=>s.id)).size<3)continue;
-      const positive=field==='verbosity'?/详细|详尽/:/幽默|笑话/;const directions=selected.map(s=>positive.test(s.body)?1:-1);if(new Set(directions).size!==1)continue;
-      const state=this.persona(agent);try{this.evolve(agent,{field,value:Math.max(0,Math.min(1,state.tendencies[field]+directions[0]*.05)),rootIds:selected.map(s=>s.id),baseVersion:state.version});}catch{/* Eligibility is conservative; no proposal is applied on a failed guard. */}
-    }
-  }
-  evolve(agent,{field,value,rootIds,baseVersion}){
-    if(!Object.hasOwn(defaults,field)||!Number.isFinite(value)||value<0||value>1)throw new Error('INVALID_PERSONA_FIELD');
-    const state=this.persona(agent),now=this.now(agent);if(state.version!==baseVersion)throw new Error('STALE_PERSONA');if(!state.autoEnabled.includes(field))throw new Error('PERSONA_AUTO_DISABLED');
-    const rows=this.refs(agent,rootIds),roots=[...new Set(rows.map(s=>s.root))];
-    if(roots.length<3||roots.length!==rows.length||rows.some(s=>s.kind!=='user'||s.namespace!=='real'||s.root!==s.id||developmentInput(s.body)||!new RegExp(field==='verbosity'?'简短|简洁|详细|详尽':'幽默|笑话|严肃').test(s.body)))throw new Error('INSUFFICIENT_PERSONA_EVIDENCE');
-    const times=rows.map(s=>s.occurred);if(Math.max(...times)-Math.min(...times)<7*86400000)throw new Error('PERSONA_EVIDENCE_SPAN');
-    const changes=this.db.prepare('SELECT * FROM persona_change WHERE agent=? AND field=? ORDER BY applied DESC').all(agent,field);
-    if(changes.some(c=>JSON.parse(c.roots).some(r=>roots.includes(r))))throw new Error('PERSONA_EVIDENCE_REUSED');
-    const old=state.tendencies[field],delta=Math.abs(value-old);
-    if(delta>.05000001||Math.abs(value-state.baseline[field])>.20000001||changes.some(c=>now-c.applied<7*86400000)||changes.filter(c=>now-c.applied<30*86400000).reduce((sum,c)=>sum+Math.abs(c.new_value-c.old_value),0)+delta>.15000001)throw new Error('PERSONA_CHANGE_LIMIT');
-    const id=crypto.randomUUID();this.journal.transaction(()=>{this.db.prepare("INSERT INTO persona_change VALUES(?,?,?,?,?,?,?,'active',?)").run(id,agent,field,old,value,JSON.stringify(roots),now,state.version);state.tendencies[field]=value;state.version++;this.journal.put(agent,'personaState',state);});return id;
-  }
-  rollback(agent){const state=this.persona(agent);state.tendencies={...state.baseline};state.temporary=null;state.version++;this.db.prepare("UPDATE persona_change SET status='rolled-back' WHERE agent=? AND status='active'").run(agent);this.journal.put(agent,'personaState',state);}
+  setCore(agent,text){if(typeof text!=='string'||!text.trim()||text.length>512)throw new Error('INVALID_PERSONA');this.ensurePersona(agent);const s=this.journal.value(agent,'personaState',null);s.core=text.trim();s.coreHash=digest(s.core);s.version++;this.journal.put(agent,'persona',s.core);this.journal.put(agent,'personaState',s);}
+  // Retained only for old driver call sites during an upgrade. The former
+  // verbosity/humor and keyword-triggered expression mechanisms no longer run.
+  applyEligibleEvidence(){return {applied:0,retired:true};}
+  enableAuto(){throw new Error('PERSONA_AUTO_REMOVED');}
+  evolve(){throw new Error('PERSONA_AUTO_REMOVED');}
+  rollback(){throw new Error('PERSONA_AUTO_REMOVED');}
   goal(agent,{description,refs,expires}){
     if(typeof description!=='string'||description.length<1||description.length>512||!Number.isSafeInteger(expires)||expires<=this.now(agent))throw new Error('INVALID_GOAL');this.refs(agent,refs);
     if(this.db.prepare("SELECT count(*) AS n FROM goal_record WHERE agent=? AND status IN ('proposed','active','blocked','paused','needs-evidence','awaiting-review') AND expires>?").get(agent,this.now(agent)).n>=8)throw new Error('GOAL_LIMIT');
@@ -173,7 +150,9 @@ export class DomainMemory {
       if(excluded.has(row.source_id)||!this.sourceUsable(agent,row.source_id)||developmentInput(row.body))continue;
       let refs;try{refs=JSON.parse(row.refs);}catch{continue;}
       if(!refs.every(ref=>this.sourceUsable(agent,ref)&&this.db.prepare("SELECT 1 FROM source_record WHERE agent=? AND id=? AND status='active'").get(agent,ref)))continue;
-      const topics=topicKeys(row.body),key=Math.floor(row.occurred/86400000)+':'+(topics[0]??'conversation'),score=terms.filter(t=>row.body.toLowerCase().includes(t)).length;
+      const score=terms.filter(t=>row.body.toLowerCase().includes(t)).length;
+      if(this.lifecycle){const memory=this.db.prepare('SELECT id,type,payload,valid_from FROM memory_record WHERE agent=? AND id=?').get(agent,row.id);if(memory&&this.lifecycle.overlay(agent,memory).tier==='cold'&&!score)continue;}
+      const topics=topicKeys(row.body),key=Math.floor(row.occurred/86400000)+':'+(topics[0]??'conversation');
       let group=groups.get(key);if(!group){group={version:1,summaryKind:'evidence-excerpts',topicHints:topics,firstObservedAt:row.occurred,lastObservedAt:row.occurred,currentState:'unconfirmed',semanticSummary:false,sourceIds:[],memoryIds:[],excerpts:[],_score:0};groups.set(key,group);}
       if(group.sourceIds.includes(row.source_id)||group.excerpts.length>=3)continue;
       group.sourceIds.push(row.source_id);group.memoryIds.push(row.id);group.excerpts.push({sourceId:row.source_id,at:row.occurred,text:Array.from(row.body).slice(0,160).join(''),excerptOnly:true});group.firstObservedAt=Math.min(group.firstObservedAt,row.occurred);group.lastObservedAt=Math.max(group.lastObservedAt,row.occurred);group._score+=score;
@@ -206,21 +185,27 @@ export class DomainMemory {
         if(['episode','fact','working','identity'].includes(type)&&refs.some(ref=>this.sourceIsDevelopmentTest(agent,ref)))continue;
         if(type==='episode'&&refs.some(ref=>excluded.has(ref)))continue;
         const payload=JSON.parse(r.payload),text=r.payload.toLowerCase(),matched=terms.reduce((n,term)=>n+(text.includes(term)?1:0),0);
-        rows.push({...r,payload,refs,score:matched,layer:['identity','fact'].includes(type)?'long-term':type==='episode'?'episodic':type==='skill'?'learning':'working'});
+        const candidate={...r,payload,refs,score:matched,layer:['identity','fact'].includes(type)?'long-term':type==='episode'?'episodic':type==='skill'?'learning':'working'},annotated=this.lifecycle?.annotate(agent,[candidate],query,{touch:false})[0]??candidate;
+        if(annotated.lifecycle?.tier==='cold'&&!matched)continue;
+        rows.push({...annotated,_lifecycleRank:this.lifecycle?.recallRank(agent,candidate,query)??0});
       }
     }
-    const recent=(a,b)=>b.score-a.score||b.valid_from-a.valid_from||a.id.localeCompare(b.id,'en');
+    const recent=(a,b)=>b.score-a.score||b._lifecycleRank-a._lifecycleRank||b.valid_from-a.valid_from||a.id.localeCompare(b.id,'en');
     rows.sort(recent);
     const stable=rows.filter(r=>['identity','fact'].includes(r.type)),chosen=stable.slice(0,Math.min(2,limit)),ids=new Set(chosen.map(r=>r.id));
     // Goals/working facts and relevant knowledge outrank unrelated chat. Keep
     // a small recent episodic tail only after durable/relevant information.
-    const rest=rows.filter(r=>!ids.has(r.id)).sort((a,b)=>((b.score>0?100:0)+(['identity','fact','goal','working'].includes(b.type)?10:0)+(b.type==='skill'?2:0))-((a.score>0?100:0)+(['identity','fact','goal','working'].includes(a.type)?10:0)+(a.type==='skill'?2:0))||recent(a,b));
-    return [...chosen,...rest].slice(0,limit).map(({score,...r})=>({...r,...this.memoryAnnotations(agent,r,rows),retrieval:score?'keyword-or-alias-match':['identity','fact'].includes(r.type)?'important-fact':'recent-background'}));
+    const rest=rows.filter(r=>!ids.has(r.id)).sort((a,b)=>((b.score>0?100:0)+(['identity','fact','goal','working'].includes(b.type)?10:0)+(b.type==='skill'?2:0)+b._lifecycleRank)-((a.score>0?100:0)+(['identity','fact','goal','working'].includes(a.type)?10:0)+(a.type==='skill'?2:0)+a._lifecycleRank)||recent(a,b));
+    return [...chosen,...rest].slice(0,limit).map(({score,_lifecycleRank,...r})=>({...r,...this.memoryAnnotations(agent,r,rows),retrieval:score?'keyword-or-alias-match':['identity','fact'].includes(r.type)?'important-fact':'recent-background'}));
   }
   context(agent,options={}){
     const {includePersona=true,...recall}=options,persona=includePersona?this.persona(agent):null,now=this.now(agent);
     const goals=this.db.prepare("SELECT id,description,status,expires,version,refs FROM goal_record WHERE agent=? AND status IN ('proposed','active','blocked','needs-evidence','awaiting-review') AND expires>? ORDER BY CASE status WHEN 'active' THEN 0 WHEN 'needs-evidence' THEN 1 WHEN 'awaiting-review' THEN 2 WHEN 'blocked' THEN 3 ELSE 4 END,expires,id LIMIT 8").all(agent,now).filter(g=>JSON.parse(g.refs).every(ref=>this.db.prepare("SELECT 1 FROM source_record WHERE id=? AND agent=? AND status='active'").get(ref,agent)&&this.sourceUsable(agent,ref))).map(g=>({...g,refs:JSON.parse(g.refs)}));
-    return {...(persona?{persona:{version:persona.version,core:persona.core,tendencies:persona.tendencies,temporary:persona.temporary}}:{}),memories:this.recall(agent,{limit:this.journal.value(agent,'humanExecution',{}).context?.memoryLimit??8,...recall}),goals};
+    const summaries=(this.lifecycle?.summaries(agent,recall.query??'',2)??[]).filter(summary=>{
+      if(recall.query)return true;
+      return summary.memoryIds.every(id=>{const memory=this.db.prepare('SELECT id,type,payload,valid_from FROM memory_record WHERE agent=? AND id=?').get(agent,id);return memory&&this.lifecycle.overlay(agent,memory).tier!=='cold';});
+    }).map(summary=>({id:summary.id,batchId:summary.batchId,title:summary.title,text:summary.text,kind:'derived-model-summary',truth:'inferred',semanticValidation:'unverified-model-inference',temporalValidity:summary.temporalValidity,created:summary.created,memoryIds:summary.memoryIds,refs:summary.refs,quotes:summary.quotes.slice(0,4).map(quote=>({sourceId:quote.sourceId,text:quote.text.slice(0,160)})),originalsRetained:true,ownerFact:false}));
+    return {...(persona?{persona:{version:persona.version,core:persona.core,developmentVersion:persona.developmentVersion,development:persona.development}}:{}),memories:this.recall(agent,{limit:this.journal.value(agent,'humanExecution',{}).context?.memoryLimit??8,...recall}),summaries,goals};
   }
-  purgeAgent(agent){if(this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='human_action'").get())this.db.prepare('DELETE FROM human_action WHERE agent=?').run(agent);if(this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='human_goal_plan'").get())this.db.prepare('DELETE FROM human_goal_plan WHERE agent=?').run(agent);for(const table of ['source_record','memory_record','extraction_block','persona_change','goal_record'])this.db.prepare('DELETE FROM '+table+' WHERE agent=?').run(agent);this.db.prepare('DELETE FROM dependency WHERE source NOT IN (SELECT id FROM source_record) AND source NOT IN (SELECT id FROM memory_record)').run();}
+  purgeAgent(agent){this.development?.purge(agent);this.lifecycle?.purgeAgent(agent);if(this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='human_action'").get())this.db.prepare('DELETE FROM human_action WHERE agent=?').run(agent);if(this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='human_goal_plan'").get())this.db.prepare('DELETE FROM human_goal_plan WHERE agent=?').run(agent);for(const table of ['source_record','memory_record','extraction_block','persona_change','goal_record'])this.db.prepare('DELETE FROM '+table+' WHERE agent=?').run(agent);this.db.prepare('DELETE FROM dependency WHERE source NOT IN (SELECT id FROM source_record) AND source NOT IN (SELECT id FROM memory_record)').run();}
 }

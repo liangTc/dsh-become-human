@@ -1,4 +1,5 @@
 import React,{useState} from 'react';
+import {DisclosureChevron,useDisclosure,useRetainedRead} from './native-disclosure';
 
 const categories:Record<string,string>={action:'行动与产物',autonomous:'自主活动',chat:'与你交流',memory:'记忆整理',schedule:'定时任务',check:'等待与检查'};
 const statuses:Record<string,string>={success:'已完成',running:'进行中',wait:'暂时等待',suspended:'已保留进度',failed:'需要处理'};
@@ -12,24 +13,24 @@ const count=(ui:any,value:any)=>ui.num?ui.num(value??0):Number(value??0).toLocal
 function localInput(ms:number){const date=new Date(ms);return new Date(ms-date.getTimezoneOffset()*60000).toISOString().slice(0,16);}
 
 export default function BrainTimeline({api,s,ui}:any){
-  const {Button,Field,Input,Select,Band,Empty,ReadState,useRead,TaskDetail,ActionDetail,JsonDetails}=ui;
+  const {Button,Field,Input,Select,Band,Empty,ReadState,TaskDetail,ActionDetail,JsonDetails}=ui;
   const offset=s.autonomy?.settings?.timeZoneOffsetMinutes??480;
   const [range,setRange]=useState(()=>{const now=Date.now(),from=Math.floor((now+offset*60000)/86400000)*86400000-offset*60000;return {from,to:now};});
   const [filter,setFilter]=useState({category:'',status:'',query:''});
   const [draft,setDraft]=useState(()=>({...filter,from:localInput(range.from),to:localInput(range.to)}));
-  const [cursors,setCursors]=useState<any[]>([{}]),[nonce,setNonce]=useState(0),[task,setTask]=useState(''),[action,setAction]=useState(''),[expanded,setExpanded]=useState<Record<string,boolean>>({}),[error,setError]=useState('');
-  const result=useRead(api,{kind:'brain-timeline',...range,...filter,...cursors.at(-1),limit:15},nonce);
+  const [cursors,setCursors]=useState<any[]>([{}]),[nonce,setNonce]=useState(0),[task,setTask]=useState(''),[action,setAction]=useState(''),[pageScope,setPageScope]=useState(0),[error,setError]=useState('');
+  const scope=JSON.stringify([s.sessionId,pageScope]),disclosure=useDisclosure(scope),result=useRetainedRead(api,{kind:'brain-timeline',...range,...filter,...cursors.at(-1),limit:15},nonce,scope);
   const patch=(key:string,value:string)=>setDraft(previous=>({...previous,[key]:value}));
   function preset(days:number){
     const now=Date.now(),from=days===0?Math.floor((now+offset*60000)/86400000)*86400000-offset*60000:now-days*86400000;
-    setError('');setRange({from,to:now});setDraft(previous=>({...previous,from:localInput(from),to:localInput(now)}));setCursors([{}]);setExpanded({});setNonce(value=>value+1);
+    setError('');setRange({from,to:now});setDraft(previous=>({...previous,from:localInput(from),to:localInput(now)}));setCursors([{}]);setPageScope(value=>value+1);setNonce(value=>value+1);
   }
   function apply(){
     const from=new Date(draft.from).getTime(),to=new Date(draft.to).getTime();
     if(!Number.isFinite(from)||!Number.isFinite(to)||from>to||to-from>31*86400000){setError('请选择有效的起止时间，每次最多查看 31 天。');return;}
-    setError('');setRange({from,to});setFilter({category:draft.category,status:draft.status,query:draft.query});setCursors([{}]);setExpanded({});setNonce(value=>value+1);
+    setError('');setRange({from,to});setFilter({category:draft.category,status:draft.status,query:draft.query});setCursors([{}]);setPageScope(value=>value+1);setNonce(value=>value+1);
   }
-  function refresh(){const now=Date.now();setRange(previous=>({...previous,to:now}));setDraft(previous=>({...previous,to:localInput(now)}));setCursors([{}]);setNonce(value=>value+1);}
+  function refresh(){const now=Date.now();setRange(previous=>({...previous,to:now}));setDraft(previous=>({...previous,to:localInput(now)}));setCursors([{}]);if(cursors.length>1)setPageScope(value=>value+1);setNonce(value=>value+1);}
   const activeFilters=Object.values(filter).filter(Boolean).length;
   return <div className="hn-activity-brain">
     <div className="hn-activity-toolbar"><p>沿着时间，回顾一段活动的起点、经过与结果。</p><div className="hn-activity-toolbar-actions"><Button disabled={result.loading} onClick={refresh}>刷新</Button><Button disabled={!result.data} onClick={()=>{if(result.data)ui.download(result.data,'human-timeline.json');}}>导出本页</Button></div></div>
@@ -40,19 +41,21 @@ export default function BrainTimeline({api,s,ui}:any){
       <Field label="话题或记忆关键词"><Input value={draft.query} maxLength={160} placeholder="查找关注的问题或留下的记忆" onChange={(value:string)=>patch('query',value)}/></Field><div className="hn-activity-filter-actions"><Button primary onClick={apply}>查看这段时间</Button></div>
     </form></details>
     {error?<p className="hn-activity-validation" role="alert">{error}</p>:null}
-    <ReadState result={result}>{(data:any)=><>
+    {result.error&&result.data?<Band>刷新失败：{ui.errorText(result.error)}。当前保留上次读取记录。</Band>:null}
+    <ReadState result={{...result,loading:result.loading&&!result.data,error:result.data?'':result.error}}>{(data:any)=><>
       <div className="hn-activity-metrics" aria-label="当前时间范围汇总">{[['关注的问题',data.totals.questions],['完成的活动',data.totals.actions],['留下的记忆',data.totals.memories],['选择等待',data.totals.waits]].map(([label,value])=><div key={label}><span>{label}</span><strong>{count(ui,value)}</strong></div>)}</div>
       <p className="hn-activity-result-caption">{format(ui,data.from)} — {format(ui,data.to)}<span>共 {count(ui,data.total)} 段活动</span></p>
+      <div className="hn-disclosure-tools hn-row hn-between"><span className="hn-board-caption">点开一段活动，查看关注的问题、行动与记忆。</span><div className="hn-row"><Button disabled={!data.items.length} onClick={()=>disclosure.setAll(data.items.map((item:any)=>item.id),true)}>展开本页全部</Button><Button disabled={!data.items.length} onClick={()=>disclosure.setAll(data.items.map((item:any)=>item.id),false)}>收起全部</Button></div></div>
       {data.partial?<Band>这个范围内记录较多，当前汇总有数量上限。缩小时间范围，可以查看更完整的经过。</Band>:null}
-      {!data.items.length?<Empty>这段时间还没有符合条件的活动。试试调整时间范围。</Empty>:<ol className="hn-activity-brain-stream">{data.items.map((item:any,index:number)=>{
-        const open=expanded[item.id]??index===0,actions=item.actions??[],memories=item.memories??[];
+      {!data.items.length?<Empty>这段时间还没有符合条件的活动。试试调整时间范围。</Empty>:<ol className="hn-activity-brain-stream">{data.items.map((item:any)=>{
+        const open=disclosure.isOpen(item.id),actions=item.actions??[],memories=item.memories??[];
         const renderStep=(step:any,stepIndex:number)=><li key={step.id??stepIndex}><time>{format(ui,step.time,'time')}</time><div><span>{step.label}</span>{step.detail?<p>{step.detail}</p>:null}</div></li>;
         return <li className="hn-activity-brain-entry" key={item.id}>
           <div className="hn-activity-time-rail"><time>{format(ui,item.ended,'time')}</time><span>{format(ui,item.started,'date')}</span><i data-status={item.status} aria-hidden="true"/></div>
           <details className="hn-activity-brain-record" open={open} onToggle={event=>{
-            const next=event.currentTarget.open;setExpanded(previous=>(previous[item.id]??index===0)===next?previous:{...previous,[item.id]:next});
+            disclosure.setOpen(item.id,event.currentTarget.open);
           }}>
-            <summary><span className="hn-activity-record-label"><span className="hn-activity-kind">{categories[item.kind]??'活动记录'}</span><strong>{item.title}</strong></span><span className="hn-activity-record-end"><span className="hn-activity-status" data-status={item.status}>{statuses[item.status]??'已记录'}</span><span className="hn-activity-chevron" aria-hidden="true">⌄</span></span></summary>
+            <summary><span className="hn-activity-record-label"><span className="hn-activity-kind">{categories[item.kind]??'活动记录'}</span><strong>{item.title}</strong></span><span className="hn-activity-record-end"><span className="hn-activity-status" data-status={item.status}>{statuses[item.status]??'已记录'}</span><DisclosureChevron/></span></summary>
             <div className="hn-activity-record-content">
               <div className="hn-activity-brain-detail-grid">
                 <section className="hn-activity-question"><h3>关注的问题</h3><p>{item.question}</p>{item.value?<details className="hn-activity-direction"><summary>为什么关注这件事</summary><p>{item.value}</p></details>:null}</section>
@@ -65,7 +68,7 @@ export default function BrainTimeline({api,s,ui}:any){
           </details>
         </li>;
       })}</ol>}
-      <nav className="hn-activity-pagination" aria-label="大脑时间线分页"><Button disabled={cursors.length<2||result.loading} onClick={()=>setCursors(value=>value.slice(0,-1))}>上一页</Button><span>第 {cursors.length} 页</span><Button disabled={!data.hasMore||result.loading} onClick={()=>setCursors(value=>[...value,data.next])}>下一页</Button></nav>
+      <nav className="hn-activity-pagination" aria-label="大脑时间线分页"><Button disabled={cursors.length<2||result.loading} onClick={()=>{setCursors(value=>value.slice(0,-1));setPageScope(value=>value+1);}}>上一页</Button><span>第 {cursors.length} 页</span><Button disabled={!data.hasMore||result.loading} onClick={()=>{setCursors(value=>[...value,data.next]);setPageScope(value=>value+1);}}>下一页</Button></nav>
       <p className="hn-activity-bottom-note">仅显示明确记录的问题与方向、执行回执和记忆。需要逐条核对时，可切换到事件日志。</p>
     </>}</ReadState>
     {task?<TaskDetail api={api} id={task} onClose={()=>setTask('')}/>:null}{action&&ActionDetail?<ActionDetail api={api} id={action} ui={ui} onClose={()=>setAction('')}/>:null}

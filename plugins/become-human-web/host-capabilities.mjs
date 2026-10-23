@@ -9,6 +9,8 @@ const only=(input,keys)=>{if(!plain(input)||Object.keys(input).some(k=>!keys.inc
 const number=(value,min,max)=>{if(!Number.isSafeInteger(value)||value<min||value>max)fail('INVALID_CAPABILITY_INPUT');return value;};
 const boundedText=(value,max)=>typeof value==='string'?value.slice(0,max):'';
 const unknown=(cause,receipt)=>Object.assign(error('CAPABILITY_OUTCOME_UNKNOWN'),{cause,...(receipt?{receipt}: {})});
+const sessionScope=value=>{if(value!==undefined&&!['selected','all'].includes(value))fail('INVALID_CAPABILITY_SETTINGS');return value??'selected';};
+const ordinarySession=value=>plain(value)&&value.origin===undefined&&!(Number(value.delegationDepth)>0);
 const visibleChatEvent=event=>{
   if(event?.surfaceOp!=='append'||!['user/message','assistant/message'].includes(event?.type))return false;
   const message=event.type==='assistant/message'?event.data?.message:event.data;
@@ -30,10 +32,10 @@ const hostRead=async operation=>{
 };
 
 export function normalizeHostCapabilitySettings(input={}){
-  only(input,['sessionReadEnabled','sessionWriteEnabled','allowedSessionIds','browser']);
+  only(input,['sessionReadEnabled','sessionReadScope','sessionWriteEnabled','sessionWriteScope','allowedSessionIds','browser']);
   for(const key of ['sessionReadEnabled','sessionWriteEnabled'])if(input[key]!==undefined&&typeof input[key]!=='boolean')fail('INVALID_CAPABILITY_SETTINGS');
   const ids=input.allowedSessionIds??[];if(!Array.isArray(ids)||ids.length>64)fail('INVALID_CAPABILITY_SETTINGS');
-  return {sessionReadEnabled:input.sessionReadEnabled===true,sessionWriteEnabled:input.sessionWriteEnabled===true,allowedSessionIds:[...new Set(ids.map(identifier))].sort(),browser:normalizeBrowserSettings(input.browser??{})};
+  return {sessionReadEnabled:input.sessionReadEnabled===true,sessionReadScope:sessionScope(input.sessionReadScope),sessionWriteEnabled:input.sessionWriteEnabled===true,sessionWriteScope:sessionScope(input.sessionWriteScope),allowedSessionIds:[...new Set(ids.map(identifier))].sort(),browser:normalizeBrowserSettings(input.browser??{})};
 }
 
 // Direct Host APIs only. Reads do not resolve/create an Agent, and no operation
@@ -43,32 +45,59 @@ export function createHostCapabilities(ctx,{getHumanSessionId,home}={}){
   const browser=createBrowserCapabilities();let settings=normalizeHostCapabilitySettings(),fingerprint=JSON.stringify(settings),revision=null,closed=false;
   const active=new Set();
   const controller=()=>{let value;try{value=ctx?.sessionController??ctx?.get?.('sessionController');}catch{}if(!value)fail('DSH_SESSION_CONTROLLER_UNAVAILABLE');return value;};
+  const ordinaryHostSession=value=>{
+    if(!ordinarySession(value))return false;
+    const parentId=value.parentSessionId??value.parentSession;if(!parentId)return true;
+    let agents;try{agents=ctx?.agents??ctx?.get?.('agents');}catch{}
+    const child=agents?.get?.(value.sessionId??value.id),parent=agents?.get?.(parentId);
+    return !(child&&parent&&typeof agents.isOwnedBy==='function'&&agents.isOwnedBy(child.id,parent));
+  };
   const humanSession=async()=>{const id=await getHumanSessionId();if(typeof id!=='string'||!id)fail('HUMAN_SESSION_UNAVAILABLE');return id;};
+  const scopeFor=write=>write?settings.sessionWriteScope:settings.sessionReadScope;
   const assertAllowed=async(sessionId,write)=>{
     const human=await humanSession();if(sessionId===human)fail('HUMAN_SESSION_TARGET_FORBIDDEN');
     if(!(write?settings.sessionWriteEnabled:settings.sessionReadEnabled))fail('CAPABILITY_DISABLED');
-    if(!settings.allowedSessionIds.includes(sessionId))fail('CAPABILITY_SCOPE_DENIED');
+    if(scopeFor(write)!=='all'&&!settings.allowedSessionIds.includes(sessionId))fail('CAPABILITY_SCOPE_DENIED');
   };
   const scopeSignal=signal=>{const aborter=new AbortController(),abort=()=>aborter.abort(signal.reason);if(signal?.aborted)abort();else signal?.addEventListener('abort',abort,{once:true});active.add(aborter);return {signal:aborter.signal,release:()=>{active.delete(aborter);signal?.removeEventListener('abort',abort);}};};
   const assertCurrent=(signal,expected)=>{signal.throwIfAborted();if(closed)fail('CAPABILITY_BRIDGE_CLOSED');if(expected!==fingerprint)fail('CAPABILITY_POLICY_CHANGED');};
+  // `all` is a live Host visibility rule, never a wildcard session identifier.
+  // A remembered/approved ID must still exist in the ordinary Session catalog at
+  // execution time. Neither selected nor all mode may promote a hidden child.
+  async function visibleSessions(signal,expected){
+    const human=await humanSession();assertCurrent(signal,expected);
+    const result=await hostRead(()=>controller().list({},signal));assertCurrent(signal,expected);
+    if(!Array.isArray(result?.items))fail('DSH_SESSION_READ_UNAVAILABLE');
+    return result.items.filter(row=>ordinaryHostSession(row)&&typeof row.sessionId==='string'&&row.sessionId!==human);
+  }
+  async function inspectAllowed(sessionId,write,signal,expected){
+    await assertAllowed(sessionId,write);assertCurrent(signal,expected);
+    const rows=await visibleSessions(signal,expected);
+    if(!rows.some(row=>row.sessionId===sessionId))fail('DSH_SESSION_NOT_VISIBLE');
+    const inspection=await hostRead(()=>controller().inspect(sessionId,signal));assertCurrent(signal,expected);
+    if(!ordinaryHostSession(inspection?.meta))fail('CAPABILITY_SCOPE_DENIED');
+    if(inspection.meta.id!==sessionId)fail('DSH_SESSION_NOT_VISIBLE');
+    await assertAllowed(sessionId,write);assertCurrent(signal,expected);return inspection;
+  }
   async function sessionList(input,signal,expected){
     only(input,['limit']);const limit=input.limit===undefined?25:number(input.limit,1,100);
-    if(!settings.sessionReadEnabled)fail('CAPABILITY_DISABLED');const human=await humanSession();assertCurrent(signal,expected);
-    const result=await hostRead(()=>controller().list({},signal));assertCurrent(signal,expected);
-    const rows=(result?.items??[]).filter(row=>row.sessionId!==human&&settings.allowedSessionIds.includes(row.sessionId)&&row.origin!=='subagent');
+    if(!settings.sessionReadEnabled)fail('CAPABILITY_DISABLED');
+    const rows=(await visibleSessions(signal,expected)).filter(row=>scopeFor(false)==='all'||settings.allowedSessionIds.includes(row.sessionId));
     const items=[];let used=0;for(const row of rows.slice(0,limit)){const item={sessionId:row.sessionId,updatedAt:row.updatedAt,running:row.running===true,agentAvailable:row.agentAvailable===true,blank:row.blank===true,...(row.cwd?{cwd:boundedText(row.cwd,256)}:{})};used+=JSON.stringify(item).length;if(used>12000)break;items.push(item);}
-    return {items,total:rows.length,hasMore:rows.length>items.length,sessionMode:'external-resources',activatedAgent:false};
+    return {items,total:rows.length,hasMore:rows.length>items.length,accessScope:settings.sessionReadScope,sessionMode:'external-resources',activatedAgent:false};
   }
   async function sessionRead(input,signal,expected){
     only(input,['sessionId','limit','beforeSeq','throughSeq']);const sessionId=identifier(input.sessionId),limit=input.limit===undefined?20:number(input.limit,1,50);
     if(input.beforeSeq!==undefined)number(input.beforeSeq,0,Number.MAX_SAFE_INTEGER);
     if(input.throughSeq!==undefined)number(input.throughSeq,-1,Number.MAX_SAFE_INTEGER);
-    await assertAllowed(sessionId,false);assertCurrent(signal,expected);const service=controller();
-    const inspection=await hostRead(()=>service.inspect(sessionId,signal));assertCurrent(signal,expected);
-    if(inspection?.meta?.origin==='subagent')fail('CAPABILITY_SCOPE_DENIED');
+    const inspection=await inspectAllowed(sessionId,false,signal,expected),service=controller();
     const currentSeq=inspection?.events?.at(-1)?.seq??-1,throughSeq=input.throughSeq??currentSeq;
     if(throughSeq>currentSeq)fail('INVALID_CAPABILITY_INPUT');
     const page=await hostRead(()=>service.page({address:{kind:'session',sessionId},throughSeq,...(input.beforeSeq===undefined?{}:{beforeSeq:input.beforeSeq}),maxMessages:limit},signal));assertCurrent(signal,expected);
+    // Visibility may have changed during persistence I/O. Do not release text
+    // from an identity that disappeared or became a child while reading it.
+    if(!(await visibleSessions(signal,expected)).some(row=>row.sessionId===sessionId))fail('DSH_SESSION_NOT_VISIBLE');
+    await assertAllowed(sessionId,false);assertCurrent(signal,expected);
     let used=0,truncated=false,budgetCut=null;const messages=[];
     for(const record of [...(page?.records??[])].reverse()){
       const event=record?.event;if(!visibleChatEvent(event))continue;
@@ -88,8 +117,8 @@ export function createHostCapabilities(ctx,{getHumanSessionId,home}={}){
   async function sessionWrite(operation,input,context,signal,expected){
     only(input,operation==='dsh-session-prompt'?['sessionId','text']:['sessionId']);const sessionId=identifier(input.sessionId);
     if(operation==='dsh-session-prompt'&&(typeof input.text!=='string'||!input.text.trim()||input.text.length>12000))fail('INVALID_CAPABILITY_INPUT');
-    await assertAllowed(sessionId,true);assertCurrent(signal,expected);
     if(typeof context?.agent!=='string'||typeof context?.jobId!=='string'||!context.agent||!context.jobId)fail('INVALID_CAPABILITY_CONTEXT');
+    await inspectAllowed(sessionId,true,signal,expected);assertCurrent(signal,expected);
     const requestId='bh-'+createHash('sha256').update(context.agent+'\n'+context.jobId+'\n'+(context.requestId??'')).digest('hex').slice(0,48);
     const service=controller(),receipt={operation,sessionId,requestId,at:Date.now()};let dispatched=false;
     try{
@@ -117,7 +146,7 @@ export function createHostCapabilities(ctx,{getHumanSessionId,home}={}){
       if(nextFingerprint!==fingerprint||(nextRevision!==undefined&&nextRevision!==revision)){for(const aborter of active)aborter.abort(error('CAPABILITY_POLICY_CHANGED'));settings=next;fingerprint=nextFingerprint;revision=nextRevision??revision;browser.configure(settings.browser,{revision});}
       return this.status();
     },
-    status(){let available=false;try{available=!!controller();}catch{}return {backend:'host-bridge',closed,session:{available,readEnabled:settings.sessionReadEnabled,writeEnabled:settings.sessionWriteEnabled,allowedSessionIds:[...settings.allowedSessionIds],coldReads:true,externalModelOnPrompt:true},browser:browser.status()};},
+    status(){let available=false;try{available=!!controller();}catch{}return {backend:'host-bridge',closed,session:{available,readEnabled:settings.sessionReadEnabled,readScope:settings.sessionReadScope,writeEnabled:settings.sessionWriteEnabled,writeScope:settings.sessionWriteScope,allowedSessionIds:[...settings.allowedSessionIds],coldReads:true,externalModelOnPrompt:true,dynamicHostVisibility:true,excludesHumanSession:true,excludesSubagents:true},browser:browser.status()};},
     async handle({operation,input,context}={},signal=new AbortController().signal){
       if(closed)fail('CAPABILITY_BRIDGE_CLOSED');const scoped=scopeSignal(signal),expected=fingerprint;
       try{assertCurrent(scoped.signal,expected);

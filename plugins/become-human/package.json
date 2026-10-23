@@ -1,6 +1,6 @@
 {
   "name": "dsh-become-human",
-  "version": "0.7.0-beta.4",
+  "version": "0.7.0-beta.5",
   "type": "module",
   "description": "Bounded autonomous Agent Web integration for DSH 0.2.0-rc.2",
   "main": "index.mjs",
@@ -69,6 +69,8 @@
     "capability-policy.mjs",
     "capability-parent.mjs",
     "capability-mcp.mjs",
+    "capability-mcp-config.mjs",
+    "capability-custom-mcp.mjs",
     "bundled-public-mcp.mjs",
     "capability-bridge.mjs",
     "capability-report.mjs",
@@ -76,7 +78,16 @@
     "README.md",
     "LICENSE",
     "NOTICE",
-    "THIRD_PARTY_NOTICES.md"
+    "THIRD_PARTY_NOTICES.md",
+    "cognition.mjs",
+    "cognition-runtime.mjs",
+    "cognition-dialogue.mjs",
+    "public-dns.mjs",
+    "task-board.mjs",
+    "persona-development.mjs",
+    "memory-lifecycle.mjs",
+    "development-runtime.mjs",
+    "usage-statistics.mjs"
   ],
   "dsh": {
     "client": {
@@ -101,6 +112,7 @@
     "zod": "4.6.6"
   },
   "dependencies": {
+    "@modelcontextprotocol/client": "2.0.0",
     "yaml": "^2.8.0"
   },
   "license": "Apache-2.0",

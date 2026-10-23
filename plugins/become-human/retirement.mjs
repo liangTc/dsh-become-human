@@ -4,6 +4,7 @@ import {createHash} from 'node:crypto';
 import {Worker} from 'node:worker_threads';
 import {actionPaths,readActionFile,sameManagedPair} from './actions-files.mjs';
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
+const developmentTables=['human_memory_overlay','human_memory_batch','human_memory_summary','human_memory_lifecycle_audit','human_persona_development_state','human_persona_development_review','human_persona_development_change'];
 export class SessionRetirement {
   constructor(storage,journal,domain,{dataRoot,quiesce=async()=>{},replace=async()=>{}}){this.storage=storage;this.journal=journal;this.domain=domain;this.dataRoot=path.resolve(dataRoot);this.quiesce=quiesce;this.replace=replace;this.previews=new Map();this.jobs=new Map();journal.db.exec('CREATE TABLE IF NOT EXISTS owned_artifact(agent TEXT,path TEXT PRIMARY KEY,kind TEXT)');}
   managedActionPair(file){
@@ -42,7 +43,7 @@ export class SessionRetirement {
     }finally{await lease?.close();}
     this.journal.transaction(()=>{
       this.domain.purgeAgent(data.oldId);
-      for(const table of ['autonomy_event','autonomy_task','learning_note','reminder','reminder_delivery','human_event','human_memory_revision','human_note_revision','human_skill','human_skill_revision','human_goal_plan','human_action','human_tool_job','human_capability_job','human_page_snapshot'])if(this.journal.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table))this.journal.db.prepare('DELETE FROM '+table+' WHERE agent=?').run(data.oldId);
+      for(const table of [...developmentTables,'human_matter','human_matter_revision','human_matter_request','human_attention','human_cognition_decision','human_reflection','human_reflection_review','autonomy_event','autonomy_task','learning_note','reminder','reminder_delivery','human_event','human_memory_revision','human_note_revision','human_skill','human_skill_revision','human_goal_plan','human_action','human_tool_job','human_capability_job','human_page_snapshot'])if(this.journal.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table))this.journal.db.prepare('DELETE FROM '+table+' WHERE agent=?').run(data.oldId);
       for(const table of ['metadata','outbox','user_request','attempt','response_stage','reservation','audit','owned_artifact'])this.journal.db.prepare('DELETE FROM '+table+' WHERE agent=?').run(data.oldId);
       this.journal.db.prepare('DELETE FROM control WHERE id=?').run(data.oldId);
       this.journal.db.prepare("INSERT OR REPLACE INTO retirement VALUES(?,'DONE',?,?)").run(data.oldId,JSON.stringify(data.paths),Date.now());
@@ -58,7 +59,8 @@ export class SessionRetirement {
     this.storage.guard(id);const handle=await this.storage.open(id,'read');let read;try{read=await handle.read();}finally{await handle.close();}this.storage.guard(id);
     const dir=path.join(this.dataRoot,'exports');await fs.mkdir(dir,{recursive:true});const file=path.join(dir,crypto.randomUUID()+'.json');await this.checked(file,{missing:true});
     this.journal.db.prepare('INSERT INTO owned_artifact VALUES(?,?,?)').run(id,file,'export');
-    const body=JSON.stringify({header:handle.header,events:read.events,memories:this.domain.list(id,{limit:100})});
+    const personaDevelopment=this.domain.development?.export(id)??null;
+    const body=JSON.stringify({header:handle.header,events:read.events,memories:this.domain.list(id,{limit:100}),memoryLifecycle:this.domain.lifecycle?.export(id)??null,personaDevelopment,developmentRestoreSemantics:'Read-only history; evidence status and versions are retained. This export does not apply or reactivate memories, summaries or persona changes.'});
     if(Buffer.byteLength(body)>2*1024*1024)throw new Error('EXPORT_TOO_LARGE');
     const fh=await fs.open(file,'wx');try{await fh.writeFile(body);await fh.sync();}finally{await fh.close();}
     try{this.storage.guard(id);}catch(e){await fs.unlink(file).catch(()=>{});throw e;}return {file,id,hash:hash(Buffer.from(body))};

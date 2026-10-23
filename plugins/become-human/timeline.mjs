@@ -1,6 +1,7 @@
 const parse=s=>{try{return JSON.parse(s);}catch{return null;}};
 const text=(s,n=220)=>typeof s==='string'?s.replace(/([?&](?:token|api_key|access_token)=)[^\s&]+/giu,'$1[隐藏]').replace(/sk-[\w-]{16,}/gu,'[隐藏]').slice(0,n):'';
 const labels={
+ 'development-review-started':'回顾已有经历与记忆','development-review-completed':'保存本次经历回顾','development-review-suspended':'保存回顾进度，优先与你交流','development-review-failed':'本次回顾未完成，等待明确重试','development-review-interrupted':'回顾遇到运行中断，保留记录','persona-development-applied':'形成一小步有依据的人格偏移','persona-development-observing':'暂时保留观察，尚未改变人格','persona-development-reverted':'撤回一条人格偏移','persona-development-invalidated':'依据变化，撤去对应人格偏移','memory-lifecycle-summary-committed':'整理可追溯摘要，保留原文',
  'action-proposed':'整理报告草稿，等待单独批准','action-approved':'收到这一版本的文件写入授权','action-executing':'开始写入已批准的报告','action-completed':'生成文件并核对哈希','action-blocked':'文件行动需要处理，没有继续写入','action-cancelled':'取消文件行动','action-expired':'文件写入授权到期','action-notified':'在唯一会话告知行动结果','goal-report-prepared':'将学习成果整理成待批准报告',
  'owner-command-recorded':'记录本地指令的处理结果',
  'context-assembled':'整理本轮现状与相关记忆','task-created':'产生一个待确认的方向','direction-selected':'确定本轮方向','task-ready':'准备继续任务','task-executing':'开始执行任务','task-completed':'完成任务','task-suspended':'保存进度，稍后继续','task-cancelled':'结束本次任务','task-failed':'任务遇到问题',
@@ -22,9 +23,9 @@ export function brainTimeline(management,agent,input={}){
  const rawEvents=db.prepare('SELECT * FROM human_event WHERE agent=? AND time>=? AND time<=? ORDER BY time DESC,id DESC LIMIT 4001').all(agent,from,to),events=rawEvents.slice(0,4000).reverse(),rawAttempts=db.prepare("SELECT id,turn,state,started,ended,usage,error,json_extract(request,'$.taskId') AS taskId,json_extract(request,'$.roundId') AS roundId,json_extract(request,'$.lane') AS lane,json_extract(request,'$.admittedIds') AS admitted FROM attempt WHERE agent=? AND started<=? AND COALESCE(ended,started)>=? ORDER BY started LIMIT 2001").all(agent,to,from),attempts=rawAttempts.slice(0,2000),requestGroups=new Map(),messageGroups=new Map();
  for(const a of attempts){
    const scheduled=a.taskId?.startsWith('schedule:'),id=scheduled?a.roundId??a.taskId:a.taskId?'task:'+a.taskId:'chat:'+a.turn;
-   const g=ensure(id,scheduled?'schedule':a.taskId?'autonomous':'chat',Math.min(a.ended??a.started,to));g.started=Math.min(g.started,Math.max(a.started,from));g.taskId=scheduled?null:a.taskId;g.requests++;const usage=parse(a.usage);g.reportedTokens+=usage?.totalTokens??(usage?(usage.inputTokens??0)+(usage.outputTokens??0):0);requestGroups.set(a.id,id);
+   const g=ensure(id,a.taskId?.startsWith('development:')?'memory':scheduled?'schedule':a.taskId?'autonomous':'chat',Math.min(a.ended??a.started,to));g.started=Math.min(g.started,Math.max(a.started,from));g.taskId=scheduled?null:a.taskId;g.requests++;const usage=parse(a.usage);g.reportedTokens+=usage?.totalTokens??(usage?(usage.inputTokens??0)+(usage.outputTokens??0):0);requestGroups.set(a.id,id);
    for(const mid of parse(a.admitted)??[])messageGroups.set(mid,id);
-   if(!g.title)g.title=scheduled?'执行一个定时任务':a.taskId?'推进一个自主任务':'与你交流';
+   if(!g.title)g.title=a.taskId?.startsWith('development:')?'回顾经历与记忆':scheduled?'执行一个定时任务':a.taskId?'推进一个自主任务':'与你交流';
    if(a.lane==='foreground'){const userIds=parse(a.admitted)??[];const messages=userIds.map(mid=>db.prepare("SELECT text FROM outbox WHERE agent=? AND event_key=?").get(agent,'user:'+mid)?.text).filter(Boolean);g.question=messages.length?'回应你：'+text(messages.join('；'),180):'回应你的消息';g.status=a.state==='completed'?'success':['failed','validation-rejected'].includes(a.state)?'failed':a.state==='cancelled'?'suspended':'running';}
  }
  for(const e of events){
@@ -33,8 +34,9 @@ export function brainTimeline(management,agent,input={}){
    else if(e.kind==='owner-command-recorded'){id='owner-command:'+d.inputId;kind='chat';messageGroups.set(d.inputId,id);}
    else if(d.inputId&&messageGroups.has(d.inputId)){id=messageGroups.get(d.inputId);kind='chat';}
    else if(d.scheduleId&&['schedule-executing','schedule-delivered','schedule-blocked'].includes(e.kind)){id=d.roundId??('schedule:'+d.scheduleId+':'+(d.occurrenceAt??e.time));kind='schedule';}
-   else if(e.task_id){id=e.task_id.startsWith('schedule:')?(requestGroups.get(e.request_id)??e.round_id??e.task_id):'task:'+e.task_id;kind=e.task_id.startsWith('schedule:')?'schedule':'autonomous';}
+   else if(e.task_id){id=e.task_id.startsWith('schedule:')?(requestGroups.get(e.request_id)??e.round_id??e.task_id):'task:'+e.task_id;kind=e.task_id.startsWith('development:')?'memory':e.task_id.startsWith('schedule:')?'schedule':'autonomous';}
    else if(requestGroups.has(e.request_id)){id=requestGroups.get(e.request_id);kind=id.startsWith('chat:')?'chat':id.startsWith('schedule:')?'schedule':'autonomous';}
+   else if(e.kind.startsWith('persona-development-')||e.kind.startsWith('memory-lifecycle-')){id='memory-lifecycle:'+Math.floor(e.time/3600000)*3600000;kind='memory';}
    else if(['brain-wait','timer-wake'].includes(e.kind)){id='check:'+Math.floor(e.time/3600000)*3600000;kind='check';}
    else continue;
    const g=ensure(id,kind,e.time);if(kind==='autonomous'){g.taskId=e.task_id;g.title=taskNames[d.kind]??g.title??'自主活动';}
@@ -46,11 +48,13 @@ export function brainTimeline(management,agent,input={}){
    if(e.kind==='direction-selected'){g.question=text(d.question,240);g.value=text(d.value,400);if(d.decision==='wait')g.status='wait';}
    if(d.noteId&&!g.noteIds.includes(d.noteId))g.noteIds.push(d.noteId);
    if(kind==='check'){g.title='例行检查';g.question='检查有没有需要处理的新事';if(e.kind==='brain-wait')g.waitChecks++;g.status=g.waitChecks?'wait':'success';if(g.waitChecks){g.title='检查后选择等待';g.value=reasonLabel(d.social?.reason&&d.social.reason!=='social-disabled'?d.social.reason:d.reason)||g.value;}}
-   if(labels[e.kind])g.actions.push({id:e.id,time:e.time,label:labels[e.kind],detail:reasonLabel(d.reason??d.code??d.error??''),status:e.status,requestId:e.request_id});
-   if(['task-completed','schedule-delivered'].includes(e.kind))g.status='success';
+   // A completed checkpoint can retain a previous suspension reason. Keep the
+   // original suspension event, but do not label completion with that history.
+   if(labels[e.kind])g.actions.push({id:e.id,time:e.time,label:labels[e.kind],detail:e.kind==='task-completed'?'':reasonLabel(d.reason??d.code??d.error??''),status:e.status,requestId:e.request_id});
+   if(['task-completed','schedule-delivered','development-review-completed'].includes(e.kind))g.status='success';
    if(['task-ready','task-executing','schedule-executing'].includes(e.kind)||e.kind==='direction-selected'&&d.decision==='execute')g.status='running';
-   if(['task-failed','autonomy-turn-ended','schedule-blocked','attempt-validation-rejected'].includes(e.kind))g.status='failed';
-   if(['task-suspended','attempt-cancelled'].includes(e.kind))g.status='suspended';
+   if(['development-review-failed','development-review-interrupted','task-failed','autonomy-turn-ended','schedule-blocked','attempt-validation-rejected'].includes(e.kind))g.status='failed';
+   if(['development-review-suspended','task-suspended','attempt-cancelled'].includes(e.kind))g.status='suspended';
    if(['task-cancelled','learning-evidence-insufficient','autonomy-deferred'].includes(e.kind))g.status='wait';
  }
  const rawMemories=db.prepare('SELECT id,type,payload,truth,refs,status,version,valid_from FROM memory_record WHERE agent=? AND valid_from>=? AND valid_from<=? ORDER BY valid_from LIMIT 1001').all(agent,from,to);

@@ -1,6 +1,6 @@
 {
   "name": "dsh-become-human-web",
-  "version": "0.7.0-beta.4",
+  "version": "0.7.0-beta.5",
   "type": "module",
   "description": "DSH Web manager with an isolated, single-session autonomous runtime",
   "icon": "./docs/assets/icon-pixel.svg",
@@ -17,6 +17,8 @@
     "manager.mjs",
     "supervisor.mjs",
     "worker.mjs",
+    "source-models.mjs",
+    "source-credentials.mjs",
     "onboarding.mjs",
     "remote.mjs",
     "remote-panel.html",
@@ -40,10 +42,13 @@
     "native-context.tsx",
     "native-social.tsx",
     "native-goals.tsx",
+    "native-task-board.tsx",
+    "native-task-detail.tsx",
+    "native-disclosure.tsx",
+    "native-development.tsx",
     "native-actions.tsx",
     "native-tools.tsx",
     "native-support.tsx",
-    "native-role.tsx",
     "operations-log.mjs",
     "offline-store.mjs",
     "service-host.mjs",
@@ -57,6 +62,7 @@
     "native-activity.css",
     "native-presets.tsx",
     "native-capability-settings.tsx",
+    "native-mcp-settings.tsx",
     "host-capabilities.mjs",
     "browser-capabilities.mjs",
     "LICENSE",
@@ -74,7 +80,10 @@
     "im/THIRD_PARTY_NOTICES.md",
     "im/licenses",
     "im-build.mjs",
-    "docs"
+    "docs",
+    "native-character-board.tsx",
+    "native-usage.tsx",
+    "native-usage.css"
   ],
   "dsh": {
     "bundle": {
@@ -109,6 +118,7 @@
   "peerDependencies": {
     "@deepseek-ai/dsh": "0.2.0-rc.2",
     "@deepseek-ai/dsh-app-boot": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-llm-deepseek-api-key": "0.2.0-rc.2",
     "@deepseek-ai/cordis": "~4.0.4",
     "@deepseek-ai/dsh-session-persistence-jsonl": "0.2.0-rc.2",
     "@deepseek-ai/dsh-agent": "0.2.0-rc.2",
@@ -120,6 +130,7 @@
     "zod": "4.6.6"
   },
   "dependencies": {
+    "@modelcontextprotocol/client": "2.0.0",
     "yaml": "^2.8.0",
     "@matrix-org/olm": "3.2.15",
     "@tencent-connect/qqbot-nodejs": "1.0.4",
@@ -134,6 +145,7 @@
   "devDependencies": {
     "@deepseek-ai/dsh": "0.2.0-rc.2",
     "@deepseek-ai/dsh-app-boot": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-llm-deepseek-api-key": "0.2.0-rc.2",
     "@deepseek-ai/cordis": "~4.0.4",
     "@deepseek-ai/dsh-session-persistence-jsonl": "0.2.0-rc.2",
     "@deepseek-ai/dsh-agent": "0.2.0-rc.2",

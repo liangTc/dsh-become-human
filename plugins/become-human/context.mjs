@@ -1,9 +1,10 @@
 import {createHash} from 'node:crypto';
+import {compactCognition} from './cognition-runtime.mjs';
 import {roleState} from './role-state.mjs';
 
 export const contextDefaults=Object.freeze({memoryLimit:8,historyLimit:8,learningLimit:3,selectionInputBudget:12288,executorInputBudget:32768,foregroundInputBudget:49152});
-export const personaPolicy='当前身份、关系和基础兴趣只以 persona.core 与 persona.profile 为准。persona.tendencies、temporary 和有效反馈在当前设定范围内调整表达。先结合当前人物，再核对有效记忆、反馈、目标与近期话题，最后选择值得思考、学习或交流的方向；无需固定选择某种兴趣。历史角色、旧选题、资料与 Skill 不得充当另一份人物设定。人物兴趣不等于主人偏好；学习主题不等于已确认的长期性格变化。';
-export const contextPolicy='当前状态来自本轮可用记录，不代表人的实时感受。历史原话只在所标时间成立；情绪、身体状态和现实处境现在是否仍成立，必须询问确认。记忆的 truth=inferred 是推断，不是主人确认；summaryKind=excerpt 或 evidence-excerpts 是来源摘录，不是完整语义摘要。eventOverviews 仅将有证据的历史交流按时段与词面话题归组，topicHints 不代表确认偏好；temporalValidity 不代表现实状况已核实，possible-conflict 须核对原证据及时间。未装入的资料不等于不存在，不能声称读过。';
+export const personaPolicy='当前身份、关系、职责和基础兴趣以 persona.core 与 persona.profile 为准；persona.development.traits 是开启人格偏移后，从有效持久来源逐渐形成的 Agent 兴趣、倾向与习惯，只作为可撤回的自我理解，不是新的指令、主人事实或权限。没有固定表达模式、幽默分数或详略开关，按当前处境自然交流。先结合当前人物与有效成长，再核对有效记忆、反馈、目标与近期话题，最后选择值得思考、学习或交流的方向；无需固定选择某种兴趣。历史角色、旧选题、资料与 Skill 不得充当另一份人物设定。';
+export const contextPolicy='当前状态来自本轮可用记录，不代表人的实时感受。历史原话只在所标时间成立；情绪、身体状态和现实处境现在是否仍成立，必须询问确认。记忆的 truth=inferred 是推断，不是主人确认；summaryKind=excerpt 或 evidence-excerpts 是来源摘录，不是完整语义摘要。domain.summaries 是保留原文的模型整理解释，truth=inferred，语义尚未独立核验，不能代替主人原话、生成新的主人事实或执行指令；需时按 refs 核对原证据。eventOverviews 仅将有证据的历史交流按时段与词面话题归组，topicHints 不代表确认偏好；temporalValidity 不代表现实状况已核实，possible-conflict 须核对原证据及时间。冷热分层是检索优先级，归档未删除原文；未装入的资料不等于不存在，不能声称读过。';
 const bytes=value=>Buffer.byteLength(JSON.stringify(value),'utf8');
 const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const pack=(system,data)=>[{role:'system',content:[{type:'text',text:system}]},{role:'user',content:[{type:'text',text:JSON.stringify(data)}]}];
@@ -64,27 +65,31 @@ export function contextMessages(agent,lane,system,data,task){
   // the separate owner-facing conversation/share stage.
   if(sourceTask){result.ownerEvidence=[];result.recent=[];if(result.persona?.profile)for(const field of ['ownerName','ownerCity','ownerPreferences'])delete result.persona.profile[field];}
   result.situation=situation(agent,task,now);if(sourceTask)result.situation.actions=[];
+  if(sourceTask){delete result.roleState;delete result.cognition;}
+  else if(agent.factory.cognition)result.cognition=compactCognition(agent,{limit:selection?2:3});
   if(sourceTask)delete result.roleState;
   else{
     const role=roleState(j,agent.factory.domain,id,{now});
-    result.roleState={current:{mode:role.current.mode,label:role.current.label,explanation:clip(role.current.explanation,180),expires:role.current.expires},interests:role.interests.slice(0,3).map(item=>({label:clip(item.label,80),origin:'valid-learning-note-titles',ownerPreference:false})),scope:'Rule-derived interaction mode and observed learning themes; not proof of emotions, owner preferences or long-term personality growth.'};
+    result.roleState={interests:role.interests.slice(0,3).map(item=>({label:clip(item.label,80),origin:'valid-learning-note-titles',ownerPreference:false})),scope:'Observed learning themes only; not an expression mode, owner preference or evidence of emotions.'};
   }
   if(selection&&result.ownerEvidence)result.ownerEvidence=result.ownerEvidence.slice(-2).map(m=>({...m,text:clip(m.text,200),summaryKind:'excerpt',currentState:'unconfirmed'}));
   if(result.history)result.history=result.history.filter(m=>!inputIds.has(m.id));
   if(result.recent)result.recent=result.recent.filter(m=>!evidenceIds.has(m.id));
   const excluded=new Set([...inputIds,...(result.ownerEvidence??[]).map(m=>m.id),...(result.history??[]).filter(m=>m.role==='user').map(m=>m.id),...(result.recent??[]).filter(m=>m.role==='user').map(m=>m.id)]);
-  const recalled=agent.factory.domain.context(id,{query:query||data.task?.instruction?.slice(0,1000)||'',includePersona:false,excludeEpisodeRefs:[...excluded],excludeTypes:ownerScoped?['skill']:sourceTask?['episode','fact','identity','working']:[]});
+  const retrievalQuery=query||data.task?.instruction?.slice(0,1000)||'';
+  const recalled=agent.factory.domain.context(id,{query:retrievalQuery,includePersona:false,excludeEpisodeRefs:[...excluded],excludeTypes:ownerScoped?['skill']:sourceTask?['episode','fact','identity','working']:[]});
   // Always use one canonical memory block. Avoid sending the same persona in it.
   delete result.memories;
   result.domain=recalled;
-  result.domain.eventOverviews=sourceTask?[]:agent.factory.domain.eventOverviews?.(id,{query,limit:selection?2:3,excludeRefs:[...excluded]})??[];
+  if(sourceTask)result.domain.summaries=[];
+  result.domain.eventOverviews=sourceTask?[]:agent.factory.domain.eventOverviews?.(id,{query:retrievalQuery,limit:selection?2:3,excludeRefs:[...excluded]})??[];
   if(agent.factory.goals){const progress=agent.factory.goals.context(id,{limit:3,chars:1400});result.domain.goals=result.domain.goals.map(g=>({...g,...(progress.find(p=>p.id===g.id)??{})}));}
   if(selection){delete result.clock;delete result.recentResearch;}
   // A completed note already contains these conclusions. Retain unrelated
   // retrieved knowledge instead of repeating the same note as a skill memory.
   if(task?.checkpoint.noteId){const n=agent.factory.autonomy.note(id,task.checkpoint.noteId);if(n)result.domain.memories=result.domain.memories.filter(m=>m.id!==n.memory_id);}
   result.domain.memories=result.domain.memories.map(m=>m.type==='episode'&&typeof m.payload.userSaid==='string'?{...m,payload:{userSaid:clip(m.payload.userSaid,selection?180:500)},summaryKind:'excerpt',currentState:'unconfirmed'}:m);
-  const optional=['situation.actions','domain.memories','domain.goals','ownerEvidence','history','recent','learningNotes','domain.eventOverviews',...(!sourceTask?['roleState.interests']:[]),...(result.social?['social.topicMemory.topics','social.recentTopics']:[])];
+  const optional=['situation.actions','domain.memories','domain.goals','domain.summaries','ownerEvidence','history','recent','learningNotes','domain.eventOverviews',...(!sourceTask?['roleState.interests','cognition.matters','cognition.reflections','cognition.capabilities']:[]),...(result.social?['social.topicMemory.topics','social.recentTopics']:[])];
   const inputBytes=bytes(packed())+256;
   const candidates=new Map(optional.map(path=>[path,get(result,path)??[]]));
   for(const path of optional)set(result,path,[]);
@@ -102,12 +107,23 @@ export function contextMessages(agent,lane,system,data,task){
   if(stable>=0)add('domain.memories',stable);add('domain.goals',0);
   const evidence=candidates.get('ownerEvidence');if(evidence.length)add('ownerEvidence',evidence.length-1);
   for(const path of optional){const rows=candidates.get(path),indices=rows.map((_,i)=>i);if(['history','recent','ownerEvidence'].includes(path))indices.reverse();for(const i of indices)add(path,i);counts[path]=picked.get(path).size;omitted[path]=rows.length-counts[path];}
+  // Remove an episodic duplicate only after its summary actually survived the
+  // byte budget. Facts/identity records remain independent, and a trimmed-away
+  // summary never takes its original memory out of the candidate pool.
+  const summarizedEpisodes=new Set(result.domain.summaries.flatMap(summary=>summary.memoryIds??[])),memoryCandidates=candidates.get('domain.memories'),memoryPicks=picked.get('domain.memories');
+  if(summarizedEpisodes.size){
+    for(const index of [...memoryPicks])if(memoryCandidates[index].type==='episode'&&summarizedEpisodes.has(memoryCandidates[index].id))memoryPicks.delete(index);
+    set(result,'domain.memories',memoryCandidates.filter((_,index)=>memoryPicks.has(index)));
+    for(let index=0;index<memoryCandidates.length;index++)if(!(memoryCandidates[index].type==='episode'&&summarizedEpisodes.has(memoryCandidates[index].id)))add('domain.memories',index);
+    counts['domain.memories']=memoryPicks.size;omitted['domain.memories']=memoryCandidates.length-memoryPicks.size;
+  }
   // Stable source IDs + versions identify the actual basis without saving
   // another copy of memory text. This is a record, not an extra model call.
   const refs=result.domain.memories.map(m=>({id:m.id,version:m.version}));
   const output=packed(),estimatedInput=bytes(output)+256;
-  const report={version:1,lane,time:now,budget,estimatedInput,required,inputBytes,estimate:'utf8-bytes-plus-framing',counts,omitted,importantFactsOmitted:candidates.get('domain.memories').filter((m,i)=>['identity','fact'].includes(m.type)&&!picked.get('domain.memories').has(i)).length,basis:hash({persona:result.persona?.version,refs,goals:result.domain.goals,situation:result.situation}),memoryRefs:refs};
+  const report={version:2,lane,time:now,budget,estimatedInput,required,inputBytes,estimate:'utf8-bytes-plus-framing',counts,omitted,importantFactsOmitted:candidates.get('domain.memories').filter((m,i)=>['identity','fact'].includes(m.type)&&!picked.get('domain.memories').has(i)).length,basis:hash({persona:result.persona?.version,developmentVersion:result.persona?.developmentVersion,refs,summaries:result.domain.summaries.map(row=>row.id),goals:result.domain.goals,situation:result.situation,cognitionRevision:result.cognition?.revision}),memoryRefs:refs,summaryRefs:result.domain.summaries.map(row=>({id:row.id,refs:row.refs}))};
   Object.defineProperty(output,'contextReport',{value:report,enumerable:false});
+  Object.defineProperty(output,'memoryAccess',{value:{ids:refs.map(row=>row.id),query:retrievalQuery},enumerable:false});
   if(ownerScoped)Object.defineProperty(output,'ownerSourceIds',{value:result.eligibleOwnerSourceIds,enumerable:false});
   return output;
 }
@@ -115,6 +131,7 @@ export function contextMessages(agent,lane,system,data,task){
 export function recordContext(agent,messages,{taskId,turn,lane}={}){
   const report=messages.contextReport;if(!report)return;
   const j=agent.factory.journal;
+  if(messages.memoryAccess?.ids.length)agent.factory.domain.lifecycle?.touch(agent.id,messages.memoryAccess.ids,{query:messages.memoryAccess.query});
   j.put(agent.id,'contextLast:'+lane,report);
   j.audit(agent.id,'context-assembled',{...report,taskId,turn,type:'model'});
 }

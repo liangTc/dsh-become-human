@@ -43,7 +43,7 @@ export class AutonomyStore {
   }
   persona(id){
     const p=this.domain.persona(id),profile=currentPersonaProfile(this.journal,id,p.core);
-    return {contextVersion:PERSONA_CONTEXT_VERSION,version:p.version,core:profile.corePrompt,tendencies:p.tendencies,temporary:p.temporary,profile};
+    return {contextVersion:PERSONA_CONTEXT_VERSION,version:p.version,core:profile.corePrompt,developmentVersion:p.developmentVersion,development:p.development,profile};
   }
   event(id,key,kind,data){
     this.db.prepare("INSERT OR IGNORE INTO autonomy_event VALUES(?,?,?,?,?,'pending',?)").run(crypto.randomUUID(),id,key,kind,JSON.stringify(data),Date.now());
@@ -108,7 +108,7 @@ export class AutonomyStore {
     this.db.prepare("INSERT INTO learning_note VALUES(?,?,?,?,?,'active',?,NULL)").run(noteId,id,memoryId,sourceId,JSON.stringify({...result,coverage:learningCoverage(result,source,task.checkpoint.plan?.question??source.topic??''),researchQuestion:task.checkpoint.plan?.question??null,source:{url:source.url,requestedUrl:source.requestedUrl,digest:source.digest,digestScope:source.digestScope??'extracted-text',fetchedAt:source.fetchedAt,partial:source.partial,excerptOffset:source.excerptOffset??0,excerptSelection:source.excerptSelection??'prefix',transportTruncated:source.transportTruncated??false,publishedAt:source.publishedAt??null,publishedAtStatus:source.publishedAtStatus??'unknown',discovery:source.discovery??null,signals:source.signals??source.discovery?.sourceSignals??null,trust:'untrusted-public-web'},taskId:task.id}),Date.now());
     this.journal.put(id,'learned:'+createHash('sha256').update(source.url).digest('hex'),source.digest);
     if(task.checkpoint.correction)this.journal.put(id,'learning-correction:'+hash(source.requestedUrl??source.url),null);
-    this.journal.audit(id,'learning-remembered',{taskId:task.id,noteId,memoryId,sourceId});this.update(task.id,'completed',{noteId});return noteId;
+    this.journal.audit(id,'learning-remembered',{taskId:task.id,noteId,memoryId,sourceId});this.update(task.id,'completed',{...task.checkpoint,noteId});return noteId;
     });
   }
   feedback(id,noteId,value,comment=''){

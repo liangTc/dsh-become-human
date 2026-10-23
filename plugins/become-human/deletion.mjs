@@ -7,6 +7,7 @@ import {Context} from '@deepseek-ai/cordis';
 import Jsonl from '@deepseek-ai/dsh-session-persistence-jsonl';
 import {Session} from '@deepseek-ai/dsh-session';
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
+const developmentTables=['human_memory_overlay','human_memory_batch','human_memory_summary','human_memory_lifecycle_audit','human_persona_development_state','human_persona_development_review','human_persona_development_change'];
 export class DeletionLab {
   constructor(root,journal){
     this.root=path.resolve(root);this.journal=journal;this.ctx=new Context();this.previews=new Map();
@@ -78,7 +79,7 @@ export class DeletionLab {
   async preview(id){
     this.gate(id);const files=await this.inventory(id),token=crypto.randomUUID();
     this.previews.clear();this.previews.set(token,{id,files,expires:Date.now()+120000});
-    return {id,token,expires:Date.now()+120000,scope:'disposable-fixture-only',files:files.map(f=>({name:path.basename(f.path),kind:f.kind,bytes:f.size})),sqliteTables:['metadata','outbox','user_request','attempt','response_stage','reservation','audit','control'],confirmation:'删除临时会话'};
+    return {id,token,expires:Date.now()+120000,scope:'disposable-fixture-only',files:files.map(f=>({name:path.basename(f.path),kind:f.kind,bytes:f.size})),sqliteTables:['metadata','outbox','user_request','attempt','response_stage','reservation','audit','control',...developmentTables.filter(table=>this.journal.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table))],confirmation:'删除临时会话'};
   }
   async request({id,token,confirmation},checkpoint){
     this.fixture(id);const prior=this.journal.db.prepare('SELECT * FROM retirement WHERE id=?').get(id);
@@ -105,6 +106,7 @@ export class DeletionLab {
           if(++count===1)await checkpoint?.('during-purge');
         }
         this.journal.transaction(()=>{
+          for(const table of developmentTables)if(this.journal.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table))this.journal.db.prepare('DELETE FROM '+table+' WHERE agent=?').run(job.id);
           for(const table of ['metadata','outbox','user_request','attempt','response_stage','reservation','audit'])this.journal.db.prepare('DELETE FROM '+table+' WHERE agent=?').run(job.id);
           this.journal.db.prepare('DELETE FROM control WHERE id=?').run(job.id);
           this.journal.db.prepare("UPDATE retirement SET phase='PURGED' WHERE id=?").run(job.id);

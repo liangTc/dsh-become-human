@@ -1,5 +1,5 @@
 {
-  "auditDate": "2026-10-22",
+  "auditDate": "2026-10-23",
   "scope": "Actual Apache release IM host/client build inputs; external runtime dependencies are not bundled.",
   "inputsManifest": "../BUILD-MANIFEST.json",
   "metafiles": [

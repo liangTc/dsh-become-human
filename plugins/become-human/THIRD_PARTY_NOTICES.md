@@ -37,6 +37,8 @@ dsh-im 保留的 [第三方声明](../become-human-web/im/THIRD_PARTY_NOTICES.md
 
 npm 安装的外部运行依赖、DSH 宿主及构建工具保留各自包内的许可证；这里的 Apache-2.0 不重新授权这些包。向他人提供包含 `node_modules` 的离线发行物时，应重新清点并附带相应法律文件。
 
+自定义 MCP 接入通过外部运行依赖 `@modelcontextprotocol/client` 2.0.0（[Model Context Protocol TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk)，MIT）处理 stdio 与 Streamable HTTP 协议。该 SDK 源码未复制进本项目的适配模块；安装依赖保留其包内许可证。第三方 MCP 服务器由用户自行安装或选择，保留各自许可证，服务接入不代表本项目重新授权其内容。
+
 ## 图标、商标与配图
 
 渠道图标仅用于识别连接目标。原 IM 声明中来自 [Simple Icons](https://github.com/simple-icons/simple-icons) 的部分路径采用 CC0-1.0；飞书、钉钉、企微等产品标识的商标权仍归各自权利人。dsh-im 随附的品牌图片不应被用作 Become Human 的项目标识。新增项目配图的来源和使用范围应在其资源说明中记录。

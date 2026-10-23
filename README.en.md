@@ -6,10 +6,15 @@
 
 **A DSH agent that remembers, learns, starts conversations, and works toward goals through one persistent session.**
 
-[简体中文](README.md) · [Installation](docs/INSTALLATION.md) · [Usage](docs/USAGE.md) · [Configuration](docs/CONFIGURATION.md) · [Architecture](docs/ARCHITECTURE.md)
+[简体中文](README.md) · [Installation](docs/INSTALLATION.md) · [Usage](docs/USAGE.md) · [Configuration](docs/CONFIGURATION.md) · [Testing status](docs/TESTING_STATUS.md) · [Architecture](docs/ARCHITECTURE.md)
 
 > [!WARNING]
-> **Test release · Development is incomplete.** The current version is `0.7.0-beta.4`, requiring Windows, Node.js 24+, and DSH `0.2.0-rc.2`. Start with a separate data directory. Long-running reliability and several channels and external actions still need validation. This release is not intended for critical workloads.
+> **Test release · Development is incomplete.** The public release remains `0.7.0-beta.4`. Development code for `0.7.0-beta.5` has been built and deployed locally by the maintainer, but has not been publicly released. Windows, Node.js 24+, and DSH `0.2.0-rc.2` are required. Complete acceptance and long-running reliability remain unverified; see [testing status](docs/TESTING_STATUS.md).
+
+| Version | Availability and status |
+| --- | --- |
+| `0.7.0-beta.4` | Current public test release; use the Release package below |
+| `0.7.0-beta.5` | Development source, locally built and deployed; no public Release package for the new task board, statistics, personality drift, memory maintenance, or native DeepSeek compatibility |
 
 ## What it does
 
@@ -30,10 +35,16 @@ DSH Web is the management surface. A paired phone is another channel into the sa
 | Goals and schedules | Multiple-step goals, one-time reminders, recurring tasks, and progress tracking |
 | Artifacts | Full report previews, precise approval, managed file output, and receipts |
 | Messaging | Owner pairing and shared Web / IM messages through one main session |
-| Tools | A unified capability interface, bundled read-only MCP, and scoped DSH session reads |
-| Traceability | Activity timeline, event logs, usage, tasks, and memory changes |
+| Tools | A unified capability interface and bundled read-only MCP; beta.5 adds configurable MCP servers and scoped access to visible host DSH sessions |
+| Traceability | Activity timeline and event logs linked to tasks, artifacts, and memory changes |
+| Task board · beta.5 | Goals, steps, schedules, and results in a concise view; expand one node or the current page, with shared matters, self-state, and reviews in the same workspace |
+| Usage statistics · beta.5 | Rolling 24-hour and current-budget-window tokens, model requests, work categories, hourly trends, and model breakdowns |
+| Personality and memory maintenance · beta.5 | Optional evidence-linked personality drift and retraction; periodic memory consolidation, hot/cold tiers, source links, and batch restoration |
+| Model setup · beta.5 | DSH's native DeepSeek API Key adapter and third-party routes using host credential references |
 
 Browser tab control and DSH session writes have integration code, are disabled by default, and require scoped configuration and per-operation approval. Their real workflows still need separate validation. Text Skills provide guidance; they do not grant arbitrary code execution or operating-system access.
+
+[Shared matters and reviews in the task board](docs/CHARACTER_BOARD.md) use the existing main session, IM binding, and execution lane. Manual focus does not start the driver; recording a goal or commitment does not dispatch it. Accepting a review does not grant permissions or retry failed work. The view shows concise intentions and evidence, not raw chain of thought or proof of consciousness. Additions marked beta.5 are not included in the public beta.4 package.
 
 ## Architecture
 
@@ -61,7 +72,9 @@ npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./dsh-become-human-web-
 
 The npm package is not published. The Git repository and GitHub source ZIP omit generated bundles and cannot be installed directly as a prebuilt plugin. Developers can [build a `.tgz` from source](docs/INSTALLATION.md#从源码构建). The detailed guides are currently in Chinese.
 
-Start DSH, open Human, and follow **existing model → persona and budget → create and start**. The plugin prepares its data directory, private profile, and available loopback port automatically. No separate runtime installation or YAML editing is required for a fresh setup. Model import currently requires a `llm-pi-ai` route with an `apiKeyEnv` credential reference; it does not support every DSH provider configuration.
+Start DSH, open Human, and follow **existing model → persona and budget → create and start**. The plugin prepares its data directory, private profile, and available loopback port automatically. No separate runtime installation or YAML editing is required for a fresh setup. Public `beta.4` supports `llm-pi-ai` routes; the `beta.5` development source also supports DSH's native DeepSeek API Key adapter. Both resolve `apiKeyEnv` credential references without returning secrets to the browser. DeepSeek account authentication, inline keys, and arbitrary headers are not supported. See [model configuration](docs/CONFIGURATION.md#进程与模型配置).
+
+**Native adapter validation:** beta.5 has passed local build, installed-file verification, service recovery, and read-only model catalog discovery. The complete fresh-DSH flow—configure a native key, reuse its credential, start the background runtime, and make a real request—is [pending and deferred for this update](docs/TESTING_STATUS.md#优先待测试项). Fresh-install success and native network calls have not been verified.
 
 Choose a persona, low/medium/high budget, optional owner name, and timezone. Enabling autonomous behavior during setup is off by default; phone binding is optional afterward. Existing installations retain their session, configuration, and binding. Later cold starts remain paused until explicitly resumed. The runtime continues to follow the DSH service lifecycle; this change does not add a resident service. See [configuration](docs/CONFIGURATION.md) and [usage](docs/USAGE.md).
 
@@ -95,6 +108,8 @@ This remains a test release. Complete clean-install, multiple-plugin, multiple-c
 - [Installation and upgrades](docs/INSTALLATION.md)
 - [Configuration](docs/CONFIGURATION.md)
 - [Usage and phone commands](docs/USAGE.md)
+- [Shared matters and outcome reviews](docs/CHARACTER_BOARD.md)
+- [Testing status and pending acceptance](docs/TESTING_STATUS.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Releases, community registration, and plugin markets](docs/PLUGIN_SUBMISSION.md)
 - [Contributing](CONTRIBUTING.md), [Security](SECURITY.md), [Changelog](CHANGELOG.md)

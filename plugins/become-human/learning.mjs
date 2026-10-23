@@ -1,9 +1,9 @@
 import https from 'node:https';
 import http from 'node:http';
-import dns from 'node:dns/promises';
 import net from 'node:net';
 import {createHash} from 'node:crypto';
 import {lexicalCoverage,sourceSignals,retrievalTerms,questionSignals} from './knowledge-signals.mjs';
+import {resolvePublicAddresses} from './public-dns.mjs';
 
 // Open public web research. Domain and subject are not allowlisted. Every hop is
 // pinned to a public DNS address; no browser cookies, credentials or JS execution.
@@ -45,7 +45,7 @@ export function sourceText(text,type){
 export function researchExcerpt(text,topic,{maxChars=2800}={}){
   if(typeof text!=='string'||typeof topic!=='string'||!Number.isInteger(maxChars)||maxChars<100||maxChars>2800)throw new Error('INVALID_RESEARCH_EXCERPT');
   const stop=new Set(['the','and','for','with','from','what','how','are','this','that','into','about','using','latest','recent','一个','什么','如何','哪些','最新','研究','资料','问题','了解','相关','学习','是否','以及','可以','进行','方向','内容','来源']);
-  const identifiers=new Set(questionSignals(topic).identifiers),terms=[...new Set([...identifiers,...retrievalTerms(topic,{limit:32})].filter(t=>!stop.has(t)&&!/^\d+$/.test(t)))].slice(0,32);
+  const identifiers=new Set(questionSignals(topic).identifiers),terms=[...new Set([...identifiers,...retrievalTerms(topic,{limit:32})].filter(t=>!stop.has(t)&&(!/^\d+$/.test(t)||identifiers.has(t))))].slice(0,32);
   // NFKC can change offsets (for example a ligature). Match on the original
   // lowercase body so every selected offset still addresses exact source text.
   const observed=text.replace(/[A-Z]/g,char=>char.toLowerCase()),candidates=new Set([0]);
@@ -56,7 +56,7 @@ export function researchExcerpt(text,topic,{maxChars=2800}={}){
     return last?Math.max(0,start-180)+last.index+last[0].length:start;
   };
   for(const term of terms){let at=0;for(let n=0;n<24;n++){at=observed.indexOf(term,at);if(at<0)break;candidates.add(boundary(at-Math.floor(maxChars/5)));candidates.add(boundary(at-maxChars+180));at+=term.length;}}
-  const score=start=>{const slice=observed.slice(start,start+maxChars);let value=0;for(const term of terms){let at=0,count=0;while(count<3&&(at=slice.indexOf(term,at))>=0){count++;at+=term.length;}if(count)value+=(4+count)*(identifiers.has(term)?4:1);}return value;};
+  const score=start=>{const slice=observed.slice(start,start+maxChars);let value=0;for(const term of terms){let at=0,count=0;const numeric=/^\d+$/u.test(term);while(count<3&&(at=slice.indexOf(term,at))>=0){const found=at;at+=term.length;if(numeric&&(/[a-z0-9]/u.test(slice[found-1]??'')||/[a-z0-9]/u.test(slice[at]??'')))continue;count++;}if(count)value+=(4+count)*(identifiers.has(term)?numeric?8:4:1);}return value;};
   let start=0,best=score(0);for(const candidate of candidates){const value=score(candidate);if(value>best||value===best&&candidate<start){start=candidate;best=value;}}
   // Keep selection bounded to an exact slice even when a query used fullwidth
   // characters. Query normalization may help term matching; offsets never use it.
@@ -66,7 +66,7 @@ export function researchExcerpt(text,topic,{maxChars=2800}={}){
 async function requestText(url,signal){
   signal.throwIfAborted();
   const u=new URL(researchUrl(url));
-  const addresses=await new Promise((resolve,reject)=>{const abort=()=>reject(signal.reason??new Error('SOURCE_CANCELLED'));signal.addEventListener('abort',abort,{once:true});dns.lookup(u.hostname.replace(/^\[|\]$/g,''),{all:true}).then(resolve,reject).finally(()=>signal.removeEventListener('abort',abort));if(signal.aborted)abort();});signal.throwIfAborted();
+  const addresses=await resolvePublicAddresses(u.hostname,{signal,isPublic:publicAddress});signal.throwIfAborted();
   if(!addresses.length||addresses.some(x=>!publicAddress(x.address)))throw new Error('SOURCE_ADDRESS_NOT_PUBLIC');
   const pinned=addresses[0];
   return new Promise((resolve,reject)=>{

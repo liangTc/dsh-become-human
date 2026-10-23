@@ -3,6 +3,9 @@ import {DatabaseSync} from 'node:sqlite';
 import {Service,createScope,agentEvents,z,createAssistantMessage,interruptedTurnClosers} from './api.mjs';
 import {DomainMemory} from './domain.mjs';
 import {AutonomyStore} from './autonomy-store.mjs';
+import {PersonaDevelopment} from './persona-development.mjs';
+import {MemoryLifecycle} from './memory-lifecycle.mjs';
+import {runDevelopmentReview} from './development-runtime.mjs';
 import {runAutonomyTurn} from './autonomy.mjs';
 import {ReminderStore,runReminderTurn} from './reminders.mjs';
 import {EventLog} from './event-log.mjs';
@@ -14,7 +17,9 @@ import {pendingOwnerCommand} from './owner-commands.mjs';
 import path from 'node:path';
 import {ActionStore} from './actions.mjs';
 import {ToolExecutor} from './tool-executor.mjs';
+import {CognitionStore} from './cognition.mjs';
 import {registerMcpCapabilities} from './capability-mcp.mjs';
+import {CustomMcpCapabilities} from './capability-custom-mcp.mjs';
 import {registerBridgeCapabilities} from './capability-bridge.mjs';
 import {registerReportCapability} from './capability-report.mjs';
 import {parentCapabilityRequest} from './capability-parent.mjs';
@@ -354,6 +359,7 @@ export class HumanAgent {
     if(!this.inbox.nextTurn.length&&!this.inbox.nextStep.length){const action=nextActionWork(this);if(action)return runActionTurn(this,signal,action);}
     if(reminderOnly&&!this.inbox.nextTurn.length&&!this.inbox.nextStep.length)return;
     const ownerPending=this.inbox.nextTurn.length||this.inbox.nextStep.length;
+    if(!ownerPending&&this.factory.journal.value(this.id,'remaining',0)===null&&await runDevelopmentReview(this,signal))return;
     if(this.factory.autonomy.settings(this.id).enabled||this.factory.config.interactiveOnly&&ownerPending)return runAutonomyTurn(this,signal);
     // Chat-only mode stays online for owner input without an idle model turn.
     // Foreground requests use the same conversation and accounting path as
@@ -371,6 +377,9 @@ export class HumanAgent {
     let entered=false,rid,usage,finish,dispatched=false,staged=false,countedCycle=false,admitted=[],ownerBatch,text='',reasoningChars=0,requestSignal,outcome='failed',errorCode,failureFacts,reason={kind:'completed'};
     this.session.append('turn/start',{turn});
     try{
+      // Legacy text turns use the base route; reject an incompatible native
+      // effort before reserving budget or admitting owner messages.
+      this.factory.management.assertReasoningEffort(config.reasoningEffort??'',[{provider:config.provider,model:config.model}]);
       // Reserve all UTF-8 bytes plus a fixed framing margin and bounded output.
       // This conservative admission limit is not a provider billing guarantee.
       const plan=ownerTurnPlan(this),target=plan?.target??'next-turn',pending=plan?.messages??[];
@@ -381,7 +390,7 @@ export class HumanAgent {
       if(inputs.some(m=>!m.text.trim()||m.text.length>1024)){const e=new Error('INPUT_TOO_LARGE');e.code='INPUT_TOO_LARGE';throw e;}
       const persona=this.factory.autonomy.persona(this.id);
       const memory=journal.value(this.id,'memory','尚无简记。');
-      const system='当前身份、关系与兴趣只来自 persona.core 和 persona.profile；记忆、反馈、目标和历史交流用于判断现状，不充当另一份角色设定。用最多两句中文回应本轮输入；历史仅作背景，不再次当成待回答指令。自主唤醒时只表达新的简短想法，没有新内容时只输出 [WAIT]。不要解释规则或输出推理过程，不调用工具或执行动作。';
+      const system='当前身份和关系以 persona.core 和 persona.profile 为基础；persona.development 中有效且已开启的经历成长可影响兴趣、习惯和行为倾向。记忆、反馈和目标用于判断现状，不扩大权限或替换身份。用最多两句中文回应本轮输入；历史仅作背景，不再次当成待回答指令。自主唤醒时只表达新的简短想法，没有新内容时只输出 [WAIT]。不要解释规则或输出推理过程，不调用工具或执行动作。';
       const domain=config.domainEnabled?this.factory.domain.context(this.id,{includePersona:false}):undefined;
       const prompt=JSON.stringify({persona,trigger:inputs.length?'new-input':'autonomous-tick',time:new Date().toISOString(),currentInput:inputs,recentContext:recent.map(m=>({id:m.id,text:textOf(m).slice(-160)})),lastExpression:memory,...(domain?{domain}: {})});
       const messages=[{role:'system',content:[{type:'text',text:system}]},{role:'user',content:[{type:'text',text:prompt}]}];
@@ -463,7 +472,6 @@ export class HumanAgent {
       if(staged)journal.commitResponse(rid);
       journal.reconcile(this.session);
       if(config.domainEnabled)for(const message of admitted??[])this.factory.domain.observe(this.id,message);
-      if(config.domainEnabled)this.factory.domain.applyEligibleEvidence(this.id);
       if(countedCycle&&signal.aborted&&this.cause?.kind==='owner-supplement')journal.put(this.id,'remaining',journal.value(this.id,'remaining',0)+1);
       if(journal.value(this.id,'remaining',0)!==null&&journal.value(this.id,'remaining',0)<=0&&this.desired().desired==='running'){journal.set(this.id,'paused');journal.put(this.id,'stopReason','cycle-limit');clearTimeout(this.timer);this.timer=undefined;}
     }
@@ -474,15 +482,16 @@ export class HumanAgent {
 export class HumanFactory extends Service {
   static inject=['agents','sessions','sessionPersistence','sessionProjections','llm'];
   constructor(ctx,config){
-    super(ctx,'becomeHuman');this.runtime={ctx};this.config=config;this.journal=new ControlJournal(config.journal);this.handles=new Set();this.closing=false;this.domain=new DomainMemory(this.journal);this.autonomy=new AutonomyStore(this.journal,this.domain);this.goals=new GoalEngine(this.journal,this.domain,this.autonomy);this.actions=new ActionStore(this.journal,this.domain,{root:path.resolve(path.dirname(config.journal),'artifacts'),validNote:(agent,note)=>this.goals.validNote(agent,note),validGoal:(agent,ref,action)=>this.goals.actionAllowed(agent,action)});this.goals.setActions(this.actions);this.tools=new ToolExecutor(this.journal);this.reminders=new ReminderStore(this.journal);this.management=new HumanManagement(this);this.tickets=new WeakMap();this.inflight=0;
+    super(ctx,'becomeHuman');this.runtime={ctx};this.config=config;this.journal=new ControlJournal(config.journal);this.handles=new Set();this.closing=false;this.domain=new DomainMemory(this.journal);this.personaDevelopment=new PersonaDevelopment(this.journal,this.domain);this.memoryLifecycle=new MemoryLifecycle(this.journal,this.domain);this.domain.development=this.personaDevelopment;this.domain.lifecycle=this.memoryLifecycle;this.autonomy=new AutonomyStore(this.journal,this.domain);this.goals=new GoalEngine(this.journal,this.domain,this.autonomy);this.actions=new ActionStore(this.journal,this.domain,{root:path.resolve(path.dirname(config.journal),'artifacts'),validNote:(agent,note)=>this.goals.validNote(agent,note),validGoal:(agent,ref,action)=>this.goals.actionAllowed(agent,action)});this.goals.setActions(this.actions);this.tools=new ToolExecutor(this.journal);this.reminders=new ReminderStore(this.journal);this.management=new HumanManagement(this);this.cognition=new CognitionStore(this.journal,this.domain,{factory:this});this.tickets=new WeakMap();this.inflight=0;
     this.mcpCapabilities=registerMcpCapabilities(this.tools);
+    this.customMcpCapabilities=new CustomMcpCapabilities(this.tools,{configuration:agent=>this.tools.configuration(agent),journal:this.journal});
     this.bridgeCapabilities=registerBridgeCapabilities(this.tools,{request:(operation,input,options)=>parentCapabilityRequest(operation,input,{...options,context:{...options.context,policy:this.tools.configuration(options.context.agent).bridge,policyRevision:this.tools.configuration(options.context.agent).revision}})});
     registerReportCapability(this.tools,this.actions,this.journal);
     this.capabilities=Object.freeze({contractVersion:1,register:(name,descriptor)=>this.tools.register(name,descriptor),catalog:()=>this.controllerSessionId?this.tools.catalog(this.controllerSessionId):[]});
     if(config.sharedBudgetGuard)ctx.on('llm/stream',(options,next)=>this.guardedStream(options,next));
     ctx.sessionProjections.register(inboxProjection);ctx.sessionProjections.register(boundaryProjection);
     ctx.agents.setFactory(this);
-    ctx.effect(()=>async()=>{this.closing=true;await Promise.all([...this.handles].map(h=>h.dispose()));await this.mcpCapabilities.close();this.bridgeCapabilities();this.management.close();this.journal.close();},'becomeHuman.ownership');
+    ctx.effect(()=>async()=>{this.closing=true;await Promise.all([...this.handles].map(h=>h.dispose()));await this.customMcpCapabilities.close();await this.mcpCapabilities.close();this.bridgeCapabilities();this.management.close();this.journal.close();},'becomeHuman.ownership');
   }
   createAgent(owner,options){return this.build(owner,options,false);}
   resume(owner,options){return this.build(owner,options,true);}

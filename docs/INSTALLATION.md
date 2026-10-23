@@ -1,9 +1,11 @@
 # 安装与升级
 
-[返回首页](../README.md) · [配置说明](CONFIGURATION.md) · [使用指南](USAGE.md)
+[返回首页](../README.md) · [配置说明](CONFIGURATION.md) · [使用指南](USAGE.md) · [测试状态](TESTING_STATUS.md)
 
 > [!WARNING]
 > **`0.7.0-beta.4` 是测试版本，尚未开发完成。** 本页是公开发行的安装流程，不表示干净机器安装与全部能力已完成验收。
+
+`0.7.0-beta.5` 开发代码已在维护者本地构建部署，尚未公开发行；下文 Release 下载与命令示例仍指向公开 `beta.4`。使用 beta.5 新增能力需要自行构建对应开发源码，不能从 beta.4 安装包获得。
 
 ## 支持范围
 
@@ -14,7 +16,7 @@
 | DeepSeek Harness | **0.2.0-rc.2**，当前代码会拒绝其他版本 |
 | DSH profile | `web` |
 | 安装单元 | `plugins/become-human-web` 生成的组合包 |
-| 模型 | 已在源 DSH profile 中配置的 `llm-pi-ai` 提供商与模型 |
+| 模型 | 源 DSH profile 的兼容第三方模型；`beta.5` 开发版另支持 DSH 原生 DeepSeek API Key 通道 |
 
 当前实机验证环境为 **Windows + Node.js 24 + DSH `0.2.0-rc.2` 的 `web` profile**，包括已有安装升级、模型与微信流程；这不代表所有系统、干净机器或全部渠道均已验收。
 
@@ -32,9 +34,20 @@
 npx @deepseek-ai/dsh@0.2.0-rc.2 web
 ```
 
-通过 DSH 设置 → 模型，添加可用的第三方或自定义模型 API。Human 首次设置会列出兼容的现有模型，选择后自动保存，不必手工抄写 Provider ID 和 Model ID。本插件当前读取源 profile 的 `cordis.patch.yml` 内 `llm-pi-ai.config.providers` 路由；仅配置 `llm-deepseek` 原生适配器尚不足以启动本插件。
+通过 DSH 设置 → 模型，配置可用的模型 API。Human 首次设置会列出兼容的现有模型，选择后自动保存，不必手工抄写 Provider ID 和 Model ID。选择和初始化不会额外发起模型测试调用；首次真正聊天或执行已开启的自主任务时才产生相应模型请求。
 
-凭据使用 DSH 的凭据引用（`apiKeyEnv`），或该引用对应的环境变量。不要把明文密钥放进插件配置。内联 `apiKey` 与自定义 `headers` 的源路由目前不会被迁入运行模块。模型配置的字段以 [DSH 模型配置指南](https://deepseek-harness.github.io/deepseek-harness/guide/providers) 为准。
+**原生 DeepSeek 兼容属于 `0.7.0-beta.5` 开发版，公开的 `beta.4` 安装包尚不包含。** 开发版支持以下两类来源：
+
+| DSH 中的来源 | Human 的读取方式 |
+| --- | --- |
+| 原生 DeepSeek API Key | 读取 `llm-deepseek` 的 API Key 适配器配置，使用 `deepseek-official` 提供商；模型列表由当前 DSH 官方适配器解析，保留有效的模型覆盖 |
+| 第三方 / 自定义 API | 继续读取 `llm-pi-ai.config.providers` 中兼容的提供商与模型 |
+
+凭据使用 DSH 的 `apiKeyEnv` 引用；原生 DeepSeek 默认引用 `DEEPSEEK_API_KEY`。后台按 **宿主进程环境变量 → 源 `$DSH_HOME/.credentials.yaml` → 宿主启动项目的 `.env` → 源 `$DSH_HOME/.env`** 的顺序解析。凭据值仅供后台进程使用，不会回传首次设置页面，也不会写入首次设置记录或生成的 profile。全新 DSH 尚未配置 API 时，先在 DSH 模型设置中完成，再回 Human 点击“重新检查”。
+
+当前未接入 DeepSeek 账号登录通道，不导入内联 `apiKey` 或任意自定义 `headers`。原生通道使用官方 Messages 协议，默认地址为 `https://api.deepseek.com/anthropic`；不要为它填写 OpenAI Chat Completions 地址。地址可通过原生配置的 `baseURL` 或宿主进程环境变量 `DEEPSEEK_BASE_URL` 指定，不能通过 `.env` 设置该地址。后台沿用 Human 的准入、超时与取消控制，并将适配器自动重试次数设为 `0`，避免隐藏重试增加实际调用。模型配置字段见 [DSH 模型配置指南](https://deepseek-harness.github.io/deepseek-harness/guide/providers)。
+
+**原生通道验收尚未完成。** beta.5 已通过语法检查、本地构建、179 个安装文件一致性核对、服务恢复和只读模型目录发现；源 DSH 尚未配置原生凭据。全新安装后“配置 Key → 发现可用原生模型 → 凭据复用 → 后台启动 → 真实模型请求”整链流程已列入[优先待测试项](TESTING_STATUS.md#优先待测试项)，本轮暂缓。目录中存在模型不等于凭据可用，后台能启动也不等于真实网络请求成功。
 
 完成后关闭该次 DSH 进程，再安装组合包。默认 `$DSH_HOME` 是用户主目录下的 `.dsh`；如使用了自定义值，后续命令必须保持一致。
 
@@ -74,6 +87,8 @@ npm run release:package
 构建所需的本地依赖由 `package.json` 声明，主构建重建 IM 和 Human Web 客户端，并把同仓库的运行模块复制到分发包中。最终得到类似 `dsh-become-human-web-0.7.0-beta.4.tgz` 的文件；**以命令实际输出路径为准**。
 
 定时规则产物随仓库提供，需要修改日历生成逻辑时，再按 [架构说明](ARCHITECTURE.md#开发与构建边界) 重新生成。`npm run release:source` 可另外导出干净源码，不会自动上传或发布。
+
+以上命令构建公开 beta.4 标签。需要开发版时，将克隆命令改为 `git clone https://github.com/liangTc/dsh-become-human.git` 并在构建前核对源码中的版本；开发分支不承诺与公开 Release 相同的验收状态。以实际生成的 `.tgz` 文件名安装，不要混用不同版本的校验文件。
 
 ## 3. 安装到 web profile
 
@@ -149,8 +164,11 @@ npx @deepseek-ai/dsh@0.2.0-rc.2 web --no-open
 | --- | --- |
 | `UNSUPPORTED_DSH_VERSION` | 启动的 DSH 是否精确为 `0.2.0-rc.2` |
 | `UNSUPPORTED_KEY_PLATFORM` | 当前完整运行模块依赖 Windows DPAPI |
-| `MODEL_ROUTE_REQUIRES_SETUP` | 源 profile 的 `llm-pi-ai` 内是否存在所选 provider/model，是否混入内联密钥或 headers |
-| `MODEL_CREDENTIAL_REFERENCE_MISSING` / `MODEL_CREDENTIAL_MISSING` | 路由是否有 `apiKeyEnv`，源凭据或环境变量是否有效 |
+| `MODEL_ROUTE_REQUIRES_SETUP` | 是否已在源 DSH 中配置兼容的模型；`beta.5` 开发版支持原生 DeepSeek API Key 与第三方模型 |
+| `MODEL_CREDENTIAL_REFERENCE_MISSING` / `MODEL_CREDENTIAL_MISSING` | 路由的 `apiKeyEnv` 引用及源凭据或环境变量是否可用；原生 DeepSeek 默认引用 `DEEPSEEK_API_KEY` |
+| `SOURCE_NATIVE_MODEL_CONFIGURATION_INVALID` | 原生 DeepSeek API Key 配置是否包含不支持的内联密钥、headers 或无效模型字段；在 DSH 中修正后重新检查 |
+| `SOURCE_NATIVE_ADAPTER_UNSUPPORTED` | 当前安装的 DSH 原生适配器合同是否兼容；使用本页指定的 DSH 版本 |
+| `SOURCE_MODEL_ROUTE_CONFLICT` | 第三方 `llm-pi-ai` 提供商是否也使用了保留 ID `deepseek-official`；为第三方提供商换用其他 ID，并同步其默认模型选择 |
 | `RUNTIME_PORT_ALREADY_IN_USE` | 内部端口是否已被其他进程占用；管理端不会接管陌生进程 |
 | `INVALID_RUNTIME_HOME` / `LINKED_RUNTIME_HOME` | 是否使用不同的绝对路径，以及真实目录 |
 | `WORKER_UNAVAILABLE` | 在数据与维护中查看运行状态与日志；确认问题后再手动恢复 |

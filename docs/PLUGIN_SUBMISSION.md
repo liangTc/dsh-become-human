@@ -4,7 +4,9 @@
 
 本页分别说明公开源码、Release 安装包、社区登记和自定义市场索引。社区登记不等于可安装索引，也不代表 DSH 官方背书。
 
-当前版本是 **`0.7.0-beta.4` 测试版本，尚未开发完成**。安装入口为 [固定版本 Release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.4)，其中提供 [组合包](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.4/dsh-become-human-web-0.7.0-beta.4.tgz) 与 [SHA-256 校验文件](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.4/dsh-become-human-web-0.7.0-beta.4.tgz.sha256)。npm 包尚未发布；介绍页和社区条目继续保留测试状态。
+当前公开安装包为 **`0.7.0-beta.4` 测试版本，尚未开发完成**。安装入口为 [固定版本 Release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.4)，其中提供 [组合包](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.4/dsh-become-human-web-0.7.0-beta.4.tgz) 与 [SHA-256 校验文件](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.4/dsh-become-human-web-0.7.0-beta.4.tgz.sha256)。npm 包尚未发布；介绍页和社区条目继续保留测试状态。
+
+`main` 上的 **`0.7.0-beta.5` 为开发源码**，已在维护者现有 Windows 环境构建、安装和启动，尚未发布对应 Release。新增任务看板、统计、人格偏移与记忆整理、可配置 MCP 和 DSH 会话授权，以及 DSH 原生 DeepSeek API Key 适配。原生通道的全新安装、实际凭据复用、后台首次启动及真实请求整链验证列入 [待测试清单](TESTING_STATUS.md)，不作为已验收能力宣传。原生适配不包含 DeepSeek 账号登录通道。
 
 ## 提交 DSH Plugin Radar 社区登记
 
@@ -18,10 +20,12 @@
 可提交的条目描述示例：
 
 ```markdown
-| dsh-become-human | [liangTc/dsh-become-human](https://github.com/liangTc/dsh-become-human) | 单会话自主 Agent：人格、分层记忆、学习、目标与主动交流，Web 与一个 IM 渠道共享会话；beta.4 尚未开发完成；Windows / Node 24 / DSH 0.2.0-rc.2 web 已有作者实测，提供 Release .tgz 与校验文件 | 待测 |
+| dsh-become-human | [liangTc/dsh-become-human](https://github.com/liangTc/dsh-become-human) | DSH Web 单会话自主 Agent：人格、记忆、学习、目标与主动交流，Web 与一个 IM 共享；安装见 beta.4 Release；beta.5 源码新增任务看板、统计、MCP 及原生 DeepSeek API Key 适配（全新安装整链待测）；Windows / Node 24+ / DSH 0.2.0-rc.2，测试版未完成 | 待测 |
 ```
 
 PR 说明应注明实测限于 Windows 与 DSH `0.2.0-rc.2` 的 `web` profile：已有安装升级、真实模型、部分微信流程和本地隔离回归。不要据此声称所有渠道、干净机器、多插件共存或多日稳定性已通过。提交或被社区收录均不构成官方兼容认证；上游合并前不写“已收录”。
+
+本项目登记 PR 为 [#967](https://github.com/AdamPlatin123/dsh-plugin-radar/pull/967)。登记条目保留“待测”；后续源码与待测状态变更更新同一 PR，无需重复登记。是否已合并及是否有评审意见，以该 PR 的实时页面为准。
 
 ## Release 与源码的安装边界
 
@@ -92,7 +96,7 @@ title.en: Become Human
 description.zh: 为 DSH Web 增加统一人格、记忆、学习与主动行为的单会话 Agent。
 repository.url: https://github.com/liangTc/dsh-become-human
 repository.directory: plugins/become-human-web
-version: 0.7.0-beta.4（必须与实际 package.json 一致）
+version: 目标安装包的精确版本（必须与该包 package.json 一致；当前公开包为 beta.4，开发源码为 beta.5）
 publishTimestamp: 实际发布时间的 Unix 秒
 source.type: git
 source.url: https://github.com/liangTc/dsh-become-human
@@ -107,6 +111,6 @@ engines.dsh: 0.2.0-rc.2
 
 ## 推荐的公开描述
 
-> Become Human 是面向 DeepSeek Harness Web 的自主 Agent 插件。它围绕一个持久会话组织人格、记忆、学习、目标、定时任务和主动交流，并通过独立运行模块控制模型调用、额度与执行边界。Web 与一个本人绑定的 IM 渠道共享会话，更换渠道会替换旧绑定；内置只读 MCP，外部 DSH 会话和浏览器操作按范围授权。当前为 0.7.0-beta.4 测试版本，尚未开发完成，完整运行要求 Windows 与 DSH 0.2.0-rc.2。
+> Become Human 是面向 DeepSeek Harness Web 的单会话自主 Agent 插件，围绕人格、记忆、学习、目标、定时任务与主动交流组织事件循环。Web 与一个本人绑定的 IM 渠道共享会话，独立运行模块负责调度、额度与审批。公开安装包为 beta.4；beta.5 开发源码增加任务看板、统计、人格偏移与记忆整理、MCP 自行接入、DSH 会话授权和原生 DeepSeek API Key 适配，完整新装与原生请求仍待测试。项目尚未开发完成，完整运行要求 Windows、Node.js 24+ 与 DSH 0.2.0-rc.2。
 
 不建议写“官方插件”“已入插件市场”“全平台即装即用”“所有 IM 实测”“永不停机”或“拥有真实情感”。这些说法超出当前交付和验证范围。

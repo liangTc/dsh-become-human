@@ -86,9 +86,9 @@ export class HumanOnboarding {
   if(!profileName(c.sourceProfile)||!profileName(c.runtimeProfile))issues.push({code:'INVALID_SETUP_PROFILE',message:'当前 profile 名称不符合运行模块要求。'});
   try{
    const source=await readSourceModelConfiguration(c);this.models=source.models;this.defaultRoute=source.defaultRoute;
-   if(!this.models.length)issues.push({code:'MODEL_ROUTE_REQUIRES_SETUP',message:'请先在 DSH 模型设置中添加使用凭据引用的 llm-pi-ai 模型，然后刷新。'});
-   else if(!this.models.some(model=>model.credentialReady))issues.push({code:'MODEL_CREDENTIAL_MISSING',message:'已发现模型，但凭据引用尚不可用。请在 DSH 中完成凭据设置后刷新。'});
-  }catch(error){this.models=[];this.defaultRoute=null;issues.push({code:codeOf(error),message:'暂时无法读取当前 DSH profile 的模型配置，请完成 DSH 模型设置后刷新。'});}
+   if(!this.models.length)issues.push({code:'MODEL_ROUTE_REQUIRES_SETUP',message:'请先在 DSH 模型设置中配置原生 DeepSeek API 或兼容的第三方模型，再点击“重新检查”。'});
+   else if(!this.models.some(model=>model.credentialReady))issues.push({code:'MODEL_CREDENTIAL_MISSING',message:'已发现模型，但尚未取得可用凭据。请在 DSH 模型设置中补全 API 密钥后重新检查。'});
+  }catch(error){this.models=[];this.defaultRoute=null;const code=codeOf(error);issues.push({code,message:({SOURCE_NATIVE_MODEL_CONFIGURATION_INVALID:'DSH 原生 DeepSeek API Key 配置无效或包含不支持的字段，请在 DSH 模型设置中修正后重新检查。',SOURCE_NATIVE_ADAPTER_UNSUPPORTED:'当前 DSH 原生 DeepSeek 适配器不兼容，请使用 DSH 0.2.0-rc.2 后重新检查。',SOURCE_MODEL_ROUTE_CONFLICT:'第三方提供商 ID 与原生 DeepSeek 的 deepseek-official 冲突，请在 DSH 中为第三方提供商换用其他 ID 后重新检查。',SOURCE_CREDENTIALS_INVALID:'当前 DSH 凭据配置无法读取，请在 DSH 中修正后重新检查。',SOURCE_PROFILE_NOT_FOUND:'未找到当前 DSH profile，请核对宿主配置后重新检查。'})[code]??'暂时无法读取当前 DSH profile 的模型配置，请完成 DSH 模型设置后重新检查。'});}
   if(this.loadError)issues.push({code:this.loadError,message:({SETUP_SESSION_MISSING:'现有会话标识文件缺失，已停止启动以免创建另一会话。请检查数据或恢复备份。',SETUP_SESSION_INVALID:'现有会话标识无法读取，已停止启动。请检查数据或恢复备份。',SETUP_SESSION_CHANGED:'未完成的设置对应会话已变化，已停止继续写入。请检查运行诊断。',MODEL_SELECTION_MISSING:'已找到原会话，但无法恢复它原来的模型选择。请补全已有高级模型配置后重启。'})[this.loadError]??'首次设置记录无法读取。现有会话不会被覆盖，请检查数据与运行诊断。'});
   this.issues=issues;this.resettable=await this.canReset();return this.describe();
  }

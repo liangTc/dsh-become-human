@@ -1,6 +1,6 @@
 # Become Human · 内部运行模块
 
-> **0.7.0-beta.4 · 测试版本，尚未开发完成。**
+> **0.7.0-beta.5 · 源码开发中，尚未公开发行 · 测试版本，尚未开发完成。**
 
 这是组合插件 `dsh-become-human-web` 的内部自主运行模块，包含事件循环、唯一会话、分层记忆、学习、额度、目标、定时任务及统一能力队列。
 
@@ -15,6 +15,10 @@
 - 写操作绑定具体目标、参数、预览、有效期与批准；unknown 不自动重试。
 - 外部网页与工具结果作为未核验材料，不自动改写人格或主人事实。
 
-完整介绍与使用方法见仓库根 [README](../../README.md) 和 [架构说明](../../docs/ARCHITECTURE.md)。
+完整介绍与使用方法见仓库根 [README](https://github.com/liangTc/dsh-become-human#readme) 和 [架构说明](https://github.com/liangTc/dsh-become-human/blob/main/docs/ARCHITECTURE.md)。
 
 本模块原创代码采用 [Apache-2.0](LICENSE)。表达规则、日历纯函数与其打包依赖保留各自原许可，见 [NOTICE](NOTICE)、[第三方声明](THIRD_PARTY_NOTICES.md)、`skills/` 与 `vendor/` 内的许可证。
+
+## 任务看板与认知记录
+
+任务看板汇总任务、目标、子步骤、定时、工具和产物，并收纳自我状态、共享事项、单一关注与规则反思。主人和 Agent 使用同一主 Session 的持久记录；关注事项仍需经过原预算、静默、未回复退避和动作权限。参见[看板说明](https://github.com/liangTc/dsh-become-human/blob/main/docs/CHARACTER_BOARD.md)与[测试状态](https://github.com/liangTc/dsh-become-human/blob/main/docs/TESTING_STATUS.md)，已验证片段不代表新版完整验收或长期运行通过。
