@@ -11,8 +11,11 @@
 > [!WARNING]
 > **Test release · Development is incomplete.** The current public test release is `0.7.0-beta.5` (GitHub Prerelease). Windows, Node.js 24+, and DSH `0.2.0-rc.2` are required. Complete acceptance and long-running reliability remain unverified, including the fresh-DSH native DeepSeek flow; see [testing status](docs/TESTING_STATUS.md).
 
+`main` now contains **`0.7.0-beta.6` development source**, with no public Release package for that version. The beta.5 downloads below do not include beta.6 additions.
+
 | Version | Availability and status |
 | --- | --- |
+| `0.7.0-beta.6` | Development source with local builds, upgrades, and limited real-model checks; build from source, not publicly released |
 | `0.7.0-beta.5` | Current public test release, with a prebuilt bundle and SHA-256 file; see installation below |
 | `0.7.0-beta.4` | Historical test release; its package does not include beta.5 additions |
 
@@ -41,10 +44,19 @@ DSH Web is the management surface. A paired phone is another channel into the sa
 | Usage statistics · beta.5 | Rolling 24-hour and current-budget-window tokens, model requests, work categories, hourly trends, and model breakdowns |
 | Personality and memory maintenance · beta.5 | Optional evidence-linked personality drift and retraction; periodic memory consolidation, hot/cold tiers, source links, and batch restoration |
 | Model setup · beta.5 | DSH's native DeepSeek API Key adapter and third-party routes using host credential references |
+| Conversation continuity · beta.6 development | Complete dialogue turns, evidence-linked rolling summaries, pending original turns, and relevant long-term memory; inspect coverage and compression usage |
+| Images and personal choices · beta.6 development | Image input for confirmed vision models; agree, negotiate, decline, or reconsider ordinary requests without turning relationship scores into permissions |
+| Learning and work support · beta.6 development | Explicit learning motivation, conversational teasers, details on follow-up, response-based route weighting, and configurable observation of authorized DSH sessions |
 
 Browser tab control and DSH session writes have integration code, are disabled by default, and require scoped configuration and per-operation approval. Their real workflows still need separate validation. Text Skills provide guidance; they do not grant arbitrary code execution or operating-system access.
 
 [Shared matters and reviews in the task board](docs/CHARACTER_BOARD.md) use the existing main session, IM binding, and execution lane. Manual focus does not start the driver; recording a goal or commitment does not dispatch it. Accepting a review does not grant permissions or retry failed work. The view shows concise intentions and evidence, not raw chain of thought or proof of consciousness. Additions marked beta.5 are included in this test package and still require separate acceptance checks.
+
+### beta.6 development progress
+
+Recent changes focus on conversation continuity, useful learning, and considerate sharing. Recent history uses complete turns. Older turns are summarized on demand with source links, while failed compression allows the conversation to continue. Compression uses the chat model, incurs additional provider usage, and has a separate statistics category outside the autonomous budget. Original messages remain available; summaries do not guarantee unlimited recall or factual accuracy.
+
+A limited real Web check used one summary across three conversations, covered ten older turns, and reused the summary after a restart. Isolated checks are recorded separately. These results do not establish long-term quality, fresh-install success, real native DeepSeek requests, or WeChat image acceptance. See the [changelog](CHANGELOG.md), [learning and conversation guide](docs/LEARNING_AND_CONVERSATION.md), and [test record](docs/TESTING_STATUS.md).
 
 ## Architecture
 
@@ -71,6 +83,8 @@ npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./dsh-become-human-web-
 ```
 
 The npm package is not published. The Git repository and GitHub source ZIP omit generated bundles and cannot be installed directly as a prebuilt plugin. Developers can [build a `.tgz` from source](docs/INSTALLATION.md#从源码构建). The detailed guides are currently in Chinese.
+
+**Known beta.5 fresh-install issue:** initial Human creation can fail because of initialization order. The fix is in beta.6 development source, with no new public Release package yet. Read the [testing status](docs/TESTING_STATUS.md) before installing; existing-install upgrade checks do not establish clean-install success.
 
 Start DSH, open Human, and follow **existing model → persona and budget → create and start**. The plugin prepares its data directory, private profile, and available loopback port automatically. No separate runtime installation or YAML editing is required for a fresh setup. `beta.5` supports `llm-pi-ai` routes and DSH's native DeepSeek API Key adapter. Both resolve `apiKeyEnv` credential references without returning secrets to the browser. DeepSeek account authentication, inline keys, and arbitrary headers are not supported. See [model configuration](docs/CONFIGURATION.md#进程与模型配置).
 

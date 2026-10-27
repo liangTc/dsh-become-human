@@ -2,10 +2,15 @@
 import {DatabaseSync} from 'node:sqlite';
 import {Service,createScope,agentEvents,z,createAssistantMessage,interruptedTurnClosers} from './api.mjs';
 import {DomainMemory} from './domain.mjs';
+import {RelationshipChoice} from './relationship-choice.mjs';
+import {RollingDialogueSummary} from './dialogue-summary.mjs';
+import {commitLearningOffer} from './learning-engagement.mjs';
 import {AutonomyStore} from './autonomy-store.mjs';
 import {PersonaDevelopment} from './persona-development.mjs';
 import {MemoryLifecycle} from './memory-lifecycle.mjs';
 import {runDevelopmentReview} from './development-runtime.mjs';
+import {WorkObservation} from './work-observation.mjs';
+import {runWorkObservation} from './work-observation-runtime.mjs';
 import {runAutonomyTurn} from './autonomy.mjs';
 import {ReminderStore,runReminderTurn} from './reminders.mjs';
 import {EventLog} from './event-log.mjs';
@@ -99,12 +104,12 @@ export class ControlJournal {
     catch(e){if(nested){this.db.exec('ROLLBACK TO '+name);this.db.exec('RELEASE '+name);}else this.db.exec('ROLLBACK');throw e;}
     finally{this.transactionDepth--;}
   }
-  beginAttempt(id,rid,turn,epoch,request){this.db.prepare("INSERT OR IGNORE INTO attempt(id,agent,turn,epoch,state,request,started,trigger) VALUES(?,?,?,?,'prepared',?,?,?)").run(rid,id,turn,epoch,JSON.stringify(request),Date.now(),request?.admittedIds?.length?'new-input':'autonomous-tick');}
+  beginAttempt(id,rid,turn,epoch,request){this.db.prepare("INSERT OR IGNORE INTO attempt(id,agent,turn,epoch,state,request,started,trigger) VALUES(?,?,?,?,'prepared',?,?,?)").run(rid,id,turn,epoch,JSON.stringify(request),Date.now(),request?.purpose==='conversation-summary'?'conversation-summary':request?.admittedIds?.length?'new-input':'autonomous-tick');}
   longRunStats(id){
     const baseline=this.value(id,'longRunBaseline',null);if(!baseline)return null;
     const groups=this.db.prepare("SELECT trigger,state,count(*) AS calls,sum(CASE WHEN usage_confidence='reported' THEN COALESCE(json_extract(usage,'$.totalTokens'),0) ELSE 0 END) AS reportedTokens,max(ended) AS lastEnded FROM attempt WHERE agent=? AND started>=? GROUP BY trigger,state").all(id,baseline.startedAt);
     const count=filter=>groups.filter(filter).reduce((n,g)=>n+g.calls,0);
-    return {...baseline,elapsedMs:Date.now()-baseline.startedAt,observation24hElapsed:Date.now()-baseline.startedAt>=86400000,attempts:count(()=>true),autonomousAttempts:count(g=>g.trigger==='autonomous-tick'),inputAttempts:count(g=>g.trigger==='new-input'),expressions:count(g=>g.state==='completed'),waits:count(g=>g.state==='wait'),failures:count(g=>['failed','output-limit','interrupted'].includes(g.state)),cancelled:count(g=>g.state==='cancelled'),inflight:count(g=>['prepared','dispatched','response-ready'].includes(g.state)),reportedTokens:groups.reduce((n,g)=>n+(g.reportedTokens??0),0),conservativeTokens:this.get(id).used-baseline.initialCumulativeUsed,lastEnded:Math.max(0,...groups.map(g=>g.lastEnded??0))||null};
+    return {...baseline,elapsedMs:Date.now()-baseline.startedAt,observation24hElapsed:Date.now()-baseline.startedAt>=86400000,attempts:count(()=>true),autonomousAttempts:count(g=>g.trigger==='autonomous-tick'),inputAttempts:count(g=>g.trigger==='new-input'),summaryAttempts:count(g=>g.trigger==='conversation-summary'),expressions:count(g=>g.state==='completed'),waits:count(g=>g.state==='wait'),failures:count(g=>['failed','output-limit','interrupted'].includes(g.state)),cancelled:count(g=>g.state==='cancelled'),inflight:count(g=>['prepared','dispatched','response-ready'].includes(g.state)),reportedTokens:groups.reduce((n,g)=>n+(g.reportedTokens??0),0),conservativeTokens:this.get(id).used-baseline.initialCumulativeUsed,lastEnded:Math.max(0,...groups.map(g=>g.lastEnded??0))||null};
   }
   dispatchAttempt(rid,config){this.db.prepare("UPDATE attempt SET state='dispatched',config=? WHERE id=?").run(JSON.stringify(config),rid);}
   endAttempt(rid,outcome){this.db.prepare('UPDATE attempt SET state=?,usage=?,usage_confidence=?,error=?,text_chars=?,reasoning_chars=?,failure_facts=?,ended=? WHERE id=?').run(outcome.state,JSON.stringify(outcome.usage??null),outcome.usageConfidence??'unknown',outcome.error??null,outcome.textChars??0,outcome.reasoningChars??0,JSON.stringify(outcome.failureFacts??null),Date.now(),rid);const row=this.db.prepare('SELECT * FROM attempt WHERE id=?').get(rid);if(row){const request=JSON.parse(row.request),config=JSON.parse(row.config??'{}');this.audit(row.agent,'attempt-'+outcome.state,{attemptId:rid,taskId:request.taskId,roundId:request.roundId,lane:request.lane,origin:request.lane==='foreground'?'owner':'timer',provider:config.provider,model:config.model,usage:outcome.usage??null,usageConfidence:outcome.usageConfidence??'unknown',reserved:this.safety?.budget.entries.get(rid)?.amount,error:outcome.error,started:row.started,ended:row.ended});}}
@@ -151,6 +156,7 @@ export class ControlJournal {
         const committed=payload.autonomyCommit;
         this.put(row.agent,'lastAutonomousContact',Math.max(this.value(row.agent,'lastAutonomousContact',0),committed.contactAt));
         if(committed.noteId)this.put(row.agent,'learning-shared:'+committed.noteId,true);
+        if(committed.learningOffer)commitLearningOffer(this,row.agent,committed.learningOffer);
         if(committed.careAnchor)this.put(row.agent,'care-user-anchor',committed.careAnchor);
         if(committed.social)commitSocialContact(this,row.agent,committed.social);
       }
@@ -160,7 +166,19 @@ export class ControlJournal {
         this.put(row.agent,'lastAutonomousContact',Math.max(this.value(row.agent,'lastAutonomousContact',0),committed.contactAt));
       }
       if(payload.ownerBatch&&this.value(row.agent,'ownerBatch',null)?.id===payload.ownerBatch.id)this.put(row.agent,'ownerBatch',null);
-      if(row.kind==='MESSAGE'){const a=this.db.prepare('SELECT request FROM attempt WHERE id=?').get(rid),request=a?JSON.parse(a.request):{},localInput=this.value(row.agent,'local-admitted:'+payload.data?.message?.id,[])[0];this.audit(row.agent,'response-published',{taskId:request.taskId,roundId:request.roundId,attemptId:rid,messageId:payload.data?.message?.id,inputId:localInput,noteId:payload.autonomyCommit?.noteId??null,origin:request.lane==='foreground'||localInput?'owner':'timer'});}
+      if(row.kind==='MESSAGE'){
+        const a=this.db.prepare('SELECT request FROM attempt WHERE id=?').get(rid),request=a?JSON.parse(a.request):{},messageId=payload.data?.message?.id,localInputs=this.value(row.agent,'local-admitted:'+messageId,[]),inputIds=payload.ownerBatch?.inputIds??request.admittedIds??localInputs;
+        // The native reply is durable before recording this relationship. Keep
+        // the whole input batch for reconstruction after restart or compaction.
+        if(messageId&&Array.isArray(inputIds)&&inputIds.every(key=>typeof key==='string')&&(inputIds.length||request.lane||payload.autonomyCommit||payload.reminderCommit))this.put(row.agent,'dialogue-origin:'+messageId,{inputIds,lane:inputIds.length?'foreground':'autonomous',turn:row.turn,attemptId:rid});
+        this.audit(row.agent,'response-published',{taskId:request.taskId,roundId:request.roundId,attemptId:rid,messageId,inputId:localInputs[0],noteId:payload.autonomyCommit?.noteId??null,origin:request.lane==='foreground'||localInputs.length?'owner':'timer'});
+      }
+      // Relationship evidence is committed only after the native assistant event
+      // is durable. A malformed/revoked optional record must not lose the reply.
+      if(row.kind==='MESSAGE'&&payload.relationshipCommit&&this.relationship){
+        try{this.relationship.commitDecision(row.agent,payload.relationshipCommit);}
+        catch(error){this.audit(row.agent,'relationship-choice-held',{messageId:payload.data?.message?.id,code:/^[A-Z_]{3,64}$/u.test(error.message)?error.message:'RELATIONSHIP_COMMIT_FAILED'});}
+      }
       // The native event is the canonical content owner after durable publication.
       this.db.prepare("UPDATE response_stage SET state='committed',payload='null' WHERE id=?").run(rid);
     });
@@ -359,6 +377,7 @@ export class HumanAgent {
     if(!this.inbox.nextTurn.length&&!this.inbox.nextStep.length){const action=nextActionWork(this);if(action)return runActionTurn(this,signal,action);}
     if(reminderOnly&&!this.inbox.nextTurn.length&&!this.inbox.nextStep.length)return;
     const ownerPending=this.inbox.nextTurn.length||this.inbox.nextStep.length;
+    if(!ownerPending&&this.factory.journal.value(this.id,'remaining',0)===null&&await runWorkObservation(this,signal))return;
     if(!ownerPending&&this.factory.journal.value(this.id,'remaining',0)===null&&await runDevelopmentReview(this,signal))return;
     if(this.factory.autonomy.settings(this.id).enabled||this.factory.config.interactiveOnly&&ownerPending)return runAutonomyTurn(this,signal);
     // Chat-only mode stays online for owner input without an idle model turn.
@@ -482,7 +501,9 @@ export class HumanAgent {
 export class HumanFactory extends Service {
   static inject=['agents','sessions','sessionPersistence','sessionProjections','llm'];
   constructor(ctx,config){
-    super(ctx,'becomeHuman');this.runtime={ctx};this.config=config;this.journal=new ControlJournal(config.journal);this.handles=new Set();this.closing=false;this.domain=new DomainMemory(this.journal);this.personaDevelopment=new PersonaDevelopment(this.journal,this.domain);this.memoryLifecycle=new MemoryLifecycle(this.journal,this.domain);this.domain.development=this.personaDevelopment;this.domain.lifecycle=this.memoryLifecycle;this.autonomy=new AutonomyStore(this.journal,this.domain);this.goals=new GoalEngine(this.journal,this.domain,this.autonomy);this.actions=new ActionStore(this.journal,this.domain,{root:path.resolve(path.dirname(config.journal),'artifacts'),validNote:(agent,note)=>this.goals.validNote(agent,note),validGoal:(agent,ref,action)=>this.goals.actionAllowed(agent,action)});this.goals.setActions(this.actions);this.tools=new ToolExecutor(this.journal);this.reminders=new ReminderStore(this.journal);this.management=new HumanManagement(this);this.cognition=new CognitionStore(this.journal,this.domain,{factory:this});this.tickets=new WeakMap();this.inflight=0;
+    super(ctx,'becomeHuman');this.runtime={ctx};this.config=config;this.journal=new ControlJournal(config.journal);this.handles=new Set();this.closing=false;this.domain=new DomainMemory(this.journal);this.personaDevelopment=new PersonaDevelopment(this.journal,this.domain);this.memoryLifecycle=new MemoryLifecycle(this.journal,this.domain);this.domain.development=this.personaDevelopment;this.domain.lifecycle=this.memoryLifecycle;this.autonomy=new AutonomyStore(this.journal,this.domain);this.goals=new GoalEngine(this.journal,this.domain,this.autonomy);this.actions=new ActionStore(this.journal,this.domain,{root:path.resolve(path.dirname(config.journal),'artifacts'),validNote:(agent,note)=>this.goals.validNote(agent,note),validGoal:(agent,ref,action)=>this.goals.actionAllowed(agent,action)});this.goals.setActions(this.actions);this.tools=new ToolExecutor(this.journal);this.workObservation=new WorkObservation(this.journal,{bridgeSettings:id=>this.tools.configuration(id).bridge});this.domain.workObservation=this.workObservation;this.reminders=new ReminderStore(this.journal);this.management=new HumanManagement(this);this.cognition=new CognitionStore(this.journal,this.domain,{factory:this});this.tickets=new WeakMap();this.inflight=0;
+    this.relationship=new RelationshipChoice(this.journal,this.domain);this.journal.relationship=this.relationship;
+    this.conversationSummary=new RollingDialogueSummary(this.journal,this.domain);
     this.mcpCapabilities=registerMcpCapabilities(this.tools);
     this.customMcpCapabilities=new CustomMcpCapabilities(this.tools,{configuration:agent=>this.tools.configuration(agent),journal:this.journal});
     this.bridgeCapabilities=registerBridgeCapabilities(this.tools,{request:(operation,input,options)=>parentCapabilityRequest(operation,input,{...options,context:{...options.context,policy:this.tools.configuration(options.context.agent).bridge,policyRevision:this.tools.configuration(options.context.agent).revision}})});

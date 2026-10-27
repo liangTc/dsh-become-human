@@ -33,12 +33,14 @@ export function questionSignals(query){
   // must not become an exact-identifier requirement for an unrelated lookup.
   if(/\bhttps?(?:\/\d(?:\.\d)?)?\b/iu.test(text)){
     let previous=null;
+    const currency=/^\s*(?:万元|千元|元|块|美元|人民币|日元|欧元|英镑|港元|港币|澳元|加元|usd\b|cny\b|rmb\b|dollars?\b|euros?\b|eur\b|gbp\b|円|yen\b|%)/iu;
     for(const match of text.matchAll(/\b[1-5]\d{2}\b/gu)){
       const code=match[0],at=match.index,before=text.slice(Math.max(0,at-100),at),after=text.slice(at+code.length);
-      const money=/(?:[$￥¥€£]\s*|(?:价格|费用|预算|金额|cost|price|budget)\s*[:：]?\s*)$/iu.test(before)||/^[.,]\d/u.test(after)||/^\s*(?:万元|千元|元|块|美元|人民币|日元|欧元|英镑|港元|港币|澳元|加元|usd\b|cny\b|rmb\b|dollars?\b|euros?\b|eur\b|gbp\b|円|yen\b|%)/iu.test(after);
+      const commaCodes=/^,\s*[1-5]\d{2}(?![\dA-Za-z]|\.\d)/u.test(after),grouped=/^(?:,\d{3})+/u.exec(after)?.[0];
+      const money=/(?:[$￥¥€£]\s*|(?:价格|费用|预算|金额|cost|price|budget)\s*[:：]?\s*)$/iu.test(before)||/^\.\d/u.test(after)||/^,\d/u.test(after)&&(!commaCodes||!!grouped&&currency.test(after.slice(grouped.length)))||currency.test(after);
       const direct=/\bhttp(?:\/\d(?:\.\d)?)?(?:\s+(?:(?:response\s+)?status(?:\s+codes?)?|responses?(?:\s+codes?)?))?\s*[:：-]?\s*$/iu.test(before);
       const named=/(?:状态码|响应状态(?:码)?|响应码|status(?:\s+codes?)?)\s*[:：-]?\s*$/iu.test(before)||/^\s*(?:状态码|响应状态|响应码|status(?:\s+code)?\b|No\s+Content\b|Not\s+Modified\b)/iu.test(after);
-      const listed=previous&&/^\s*(?:[/,，、和与或-]|and|or|vs\.?)?\s*$/iu.test(text.slice(previous.end,at));
+      const listed=previous&&/^\s*(?:responses?\s+)?(?:[/,，、和与或-]|以及|and|or|with|versus|vs\.?)?\s*$/iu.test(text.slice(previous.end,at));
       if(!money&&(direct||named||listed)){codes.push(code);previous={end:at+code.length};}
     }
   }
@@ -61,14 +63,25 @@ export function sourceSignals(row={}){
 }
 
 export function scoreResearchResult(query,row,{question=''}={}){
-  const profile=questionSignals(query),terms=profile.terms,title=normalized(row.title),snippet=normalized(row.snippet),url=normalized(row.url);
-  const identifiers=[...new Set([...profile.identifiers,...questionSignals(question).identifiers])].slice(0,8);
+  const profile=questionSignals(query),questionProfile=questionSignals(question),terms=profile.terms,title=normalized(row.title),snippet=normalized(row.snippet),url=normalized(row.url);
+  const identifiers=[...new Set([...profile.identifiers,...questionProfile.identifiers])].slice(0,8);
   const hits=terms.filter(term=>signalMatch(title,term)||signalMatch(snippet,term)||signalMatch(url,term));
   const identifierHits=identifiers.filter(term=>signalMatch(title,term)||signalMatch(snippet,term)||signalMatch(url,term));
   const extra=retrievalTerms(question,{expand:false,limit:24}).filter(term=>!terms.includes(term)),questionHits=extra.filter(term=>title.includes(term)||snippet.includes(term));
   const signals=sourceSignals(row),specific=identifiers.length>0;
+  // A generic HTTP/MDN overview cannot satisfy an explicitly requested status
+  // merely by matching the protocol or publisher. A comparison may retain
+  // separate pages for its individual codes; discovery is still not evidence.
+  const codes=[...new Set([...profile.httpStatusCodes,...questionProfile.httpStatusCodes])];
+  // A publisher/acronym alone (for example a generic agency home page) is
+  // insufficient for a multi-word question. Precise API identifiers and HTTP
+  // codes may stand alone; they are still retrieval hints, not evidence.
+  const precise=[...(query+' '+question).matchAll(/[A-Za-z][A-Za-z0-9_.+-]{1,}/g)].map(m=>m[0]).filter(w=>/[a-z][A-Z]|[A-Za-z]\d/u.test(w)).map(normalized);
+  const numericProtocolContext=!codes.length&&/\bhttp\b/iu.test(query)&&/\d/u.test(query)&&hits.includes('http');
+  const topicMatch=numericProtocolContext|| (precise.length?precise.some(term=>signalMatch(title,term)||signalMatch(snippet,term)||signalMatch(url,term)):hits.length>=Math.min(2,terms.length));
+  const statusMatch=!codes.length||codes.some(code=>signalMatch(title,code)||signalMatch(snippet,code)||signalMatch(url,code));
   const score=hits.reduce((sum,term)=>sum+(signalMatch(title,term)?3:0)+(signalMatch(snippet,term)?1:0)+(signalMatch(url,term)?1:0),0)+identifierHits.length*5+Math.min(3,questionHits.length)+(signals.primaryCandidate?2:0);
-  return {...row,sourceSignals:signals,relevance:{version:1,score,matchedCount:hits.length,termCount:terms.length,identifierHits:identifierHits.length,identifierCount:identifiers.length,questionMatchedCount:questionHits.length,lexicalOnly:true,specificQuestion:specific},_relevant:!terms.length||hits.length>0};
+  return {...row,sourceSignals:signals,relevance:{version:2,score,matchedCount:hits.length,termCount:terms.length,identifierHits:identifierHits.length,identifierCount:identifiers.length,questionMatchedCount:questionHits.length,lexicalOnly:true,specificQuestion:specific},_relevant:statusMatch&&(!terms.length||(codes.length?hits.length>0:topicMatch))};
 }
 
 export function lexicalCoverage(question,text){
@@ -83,5 +96,10 @@ export function topicKeys(text){
 export function developmentInput(text){
   // Exclude explicit development fixtures without treating ordinary mentions
   // of a software test as proof that the owner's whole message is fictional.
-  return typeof text==='string'&&(/【[^】]*(?:测试|短测|验收|开发)[^】]*】|\[(?:dev[ -]?test|test[ -]?fixture|acceptance[ -]?test)\]/iu.test(text)||/(?:这(?:条|只是|仅)|仅(?:供|用于)|本(?:条|轮)).{0,16}(?:开发测试|开发短测|测试输入|功能测试|验收测试|测试消息)|不(?:代表|作为|是).{0,12}(?:真实经历|个人偏好|真实偏好|真实需求)|仅用于测试|开发测试[：:]|^(?:恢复闲聊测试|暂停恢复测试|手机入站短测|通道刷新补测)/u.test(text));
+  if(typeof text!=='string')return false;
+  // Historical harness messages predate the bracketed marker. Recognize the
+  // explicit fixture label/disclaimer, never a bare mention of software tests.
+  return /【[^】]*(?:测试|短测|验收|开发)[^】]*】|\[(?:dev[ -]?test|test[ -]?fixture|acceptance[ -]?test)\]/iu.test(text)
+    ||/(?:这(?:是一条|是一次|是一段|条|只是|仅)|仅(?:供|用于)|本(?:条|轮)).{0,16}(?:开发测试|开发短测|测试输入|功能测试|验收测试|测试消息)|不(?:代表|作为|是).{0,12}(?:真实经历|个人偏好|真实偏好|真实需求)|测试(?:文字|内容|材料).{0,8}(?:不构成|不代表|不作为).{0,20}(?:喜好|偏好|经历|事实)|仅用于测试|开发测试[：:]|^(?:恢复闲聊测试|暂停恢复测试|手机入站短测|通道刷新补测)/u.test(text)
+    ||/^\s*(?:QWEN_SHORT_[A-Z0-9]+|(?:WEB_(?:FORMAL|RECOVERY)|HOST_IDEMPOTENCY)_\d{8}(?:_[A-Z])?|P0_FINAL_REAL_[A-Z]|新版(?:角色|普通消息抢占|开放学习抢占|执行阶段抢占|继续|部署|前台优先|出站)(?:测试|短测))[：:]/iu.test(text);
 }

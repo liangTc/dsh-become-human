@@ -174,8 +174,10 @@ export class RemoteGateway {
       if(row.kind==='telegram'){if(String(envelope.senderId)!==row.config.ownerId||String(envelope.chatId)!==row.config.ownerId||envelope.privateChat!==true)throw new Error('PRIVATE_OWNER_REQUIRED');}
       else{const adapter=this.adapters.get(row.kind);if(typeof adapter?.authorizeInbound!=='function'||await adapter.authorizeInbound(row.config,envelope)!==true)throw new Error('PRIVATE_OWNER_REQUIRED');}
       if(!this.current(row))throw new Error('CHANNEL_REPLACED');
-      if(!idOk(String(envelope.messageId))||typeof envelope.text!=='string'||!envelope.text.trim()||envelope.text.length>1024)throw new Error('INVALID_REMOTE_MESSAGE');
-      const text=envelope.text.trim(),hash=digest(text),message=String(envelope.messageId);
+      const attachments=envelope.attachments??[];
+      if(!Array.isArray(attachments)||attachments.length>4||attachments.some(row=>!row||Object.keys(row).length!==1||!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/u.test(row.id??''))||new Set(attachments.map(row=>row.id)).size!==attachments.length)throw new Error('INVALID_REMOTE_MESSAGE');
+      if(!idOk(String(envelope.messageId))||typeof envelope.text!=='string'||!envelope.text.trim()&&!attachments.length||envelope.text.length>1024||attachments.length&&envelope.text.trimStart().startsWith('/'))throw new Error('INVALID_REMOTE_MESSAGE');
+      const text=envelope.text.trim(),hash=digest(attachments.length?JSON.stringify({text,attachments}):text),message=String(envelope.messageId);
       const prior=this.db.prepare('SELECT * FROM inbound WHERE channel=? AND message=?').get(channelId,message);
       if(prior&&prior.hash!==hash)throw new Error('REMOTE_MESSAGE_ID_CONFLICT');if(prior?.status==='committed')return {duplicate:true};
       const requestId=prior?.request_id??'im-'+digest(channelId+':'+message).slice(0,40);
@@ -187,7 +189,7 @@ export class RemoteGateway {
       if(!this.current(row))throw new Error('CHANNEL_REPLACED');
       if(text==='/status')return commitCommand({command:'status',sessionId:state.sessionId,desired:state.desired});
       if(!prior)this.db.prepare("INSERT INTO inbound(channel,message,hash,request_id,status,kind) VALUES(?,?,?,?,'pending','message')").run(channelId,message,hash,requestId);
-      await this.runtime.control({op:'message',requestId,text,sessionId:state.sessionId,target:envelope.target==='next-step'?'next-step':'next-turn',origin:channelId});
+      await this.runtime.control({op:'message',requestId,text,...(attachments.length?{attachments}:{}),sessionId:state.sessionId,target:envelope.target==='next-step'?'next-step':'next-turn',origin:channelId});
       this.db.prepare("UPDATE inbound SET status='committed' WHERE channel=? AND message=?").run(channelId,message);
       this.events.append(state.sessionId,crypto.randomUUID(),'message-inbound',{origin:channelId,requestId});
       this.preference('remote-wake',true);

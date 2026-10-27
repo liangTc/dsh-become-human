@@ -6,6 +6,8 @@
 
 当前公开安装包为 **`0.7.0-beta.5` 测试版本（Prerelease），尚未开发完成**。安装入口为 [固定版本 Release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.5)，其中提供 [组合包](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.5/dsh-become-human-web-0.7.0-beta.5.tgz) 与 [SHA-256 校验文件](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.5/dsh-become-human-web-0.7.0-beta.5.tgz.sha256)。npm 包尚未发布；介绍页和社区条目继续保留测试状态。此前 beta.4 保留为历史发行。
 
+`main` 已推进至 **beta.6 开发源码**，包括滚动会话摘要、完整问答上下文、图片输入与普通请求协商、学习动机与自然分享、授权 DSH 会话观察及相关修复。beta.6 尚无公开 Release 安装包，不能把 beta.5 下载说成包含这些能力。公开 beta.5 还存在首次创建 Human 的已知初始化问题；修复在 beta.6 源码中，最新干净安装及原生 DeepSeek 真实整链仍待测。
+
 **`0.7.0-beta.5` 测试包**新增任务看板、统计、人格偏移与记忆整理、可配置 MCP 和 DSH 会话授权，以及 DSH 原生 DeepSeek API Key 适配。已有维护者 Windows 环境的构建、安装与启动记录；发布预构建包不扩大验证范围。原生通道的全新安装、实际凭据复用、后台首次启动及真实请求整链验证列入 [待测试清单](TESTING_STATUS.md)，不作为已验收能力宣传。原生适配不包含 DeepSeek 账号登录通道。
 
 ## 提交 DSH Plugin Radar 社区登记
@@ -20,7 +22,7 @@
 可提交的条目描述示例：
 
 ```markdown
-| dsh-become-human | [liangTc/dsh-become-human](https://github.com/liangTc/dsh-become-human) | DSH Web 单会话自主 Agent：人格、记忆、学习、目标与主动交流，Web 与一个 IM 共享；[beta.5 测试包及校验值](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.5)；含任务看板、统计、MCP 及原生 DeepSeek API Key 适配（全新安装整链待测）；Windows / Node 24+ / DSH 0.2.0-rc.2，测试版未完成 | 待测 |
+| dsh-become-human | [liangTc/dsh-become-human](https://github.com/liangTc/dsh-become-human) | DSH Web 单会话自主 Agent：人格、记忆、学习、任务与主动交流，Web 与一个 IM 共享；[beta.5 测试包及校验值](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.5)；[beta.6 开发进展](https://github.com/liangTc/dsh-become-human/blob/main/CHANGELOG.md)：滚动上下文、图片、协商与授权工作观察（未发包）；beta.5 首次创建有已知问题，原生新装整链待测；Windows / Node 24+ / DSH 0.2.0-rc.2，测试版未完成 | 待测 |
 ```
 
 PR 说明应注明实测限于 Windows 与 DSH `0.2.0-rc.2` 的 `web` profile：已有安装升级、真实模型、部分微信流程和本地隔离回归。不要据此声称所有渠道、干净机器、多插件共存或多日稳定性已通过。提交或被社区收录均不构成官方兼容认证；上游合并前不写“已收录”。

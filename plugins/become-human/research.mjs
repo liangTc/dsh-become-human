@@ -52,7 +52,7 @@ export function searxngResults(body){
   if(!Array.isArray(data.results))throw new Error('INVALID_SEARCH_RESPONSE');
   return normalized(data.results.slice(0,40).filter(r=>r&&typeof r==='object').map(r=>({url:r.url,title:r.title,snippet:r.content,publishedAt:r.publishedDate})));
 }
-async function searchOnce(query,settings,signal){
+async function searchOnce(query,settings,signal,{regional=false}={}){
   query=searchQuery(query);let url;
   if(settings.searchProvider==='searxng'){
     const endpoint=new URL(researchUrl(settings.searchEndpoint));
@@ -61,7 +61,7 @@ async function searchOnce(query,settings,signal){
   }else if(settings.searchProvider==='duckduckgo'){
     const endpoint=new URL('https://html.duckduckgo.com/html/');endpoint.searchParams.set('q',query);url=endpoint.href;
   }else if(settings.searchProvider==='bing'){
-    const endpoint=new URL('https://www.bing.com/search');endpoint.searchParams.set('q',query);url=endpoint.href;
+    const endpoint=new URL(regional?'https://cn.bing.com/search':'https://www.bing.com/search');endpoint.searchParams.set('q',query);if(regional)endpoint.searchParams.set('ensearch','1');url=endpoint.href;
   }else throw new Error('SEARCH_PROVIDER_NOT_CONFIGURED');
   const response=await fetchPublicDocument(url,signal);
   // An HTML login/challenge response is never treated as a JSON search result.
@@ -74,7 +74,10 @@ export function researchQueryPlan(query){
   let refined,reason;
   const precise=specific.find(word=>/[a-z][A-Z]|[A-Za-z]\d/u.test(word));
   if(profile.httpStatusCodes.length){
-    const codes=profile.httpStatusCodes.map(code=>'"'+code+'"'),context=words.filter(word=>!/^https?$/iu.test(word)).slice(0,4);
+    // The status code and protocol are the retrieval target. Publisher names
+    // such as an all-capitals documentation acronym can otherwise dominate a
+    // regional response while the numeric part of the query is ignored.
+    const codes=profile.httpStatusCodes.map(code=>'"'+code+'"'),context=[...new Set(words.filter(word=>!/^https?$/iu.test(word)&&!/^[A-Z]{2,8}$/u.test(word)))].slice(0,4);
     refined=['HTTP',...codes,...context,'specification'].join(' ');reason='http-status-primary-source';
     if(refined.length>240)refined=['HTTP',...codes,'specification'].join(' ');
   }else if(precise){
@@ -90,24 +93,46 @@ export function adequateResearchResults(ranked){
   const first=ranked?.[0];
   return !!first&&(first.relevance.identifierCount?first.relevance.identifierHits===first.relevance.identifierCount:first.relevance.matchedCount/Math.max(1,first.relevance.termCount)>=.3&&ranked.length>=2);
 }
+export function regionalSearchQuery(query){
+  const profile=questionSignals(query),words=query.match(/[A-Za-z][A-Za-z0-9_.+-]{1,}/g)??[];
+  // researchQueryPlan deliberately quotes status codes. The lexical signal
+  // extractor also accepts arbitrary prose and does not classify these quoted
+  // literals, so retain the narrowly shaped generated protocol prefix here.
+  if(profile.httpStatusCodes.length||/^HTTP(?:\s+"[1-5]\d{2}")+(?:\s|$)/u.test(query))return query;
+  const precise=words.filter(word=>/[a-z][A-Z]|[A-Za-z]\d/u.test(word));
+  // A planned exact API identifier still needs its protocol/topic context and
+  // quotation marks. Compressing it again would discard the generated plan.
+  if(precise.length)return query;
+  const substantive=words.filter(word=>!(/^[A-Z]{2,8}$/u.test(word)));
+  // Acronyms such as publisher names may dominate a degraded regional
+  // response. Retain short all-acronym topics and HTTP code queries intact.
+  if(!profile.httpStatusCodes.length&&!/[\u4e00-\u9fff]/u.test(query)&&substantive.length>=2&&substantive.length<words.length)return substantive.join(' ');
+  return query;
+}
 export async function searchPublicWeb(query,settings,signal,{question=''}={}){
   const originalQuery=searchQuery(query),plan=researchQueryPlan(originalQuery),trace=[],candidates=new Map();let metadata,discarded=0;
   const deadline=AbortSignal.any([signal,AbortSignal.timeout(45000)]);
   for(const [index,step] of plan.entries()){
     deadline.throwIfAborted();let found;
-    try{found=await searchOnce(step.query,settings,deadline);}catch(error){
-      const code=/^[A-Z_]{3,64}$/u.test(error.message)?error.message:'SEARCH_UNAVAILABLE';trace.push({step:index+1,query:step.query,reason:step.reason,state:'failed',code});
+    // Same provider, bounded second retrieval. Some Bing regions return
+    // unrelated results while echoing the right query. Do not retry a CAPTCHA,
+    // rate limit or failed transport; only an inadequate successful result.
+    const regional=settings.searchProvider==='bing'&&index===1;
+    const query=regional?regionalSearchQuery(step.query):step.query;
+    const reason=regional?'bing-regional-fallback':step.reason;
+    try{found=await searchOnce(query,settings,deadline,{regional});}catch(error){
+      const code=/^[A-Z_]{3,64}$/u.test(error.message)?error.message:'SEARCH_UNAVAILABLE';trace.push({step:index+1,query,reason,state:'failed',code});
       // Do not hammer a challenged, rate-limited or broken provider. The trace
       // survives the error so a failed first step is observable as well.
       throw Object.assign(error,{searchTrace:trace});
     }
     const ranked=relevantSearchResults(originalQuery,found.parsed,{question});discarded+=found.parsed.length-ranked.length;
-    trace.push({step:index+1,query:step.query,reason:step.reason,state:ranked.length?'results':'no-relevant-results',code:ranked.length?null:found.parsed.length?'SEARCH_RESULTS_OFF_TOPIC':'SEARCH_NO_RESULTS',parsedCount:found.parsed.length,relevantCount:ranked.length,searchedAt:found.searchedAt});
+    trace.push({step:index+1,query,reason,state:ranked.length?'results':'no-relevant-results',code:ranked.length?null:found.parsed.length?'SEARCH_RESULTS_OFF_TOPIC':'SEARCH_NO_RESULTS',parsedCount:found.parsed.length,relevantCount:ranked.length,searchedAt:found.searchedAt});
     const {parsed,...current}=found;metadata=current;
-    for(const row of ranked){const candidate={...row,searchContext:{query:step.query,provider:found.provider,searchedAt:found.searchedAt,step:index+1}};const prior=candidates.get(row.url);if(!prior||candidate.relevance.score>prior.relevance.score)candidates.set(row.url,candidate);}
+    for(const row of ranked){const candidate={...row,searchContext:{query,provider:found.provider,searchedAt:found.searchedAt,step:index+1}};const prior=candidates.get(row.url);if(!prior||candidate.relevance.score>prior.relevance.score)candidates.set(row.url,candidate);}
     if(adequateResearchResults(ranked))break;
   }
   const results=[...candidates.values()].sort((a,b)=>b.relevance.identifierHits-a.relevance.identifierHits||b.relevance.score-a.relevance.score).slice(0,6);
   if(!results.length)throw Object.assign(new Error(trace.some(s=>s.parsedCount)?'SEARCH_RESULTS_OFF_TOPIC':'SEARCH_NO_RESULTS'),{searchTrace:trace});
-  return {...metadata,query:originalQuery,...(trace.length>1?{originalQuery,refinement:plan[1].reason}:{}),queryPlanVersion:1,maxQueries:2,querySteps:trace,discardedOffTopic:discarded,results};
+  return {...metadata,query:originalQuery,...(trace.length>1?{originalQuery,refinement:trace[1].reason}:{}),queryPlanVersion:2,maxQueries:2,querySteps:trace,discardedOffTopic:discarded,results};
 }

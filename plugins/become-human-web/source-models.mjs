@@ -12,6 +12,7 @@ const providerFields=['apiKeyEnv','displayName','api','baseURL','models','modelO
 const nativeFields=['apiKeyEnv','baseURL','thinking','reasoningEffort','maxTokens','defaultContextWindow','models','streamIdleTimeoutMs','maxRequestFilesBytes','maxInlineRequestImageBytes','maxImagesPerRequest','imageOffloadByteQuantum','inlineImageOffloadByteQuantum','imageOffloadCountQuantum','filesApiTimeoutMs','fileExpiresAfterSeconds','fileRefreshMarginSeconds','fileQuotaCleanupBatch','retryPolicy'];
 const credentialName=value=>typeof value==='string'&&/^\w+$/.test(value);
 const record=value=>!!value&&typeof value==='object'&&!Array.isArray(value);
+const modalities=model=>{const value=model.inputModalities??model.input;return Array.isArray(value)?{inputModalities:[...new Set(value.filter(value=>value==='text'||value==='image'))]}:{};};
 
 async function officialModules(){
   try{
@@ -96,7 +97,7 @@ export async function readSourceModelConfiguration(config){
     providers[provider]=clean;if(ready)readyProviders[provider]=clean;
     for(const model of clean.models){
       if(!record(model)||typeof model.id!=='string'||!model.id||model.id.length>256||models.length>=512)continue;
-      models.push({provider,model:model.id,providerLabel:String(clean.displayName??provider).slice(0,160),modelLabel:String(model.name??model.displayName??model.id).slice(0,200),credentialReady:ready,adapter:'pi-ai'});
+      models.push({provider,model:model.id,providerLabel:String(clean.displayName??provider).slice(0,160),modelLabel:String(model.name??model.displayName??model.id).slice(0,200),credentialReady:ready,adapter:'pi-ai',...modalities(model)});
     }
   }
   if(nativeActive){
@@ -109,6 +110,9 @@ export async function readSourceModelConfiguration(config){
       // Endpoint resolution uses the current host's inherited environment. It
       // does not parse source .env files or mutate the host's process.env.
       const environment=config.sourceLaunchEnvironment??{get:name=>process.env[name]===undefined?undefined:{source:'process',value:process.env[name]},getFrom:(name,sources)=>sources.includes('process')&&process.env[name]!==undefined?{source:'process',value:process.env[name]}:undefined};
+      // Match boot-time schema validation before advertising a ready route.
+      // Resolve the original plain options, not the schema's volatile wrappers.
+      adapter.Config(safeConfig(raw,nativeFields));
       resolved=adapter.resolveAdapterOptions(safeConfig(raw,nativeFields),environment);
     }catch(error){if(error.message==='SOURCE_NATIVE_ADAPTER_UNSUPPORTED')throw error;throw new Error('SOURCE_NATIVE_MODEL_CONFIGURATION_INVALID');}
     if(!credentialName(resolved.apiKeyEnv)||!Array.isArray(resolved.models))throw new Error('SOURCE_NATIVE_MODEL_CONFIGURATION_INVALID');
@@ -118,7 +122,7 @@ export async function readSourceModelConfiguration(config){
     const reasoningEfforts=raw.thinking==='disabled'||resolved.defaults?.thinking==='disabled'?['off']:['off','low','high','max'];
     for(const model of clean.models){
       if(typeof model.id!=='string'||!model.id||models.length>=512)continue;
-      models.push({provider:nativeProvider,model:model.id,providerLabel:'DeepSeek',modelLabel:String(model.name??model.id).slice(0,200),credentialReady:ready,adapter:'deepseek-native',reasoningEfforts:[...reasoningEfforts]});
+      models.push({provider:nativeProvider,model:model.id,providerLabel:'DeepSeek',modelLabel:String(model.name??model.id).slice(0,200),credentialReady:ready,adapter:'deepseek-native',reasoningEfforts:[...reasoningEfforts],...modalities(model)});
     }
   }
   const defaultRow=findRow(entries,'agent-default-model'),configuredDefault=defaultRow&&!defaultRow.disabled?defaultRow.config:null;

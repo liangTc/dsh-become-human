@@ -41,6 +41,7 @@ export class DomainMemory {
     if(secret(JSON.stringify(payload)))throw new Error('SENSITIVE_MEMORY_REFUSED');
     const sources=this.refs(agent,refs);
     if(namespace==='real'&&sources.some(s=>s.namespace!=='real'))throw new Error('FICTIONAL_EVIDENCE');
+    if(namespace==='real'&&sources.some(s=>this.sourceIsDevelopmentTest(agent,s.id)))throw new Error('DEVELOPMENT_MEMORY_REFUSED');
     if(truth==='factual'&&sources.some(s=>['derived','imported'].includes(s.kind)))throw new Error('UNCONFIRMED_EVIDENCE');
     if(truth==='factual'&&!sources.some(s=>s.kind==='configuration'&&s.body===JSON.stringify(payload)||type==='episode'&&payload.userSaid===s.body||type==='fact'&&payload.entity==='user'&&payload.predicate==='preference'&&s.kind==='user'&&s.namespace==='real'&&s.root===s.id&&this.sourceUsable(agent,s.id)&&preferenceSupported(payload,s.body)))throw new Error('UNSUPPORTED_CLAIM');
     const claim=digest(payload);
@@ -81,7 +82,7 @@ export class DomainMemory {
     const sourceMap=new Map(sources.map(s=>[s.id,s]));
     const revisionTable=!!this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='human_memory_revision'").get();
     const parsed=r=>{try{return JSON.parse(r.payload);}catch{return null;}};
-    const explicit=r=>{const p=parsed(r),refs=JSON.parse(r.refs);return p?.entity==='user'&&p.predicate==='preference'&&r.truth==='factual'&&refs.length===1&&sourceMap.has(refs[0])&&this.sourceUsable(agent,refs[0])&&preferenceSupported(p,sourceMap.get(refs[0]).body);};
+    const explicit=r=>{const p=parsed(r),refs=JSON.parse(r.refs);return p?.entity==='user'&&p.predicate==='preference'&&r.truth==='factual'&&refs.length===1&&sourceMap.has(refs[0])&&this.sourceUsable(agent,refs[0])&&!this.sourceIsDevelopmentTest(agent,refs[0])&&preferenceSupported(p,sourceMap.get(refs[0]).body);};
     const restored=[];
     this.journal.transaction(()=>{
       for(const row of rows){
@@ -140,16 +141,44 @@ export class DomainMemory {
     // A corrected/forgotten source must not re-enter through recent raw chat.
     return !s||s.status==='active'&&!this.db.prepare('SELECT 1 FROM extraction_block WHERE agent=? AND source=?').get(agent,s.root);
   }
-  sourceIsDevelopmentTest(agent,id){const row=this.db.prepare("SELECT body FROM source_record WHERE agent=? AND id=? AND kind='user'").get(agent,id);return !!row&&developmentInput(row.body);}
+  sourceIsDevelopmentTest(agent,id){
+    // Read-only classification: records remain visible in the memory manager.
+    // A derived source cannot launder a fixture by replacing its prose. Public
+    // trusted-result text mentioning a software test is not an owner fixture.
+    const seen=new Set();
+    for(let depth=0;typeof id==='string'&&!seen.has(id)&&depth<32;depth++){
+      seen.add(id);const row=this.db.prepare('SELECT id,kind,body,root FROM source_record WHERE agent=? AND id=?').get(agent,id);if(!row)return false;
+      if(row.kind==='user'&&developmentInput(row.body))return true;
+      if(row.kind==='configuration'){
+        let data;try{data=JSON.parse(row.body);}catch{}
+        if(data&&typeof data==='object'&&!Array.isArray(data)&&(data.developmentOnly===true||data.fixture===true||typeof data.predicate==='string'&&/^(?:p\d+|dev|fixture|acceptance)[_-]test(?:[_-]|$)/iu.test(data.predicate)))return true;
+      }
+      if(!row.root||row.root===row.id)return false;id=row.root;
+    }
+    return false;
+  }
+  contextEvidenceUsable(agent,row){
+    // Do not rewrite/deactivate old memories to repair model context. Check the
+    // current evidence on every recall so corrections and withdrawal stay live.
+    let refs,payload;try{refs=typeof row.refs==='string'?JSON.parse(row.refs):row.refs;payload=typeof row.payload==='string'?JSON.parse(row.payload):row.payload;}catch{return false;}
+    if(!Array.isArray(refs)||!refs.length||!payload||typeof payload!=='object'||Array.isArray(payload))return false;
+    const sources=refs.map(ref=>this.db.prepare('SELECT id,kind,body,status,namespace,root FROM source_record WHERE agent=? AND id=?').get(agent,ref));
+    if(sources.some(source=>!source||source.status!=='active'||source.namespace!=='real'||!this.sourceUsable(agent,source.id)||this.sourceIsDevelopmentTest(agent,source.id)))return false;
+    // Older extractors treated questions such as "我喜欢怎样的回答？" as
+    // preferences. A factual preference must satisfy today's source contract;
+    // exact explicit configuration is still allowed and is not reinterpreted.
+    if(row.type==='fact'&&row.truth==='factual'&&payload.entity==='user'&&payload.predicate==='preference'&&!sources.some(source=>source.kind==='configuration'&&source.body===JSON.stringify(payload)||source.kind==='user'&&source.root===source.id&&preferenceSupported(payload,source.body)))return false;
+    return true;
+  }
   eventOverviews(agent,{query='',limit=3,excludeRefs=[]}={}){
     if(!Number.isInteger(limit)||limit<0||limit>8||typeof query!=='string'||query.length>1000)throw new Error('INVALID_QUERY');
     if(!limit)return [];
     const now=this.now(agent),excluded=new Set(excludeRefs),terms=retrievalTerms(query),groups=new Map();
     const rows=this.db.prepare("SELECT m.id,m.refs,m.valid_from,s.id AS source_id,s.body,s.occurred FROM memory_record m JOIN source_record s ON s.agent=m.agent AND EXISTS(SELECT 1 FROM json_each(m.refs) r WHERE r.value=s.id) WHERE m.agent=? AND m.type='episode' AND m.namespace='real' AND m.status='active' AND (m.valid_to IS NULL OR m.valid_to>?) AND s.kind='user' AND s.namespace='real' AND s.status='active' AND s.root=s.id ORDER BY s.occurred DESC,m.id LIMIT 128").all(agent,now);
     for(const row of rows){
-      if(excluded.has(row.source_id)||!this.sourceUsable(agent,row.source_id)||developmentInput(row.body))continue;
+      if(excluded.has(row.source_id)||!this.sourceUsable(agent,row.source_id)||this.sourceIsDevelopmentTest(agent,row.source_id))continue;
       let refs;try{refs=JSON.parse(row.refs);}catch{continue;}
-      if(!refs.every(ref=>this.sourceUsable(agent,ref)&&this.db.prepare("SELECT 1 FROM source_record WHERE agent=? AND id=? AND status='active'").get(agent,ref)))continue;
+      if(!refs.every(ref=>this.sourceUsable(agent,ref)&&!this.sourceIsDevelopmentTest(agent,ref)&&this.db.prepare("SELECT 1 FROM source_record WHERE agent=? AND id=? AND status='active'").get(agent,ref)))continue;
       const score=terms.filter(t=>row.body.toLowerCase().includes(t)).length;
       if(this.lifecycle){const memory=this.db.prepare('SELECT id,type,payload,valid_from FROM memory_record WHERE agent=? AND id=?').get(agent,row.id);if(memory&&this.lifecycle.overlay(agent,memory).tier==='cold'&&!score)continue;}
       const topics=topicKeys(row.body),key=Math.floor(row.occurred/86400000)+':'+(topics[0]??'conversation');
@@ -164,7 +193,8 @@ export class DomainMemory {
     const sameSlot=other=>other.id!==row.id&&other.type===row.type&&payload?.entity&&other.payload?.entity===payload.entity&&payload.predicate&&other.payload.predicate===payload.predicate&&(!preference||preferenceKey(other.payload.value)===preferenceKey(payload.value));
     const conflict=active.filter(sameSlot).filter(other=>JSON.stringify(other.payload)!==JSON.stringify(payload)).slice(0,4).map(other=>other.id);
     const previous=[];
-    if(row.type==='fact'&&payload?.entity&&payload?.predicate)for(const r of this.db.prepare("SELECT id,payload FROM memory_record WHERE agent=? AND type='fact' AND namespace='real' AND status='superseded' ORDER BY valid_from DESC LIMIT 128").all(agent)){
+    if(row.type==='fact'&&payload?.entity&&payload?.predicate)for(const r of this.db.prepare("SELECT id,type,payload,truth,refs FROM memory_record WHERE agent=? AND type='fact' AND namespace='real' AND status='superseded' ORDER BY valid_from DESC LIMIT 128").all(agent)){
+      if(!this.contextEvidenceUsable(agent,r))continue;
       let p;try{p=JSON.parse(r.payload);}catch{continue;}
       if(p?.entity===payload.entity&&p.predicate===payload.predicate&&(!preference||preferenceKey(p.value)===preferenceKey(payload.value))){previous.push(r.id);if(previous.length===4)break;}
     }
@@ -180,9 +210,7 @@ export class DomainMemory {
     for(const type of TYPES){if(excludeTypes.includes(type))continue;
       const relevance=terms.length?'('+terms.map(()=>'(instr(lower(payload),?)>0)').join('+')+') DESC,':'';
       for(const r of this.db.prepare("SELECT id,type,payload,truth,confidence,refs,version,valid_from,valid_to FROM memory_record WHERE agent=? AND namespace='real' AND type=? AND status='active' AND (valid_to IS NULL OR valid_to>?) ORDER BY "+relevance+"valid_from DESC,id DESC LIMIT 512").all(agent,type,now,...terms)){
-        const refs=JSON.parse(r.refs);if(!refs.every(ref=>this.db.prepare("SELECT 1 FROM source_record WHERE id=? AND agent=? AND status='active'").get(ref,agent)))continue;
-        if(!refs.every(ref=>this.sourceUsable(agent,ref)))continue;
-        if(['episode','fact','working','identity'].includes(type)&&refs.some(ref=>this.sourceIsDevelopmentTest(agent,ref)))continue;
+        const refs=JSON.parse(r.refs);if(!this.contextEvidenceUsable(agent,r))continue;
         if(type==='episode'&&refs.some(ref=>excluded.has(ref)))continue;
         const payload=JSON.parse(r.payload),text=r.payload.toLowerCase(),matched=terms.reduce((n,term)=>n+(text.includes(term)?1:0),0);
         const candidate={...r,payload,refs,score:matched,layer:['identity','fact'].includes(type)?'long-term':type==='episode'?'episodic':type==='skill'?'learning':'working'},annotated=this.lifecycle?.annotate(agent,[candidate],query,{touch:false})[0]??candidate;
@@ -200,11 +228,15 @@ export class DomainMemory {
   }
   context(agent,options={}){
     const {includePersona=true,...recall}=options,persona=includePersona?this.persona(agent):null,now=this.now(agent);
-    const goals=this.db.prepare("SELECT id,description,status,expires,version,refs FROM goal_record WHERE agent=? AND status IN ('proposed','active','blocked','needs-evidence','awaiting-review') AND expires>? ORDER BY CASE status WHEN 'active' THEN 0 WHEN 'needs-evidence' THEN 1 WHEN 'awaiting-review' THEN 2 WHEN 'blocked' THEN 3 ELSE 4 END,expires,id LIMIT 8").all(agent,now).filter(g=>JSON.parse(g.refs).every(ref=>this.db.prepare("SELECT 1 FROM source_record WHERE id=? AND agent=? AND status='active'").get(ref,agent)&&this.sourceUsable(agent,ref))).map(g=>({...g,refs:JSON.parse(g.refs)}));
-    const summaries=(this.lifecycle?.summaries(agent,recall.query??'',2)??[]).filter(summary=>{
+    const goals=this.db.prepare("SELECT id,description,status,expires,version,refs FROM goal_record WHERE agent=? AND status IN ('proposed','active','blocked','needs-evidence','awaiting-review') AND expires>? ORDER BY CASE status WHEN 'active' THEN 0 WHEN 'needs-evidence' THEN 1 WHEN 'awaiting-review' THEN 2 WHEN 'blocked' THEN 3 ELSE 4 END,expires,id LIMIT 8").all(agent,now).filter(g=>JSON.parse(g.refs).every(ref=>this.db.prepare("SELECT 1 FROM source_record WHERE id=? AND agent=? AND status='active'").get(ref,agent)&&this.sourceUsable(agent,ref)&&!this.sourceIsDevelopmentTest(agent,ref))).map(g=>({...g,refs:JSON.parse(g.refs)}));
+    // Inspect a bounded larger candidate pool before taking two summaries:
+    // filtered legacy test summaries must not starve valid older summaries.
+    const summaries=(this.lifecycle?.summaries(agent,recall.query??'',12)??[]).filter(summary=>{
+      if(!Array.isArray(summary.refs)||summary.refs.some(ref=>this.sourceIsDevelopmentTest(agent,ref)||!this.sourceUsable(agent,ref)))return false;
+      if(!Array.isArray(summary.memoryIds)||!summary.memoryIds.every(id=>{const memory=this.db.prepare('SELECT id,type,payload,truth,refs FROM memory_record WHERE agent=? AND id=?').get(agent,id);return memory&&this.contextEvidenceUsable(agent,memory);}))return false;
       if(recall.query)return true;
       return summary.memoryIds.every(id=>{const memory=this.db.prepare('SELECT id,type,payload,valid_from FROM memory_record WHERE agent=? AND id=?').get(agent,id);return memory&&this.lifecycle.overlay(agent,memory).tier!=='cold';});
-    }).map(summary=>({id:summary.id,batchId:summary.batchId,title:summary.title,text:summary.text,kind:'derived-model-summary',truth:'inferred',semanticValidation:'unverified-model-inference',temporalValidity:summary.temporalValidity,created:summary.created,memoryIds:summary.memoryIds,refs:summary.refs,quotes:summary.quotes.slice(0,4).map(quote=>({sourceId:quote.sourceId,text:quote.text.slice(0,160)})),originalsRetained:true,ownerFact:false}));
+    }).slice(0,2).map(summary=>({id:summary.id,batchId:summary.batchId,title:summary.title,text:summary.text,kind:'derived-model-summary',truth:'inferred',semanticValidation:'unverified-model-inference',temporalValidity:summary.temporalValidity,created:summary.created,memoryIds:summary.memoryIds,refs:summary.refs,quotes:summary.quotes.slice(0,4).map(quote=>({sourceId:quote.sourceId,text:quote.text.slice(0,160)})),originalsRetained:true,ownerFact:false}));
     return {...(persona?{persona:{version:persona.version,core:persona.core,developmentVersion:persona.developmentVersion,development:persona.development}}:{}),memories:this.recall(agent,{limit:this.journal.value(agent,'humanExecution',{}).context?.memoryLimit??8,...recall}),summaries,goals};
   }
   purgeAgent(agent){this.development?.purge(agent);this.lifecycle?.purgeAgent(agent);if(this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='human_action'").get())this.db.prepare('DELETE FROM human_action WHERE agent=?').run(agent);if(this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='human_goal_plan'").get())this.db.prepare('DELETE FROM human_goal_plan WHERE agent=?').run(agent);for(const table of ['source_record','memory_record','extraction_block','persona_change','goal_record'])this.db.prepare('DELETE FROM '+table+' WHERE agent=?').run(agent);this.db.prepare('DELETE FROM dependency WHERE source NOT IN (SELECT id FROM source_record) AND source NOT IN (SELECT id FROM memory_record)').run();}

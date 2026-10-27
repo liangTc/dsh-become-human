@@ -15,7 +15,7 @@ const tabProperties={targetId:idSchema,expectedOrigin:{type:'string',maxLength:2
 const tabRequired=['targetId','expectedOrigin'];
 
 export function validateBridgeInput(operation,input){
-  if(operation==='dsh-session-list'){object(input,['limit']);return {limit:input.limit===undefined?25:integer(input.limit,1,100)};}
+  if(operation==='dsh-session-list'){object(input,['limit','offset']);return {limit:input.limit===undefined?25:integer(input.limit,1,100),...(input.offset===undefined?{}:{offset:integer(input.offset,0,100000)})};}
   if(operation==='dsh-session-read'){
     const value=sessionInput(input,['limit','beforeSeq','throughSeq']);
     value.limit=input.limit===undefined?20:integer(input.limit,1,50);
@@ -41,7 +41,7 @@ export function validateBridgeInput(operation,input){
 export function registerBridgeCapabilities(registry,{request,status}={}){
   if(typeof registry?.register!=='function'||typeof request!=='function')fail('INVALID_CAPABILITY_BRIDGE');
   const sessionProperties={sessionId:idSchema},entries=[
-    ['dsh-session-list','列出读取授权范围内的其他 DSH 会话，支持指定会话或 Host 可见的全部普通会话，不激活 Agent',schema({limit:{type:'integer',minimum:1,maximum:100}}),'read','dsh-session',()=>({kind:'dsh-session',access:'configured-visible-sessions'}),10000,64000,true],
+    ['dsh-session-list','列出读取授权范围内的其他 DSH 会话，支持指定会话或 Host 可见的全部普通会话，不激活 Agent',schema({limit:{type:'integer',minimum:1,maximum:100},offset:{type:'integer',minimum:0,maximum:100000}}),'read','dsh-session',()=>({kind:'dsh-session',access:'configured-visible-sessions'}),10000,64000,true],
     ['dsh-session-read','读取指定 DSH 会话的可见聊天文本，不读取推理或激活 Agent',schema({...sessionProperties,limit:{type:'integer',minimum:1,maximum:50},beforeSeq:{type:'integer',minimum:0},throughSeq:{type:'integer',minimum:-1}},['sessionId']),'read','dsh-session',input=>({kind:'dsh-session',sessionId:input.sessionId}),15000,96000,true],
     ['dsh-session-prompt','向指定其他 DSH 会话排队发送任务；可能启动独立模型工作，回执仅表示接收',schema({...sessionProperties,text:{type:'string',minLength:1,maxLength:12000}},['sessionId','text']),'write','dsh-session',input=>({kind:'dsh-session',sessionId:input.sessionId,externalModel:true}),15000,8000,false],
     ['dsh-session-cancel','请求取消指定其他 DSH 会话当前工作，保留其待处理队列',schema(sessionProperties,['sessionId']),'write','dsh-session',input=>({kind:'dsh-session',sessionId:input.sessionId}),10000,8000,false],

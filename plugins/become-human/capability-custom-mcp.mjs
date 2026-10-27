@@ -42,7 +42,13 @@ class CustomMcpProvider {
     signal?.throwIfAborted();if(this.closed||this.exitUnconfirmed)fail('MCP_PROVIDER_CLOSED');if(this.busy)fail('CUSTOM_MCP_BUSY');this.busy=true;
     const deadline=AbortSignal.any([...(signal?[signal]:[]),AbortSignal.timeout(this.server.timeoutMs)]);
     try{await this.connect(deadline);const value=await callback(this.client,deadline);deadline.throwIfAborted();this.lastError=null;return value;}
-    catch(error){this.lastError=deadline.aborted?(signal?.aborted?'MCP_REQUEST_CANCELLED':'MCP_REQUEST_TIMEOUT'):safeCode(error);await this.disconnect();fail(this.lastError);}
+    catch(error){
+      // A parent capability deadline is also a timeout, while an explicit owner
+      // abort is cancellation. Transport close callbacks must not replace this
+      // operation's diagnostic while disconnect() is awaiting process exit.
+      const code=deadline.aborted?(signal?.aborted&&signal.reason?.name!=='TimeoutError'?'MCP_REQUEST_CANCELLED':'MCP_REQUEST_TIMEOUT'):safeCode(error);
+      this.lastError=code;await this.disconnect();this.lastError=code;fail(code);
+    }
     finally{try{if(this.server.transport==='http')await this.disconnect();}finally{this.busy=false;}}
   }
   async connect(signal){

@@ -19,6 +19,27 @@ const visibleChatEvent=event=>{
   if(event.type==='user/message'&&message?.source?.kind!=='user')return false;
   return typeof message?.content==='string'?!!message.content:Array.isArray(message?.content)&&message.content.some(part=>part?.type==='text'&&typeof part.text==='string'&&!!part.text);
 };
+const chatText=event=>{
+  const message=event.type==='assistant/message'?event.data?.message:event.data,content=message?.content;
+  return typeof content==='string'?content:content.filter(part=>part?.type==='text'&&typeof part.text==='string').map(part=>part.text).join('\n');
+};
+const observationRecords=events=>{
+  if(!Array.isArray(events))fail('DSH_SESSION_READ_UNAVAILABLE');
+  const records=events.filter(visibleChatEvent).map(event=>{
+    if(!Number.isSafeInteger(event.seq)||event.seq<0)fail('DSH_SESSION_READ_UNAVAILABLE');
+    const message=event.type==='assistant/message'?event.data?.message:event.data;
+    return {seq:event.seq,time:event.time,role:event.type==='user/message'?'user':'assistant',text:chatText(event),sourceKind:message?.source?.kind??'model'};
+  }).sort((a,b)=>a.seq-b.seq);
+  if(records.some((row,index)=>index>0&&row.seq===records[index-1].seq))fail('DSH_SESSION_READ_UNAVAILABLE');
+  return records;
+};
+const observationDigest=(sessionId,records,throughSeq)=>{
+  const hash=createHash('sha256').update(JSON.stringify({version:1,sessionId})+'\n');
+  for(const row of records){if(row.seq>throughSeq)break;hash.update(JSON.stringify(row)+'\n');}
+  return hash.digest('hex');
+};
+const sensitiveObservation=text=>/(?:\bsk-[A-Za-z0-9_-]{12,}|\bBearer\s+[A-Za-z0-9._~+/-]{12,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|(?:api[_-]?key|access[_-]?token|password|secret|authorization|cookie|密码|密钥|令牌)["']?\s*[:=]\s*["']?[A-Za-z0-9_./+=-]{12,})/iu.test(text);
+const clipObservation=(text,limit)=>{let end=Math.min(text.length,limit);if(end<text.length&&/[\uD800-\uDBFF]/u.test(text[end-1]??''))end--;return text.slice(0,end);};
 const hostRead=async operation=>{
   try{return await operation();}catch(cause){
     const code=cause?.code;
@@ -80,11 +101,15 @@ export function createHostCapabilities(ctx,{getHumanSessionId,home}={}){
     await assertAllowed(sessionId,write);assertCurrent(signal,expected);return inspection;
   }
   async function sessionList(input,signal,expected){
-    only(input,['limit']);const limit=input.limit===undefined?25:number(input.limit,1,100);
+    only(input,['limit','offset','verifySessionIds']);const limit=input.limit===undefined?25:number(input.limit,1,100),offset=input.offset===undefined?0:number(input.offset,0,100000);
+    if(input.verifySessionIds!==undefined&&(!Array.isArray(input.verifySessionIds)||input.verifySessionIds.length>64))fail('INVALID_CAPABILITY_INPUT');
+    const verifyIds=[...new Set((input.verifySessionIds??[]).map(identifier))].sort();
     if(!settings.sessionReadEnabled)fail('CAPABILITY_DISABLED');
-    const rows=(await visibleSessions(signal,expected)).filter(row=>scopeFor(false)==='all'||settings.allowedSessionIds.includes(row.sessionId));
-    const items=[];let used=0;for(const row of rows.slice(0,limit)){const item={sessionId:row.sessionId,updatedAt:row.updatedAt,running:row.running===true,agentAvailable:row.agentAvailable===true,blank:row.blank===true,...(row.cwd?{cwd:boundedText(row.cwd,256)}:{})};used+=JSON.stringify(item).length;if(used>12000)break;items.push(item);}
-    return {items,total:rows.length,hasMore:rows.length>items.length,accessScope:settings.sessionReadScope,sessionMode:'external-resources',activatedAgent:false};
+    const rows=[...new Map((await visibleSessions(signal,expected)).filter(row=>scopeFor(false)==='all'||settings.allowedSessionIds.includes(row.sessionId)).map(row=>[row.sessionId,row])).values()].sort((a,b)=>a.sessionId<b.sessionId?-1:a.sessionId>b.sessionId?1:0);
+    const items=[];let used=0;for(const row of rows.slice(offset,offset+limit)){const item={sessionId:row.sessionId,updatedAt:row.updatedAt,running:row.running===true,agentAvailable:row.agentAvailable===true,blank:row.blank===true,...(row.cwd?{cwd:boundedText(row.cwd,256)}:{})};used+=JSON.stringify(item).length;if(used>12000)break;items.push(item);}
+    const hasMore=offset+items.length<rows.length;
+    const visibleIds=new Set(rows.map(row=>row.sessionId));
+    return {items,total:rows.length,hasMore,offset,nextOffset:hasMore?offset+items.length:null,verifiedVisibleSessionIds:verifyIds.filter(id=>visibleIds.has(id)),missingSessionIds:verifyIds.filter(id=>!visibleIds.has(id)),accessScope:settings.sessionReadScope,sessionMode:'external-resources',activatedAgent:false};
   }
   async function sessionRead(input,signal,expected){
     only(input,['sessionId','limit','beforeSeq','throughSeq']);const sessionId=identifier(input.sessionId),limit=input.limit===undefined?20:number(input.limit,1,50);
@@ -113,6 +138,28 @@ export function createHostCapabilities(ctx,{getHumanSessionId,home}={}){
     const firstSeq=budgetCut??page?.records?.[0]?.event?.seq??Math.min(input.beforeSeq??throughSeq+1,throughSeq+1);
     const hasMore=(inspection?.events??[]).some(event=>event.seq<firstSeq&&event.seq<=throughSeq&&visibleChatEvent(event));
     return {sessionId,throughSeq,messages,hasMore,nextBeforeSeq:hasMore&&Number.isSafeInteger(firstSeq)?firstSeq:null,truncated,activatedAgent:false,source:'external-dsh-session',untrustedContent:true};
+  }
+  async function sessionObserve(input,signal,expected){
+    only(input,['sessionId','afterSeq','prefixDigest','limit']);const sessionId=identifier(input.sessionId),afterSeq=number(input.afterSeq,-1,Number.MAX_SAFE_INTEGER),limit=input.limit===undefined?10:number(input.limit,1,30);
+    if(input.prefixDigest!==undefined&&(typeof input.prefixDigest!=='string'||!/^[a-f0-9]{64}$/iu.test(input.prefixDigest)))fail('INVALID_CAPABILITY_INPUT');
+    const inspection=await inspectAllowed(sessionId,false,signal,expected),events=inspection.events,records=observationRecords(events),throughSeq=events.at(-1)?.seq??-1;
+    if(!Number.isSafeInteger(throughSeq)||throughSeq< -1||records.some(row=>row.seq>throughSeq))fail('DSH_SESSION_READ_UNAVAILABLE');
+    const reset=reason=>({sessionId,messages:[],afterSeq,throughSeq,nextAfterSeq:-1,hasMore:false,prefixDigest:observationDigest(sessionId,[], -1),resetRequired:true,resetReason:reason,historyTruncated:false,truncated:false,activatedAgent:false,source:'external-dsh-session',untrustedContent:true});
+    if(afterSeq>throughSeq)return reset('cursor-beyond-current-log');
+    if(afterSeq>=0&&input.prefixDigest===undefined)return reset('prefix-digest-required');
+    if(input.prefixDigest!==undefined&&input.prefixDigest.toLowerCase()!==observationDigest(sessionId,records,afterSeq))return reset('visible-prefix-changed');
+    const pending=records.filter(row=>row.seq>afterSeq),window=afterSeq===-1?pending.slice(-limit):pending.slice(0,limit),messages=[];let used=0;
+    for(const row of window){
+      const filtered=sensitiveObservation(row.text),full=filtered?'[敏感内容已过滤]':row.text,text=clipObservation(full,Math.min(4000,20000-used));if(!text)break;
+      used+=text.length;messages.push({...row,text,...(filtered?{filtered:true}:{}),...(text.length<full.length?{truncated:true}:{})});
+    }
+    const historyTruncated=afterSeq===-1&&pending.length>window.length,last=messages.at(-1)?.seq??afterSeq,hasMore=records.some(row=>row.seq>last),nextAfterSeq=hasMore?last:throughSeq;
+    // Inspect is a cold persisted-log read. Verify the exact captured prefix
+    // once more after I/O, as well as the live grant/visibility, before release.
+    const final=await inspectAllowed(sessionId,false,signal,expected),finalRecords=observationRecords(final.events),finalSeq=final.events.at(-1)?.seq??-1;
+    if(finalSeq<throughSeq||observationDigest(sessionId,records,throughSeq)!==observationDigest(sessionId,finalRecords,throughSeq))return reset('visible-prefix-changed-during-read');
+    await assertAllowed(sessionId,false);assertCurrent(signal,expected);
+    return {sessionId,messages,afterSeq,throughSeq,nextAfterSeq,hasMore,prefixDigest:observationDigest(sessionId,records,nextAfterSeq),resetRequired:false,historyTruncated,truncated:messages.some(row=>row.truncated===true)||messages.length<window.length,activatedAgent:false,source:'external-dsh-session',untrustedContent:true};
   }
   async function sessionWrite(operation,input,context,signal,expected){
     only(input,operation==='dsh-session-prompt'?['sessionId','text']:['sessionId']);const sessionId=identifier(input.sessionId);
@@ -152,6 +199,7 @@ export function createHostCapabilities(ctx,{getHumanSessionId,home}={}){
       try{assertCurrent(scoped.signal,expected);
         if(operation==='dsh-session-list')return await sessionList(input,scoped.signal,expected);
         if(operation==='dsh-session-read')return await sessionRead(input,scoped.signal,expected);
+        if(operation==='dsh-session-observe')return await sessionObserve(input,scoped.signal,expected);
         if(['dsh-session-prompt','dsh-session-cancel'].includes(operation))return await sessionWrite(operation,input,context,scoped.signal,expected);
         if(typeof operation==='string'&&operation.startsWith('browser-tab-'))return await browser.handle({operation,input,context},scoped.signal);
         fail('CAPABILITY_NOT_FOUND');

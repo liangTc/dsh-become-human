@@ -3,7 +3,7 @@ import {boardOperations,controlBoard,prepareMatterRetry} from './cognition-runti
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import z from '@deepseek-ai/schemastery';
-import {conversationPolicy,conversationalText,wantsSources} from './conversation.mjs';
+import {conversationPolicy,conversationalText,conversationOptions} from './conversation.mjs';
 import {getDshRuntimeVersion} from '@deepseek-ai/dsh-app-boot';
 import {HumanFactory} from './driver.mjs';
 import {DeletionLab} from './deletion.mjs';
@@ -11,9 +11,10 @@ import {SessionRetirement} from './retirement.mjs';
 import {expressionSkills,expressionStatus} from './expression.mjs';
 import {supersedeOwnerBatch} from './owner-turns.mjs';
 import {replyPresentation} from './presentation.mjs';
+import {HumanMedia} from './multimodal.mjs';
 export const name='become-human';
-export const inject=['agents','sessions','sessionPersistence','sessionProjections','llm','connection','webServer','workspaceRegistry'];
-export const Config=z.object({intervalMs:z.number().default(15000),tokenBudget:z.number().default(12000),localQuotaEnabled:z.boolean().default(true),maxCycles:z.number().default(3),maxTokens:z.number().default(512),requestTimeoutMs:z.number().default(45000),interactiveOnly:z.boolean().default(false),provider:z.string(),model:z.string(),reasoningEffort:z.string(),budgetRound:z.string(),allowedRoutes:z.array(z.object({provider:z.string(),model:z.string()})).default([]),modelCapabilities:z.array(z.object({provider:z.string(),model:z.string(),adapter:z.union(['pi-ai','deepseek-native']),reasoningEfforts:z.array(z.union(['off','low','medium','high','max']))})).default([]),domainEnabled:z.boolean().default(true),sharedBudgetGuard:z.boolean().default(true)});
+export const inject=['agents','sessions','sessionPersistence','sessionProjections','llm','connection','webServer','workspaceRegistry','attachments'];
+export const Config=z.object({intervalMs:z.number().default(15000),tokenBudget:z.number().default(12000),localQuotaEnabled:z.boolean().default(true),maxCycles:z.number().default(3),maxTokens:z.number().default(512),requestTimeoutMs:z.number().default(45000),interactiveOnly:z.boolean().default(false),provider:z.string(),model:z.string(),reasoningEffort:z.string(),budgetRound:z.string(),allowedRoutes:z.array(z.object({provider:z.string(),model:z.string()})).default([]),modelCapabilities:z.array(z.object({provider:z.string(),model:z.string(),adapter:z.union(['pi-ai','deepseek-native']),inputModalities:z.array(z.union(['text','image'])).required(false),reasoningEfforts:z.array(z.union(['off','low','medium','high','max']))})).default([]),domainEnabled:z.boolean().default(true),sharedBudgetGuard:z.boolean().default(true)});
 export async function apply(ctx,config){
   let expressionRegistryRegistered=false;
   ctx.inject(['skills'],scoped=>{
@@ -32,6 +33,7 @@ export async function apply(ctx,config){
     const factory=scoped.becomeHuman,journal=factory.journal;
     scoped.inject(['skills'],s=>{factory.management.skills.registry=s.skills;if(factory.controllerSessionId)factory.management.skills.refreshRegistry(factory.controllerSessionId);});
     journal.safety=storage.ledger;
+    factory.media=new HumanMedia(journal,factory.domain,scoped.attachments);
     const deletionLab=await new DeletionLab(path.join(root,'deletion-lab'),journal).init();
     scoped.effect(()=>()=>deletionLab.close());let deletionPreview=null;
     const idFile=path.join(root,'agent.json');let id;
@@ -43,6 +45,8 @@ export async function apply(ctx,config){
     await retirement.recover();
     for(const row of storage.ledger.rows.filter(r=>r.kind==='retire')){const data=JSON.parse(row.data);if(id===data.oldId)id=data.newId;}
     factory.controllerSessionId=id;
+    // Persona reconciliation also runs on a new installation, before agent creation.
+    journal.ensure(id);
     factory.management.reconcileProfile(id);
     await factory.customMcpCapabilities.sync(id);
     scoped.provide('humanCapabilities',Object.freeze({contractVersion:1,register:(name,descriptor)=>factory.tools.register(name,descriptor),catalog:()=>factory.tools.catalog(id)}));
@@ -59,7 +63,7 @@ export async function apply(ctx,config){
     const bootId=crypto.randomUUID();
     const messageExists=messageId=>agent.session.snapshotEvents().some(e=>e.type==='user/message'&&e.data.id===messageId||e.type==='agent/inbox/spliced'&&e.data.inserted.some(m=>m.id===messageId));
     async function deliverRequest(row){
-      if(!messageExists(row.message_id))agent.send({id:row.message_id,role:'user',source:{kind:'human'},content:[{type:'text',text:row.text}]},journal.value(id,'target:'+row.request_id,'next-turn'),false);
+      if(!messageExists(row.message_id))agent.send({id:row.message_id,role:'user',source:{kind:'human'},content:factory.media.messageContent(id,row.message_id,row.text)},journal.value(id,'target:'+row.request_id,'next-turn'),false);
       await agent.flush();journal.reconcile(agent.session);
       const message=agent.session.snapshotEvents().find(e=>e.type==='user/message'&&e.data.id===row.message_id)?.data??[...agent.inbox.nextStep,...agent.inbox.nextTurn].find(m=>m.id===row.message_id);if(message&&!agent.active){factory.domain.observe(id,message);}
       journal.db.prepare("UPDATE user_request SET status='committed' WHERE agent=? AND request_id=?").run(id,row.request_id);
@@ -78,30 +82,42 @@ export async function apply(ctx,config){
     let lastSafeState,retirementPreview=null;
     function state(){
       if(storage.ledger.retired(id))return {...lastSafeState,revision:journal.db.prepare('SELECT total_changes() AS n').get().n+storage.ledger.rows.length,retiring:true,management:null,desired:'paused',status:'maintenance',agentBusy:true,canThink:false,messages:[],reminders:[],attempts:[],audit:[],persona:'',memory:'',memories:[],personaState:null,inbox:0,retirement:{operations:retirement.status(),preview:null},safety:storage.ledger.status()};
-      const control=journal.get(id),rows=journal.db.prepare('SELECT * FROM outbox WHERE agent=? ORDER BY seq DESC LIMIT 30').all(id).reverse().map(row=>{const request=row.event_key?.startsWith('user:')?journal.db.prepare('SELECT request_id FROM user_request WHERE agent=? AND message_id=?').get(id,row.event_key.slice(5)):null;return {...row,origin:request?journal.value(id,'origin:'+request.request_id,'web'):row.kind==='status'?'system':'agent'};});
-      for(const row of rows)if(row.kind==='assistant'){const owner=journal.db.prepare("SELECT text FROM outbox WHERE agent=? AND kind='user' AND seq<? ORDER BY seq DESC LIMIT 1").get(id,row.seq);row.displayText=conversationalText(row.text,{includeSources:wantsSources(owner?.text??'')});const event=agent.session.snapshotEvents().find(e=>e.type==='assistant/message'&&e.data.message.id===row.event_key?.slice(10));row.bubbleParts=replyPresentation(journal,id,event,row.displayText).parts;}
+      const control=journal.get(id),rows=journal.db.prepare('SELECT * FROM outbox WHERE agent=? ORDER BY seq DESC LIMIT 30').all(id).reverse().map(row=>{const request=row.event_key?.startsWith('user:')?journal.db.prepare('SELECT request_id FROM user_request WHERE agent=? AND message_id=?').get(id,row.event_key.slice(5)):null;return {...row,attachments:row.kind==='user'?factory.media.messageDescriptors(id,row.event_key?.slice(5)):[],origin:request?journal.value(id,'origin:'+request.request_id,'web'):row.kind==='status'?'system':'agent'};});
+      for(const row of rows)if(row.kind==='assistant'){const owner=journal.db.prepare("SELECT text FROM outbox WHERE agent=? AND kind='user' AND seq<? ORDER BY seq DESC LIMIT 1").get(id,row.seq);row.displayText=conversationalText(row.text,conversationOptions(owner?.text??''));const event=agent.session.snapshotEvents().find(e=>e.type==='assistant/message'&&e.data.message.id===row.event_key?.slice(10));row.bubbleParts=replyPresentation(journal,id,event,row.displayText).parts;}
       const budgetRemaining=storage.ledger.budget.allowance-(storage.ledger.used()-storage.ledger.budget.base);
       const attempts=journal.db.prepare('SELECT id,turn,state,trigger,config,usage,usage_confidence,error,text_chars,reasoning_chars,failure_facts,started,ended FROM attempt WHERE agent=? ORDER BY started DESC LIMIT 8').all(id);
       const autonomy=factory.autonomy.snapshot(id),autonomyEnabled=autonomy.settings.enabled;
-      return lastSafeState={plugin:'dsh-become-human',version:'0.7.0-beta.5',expression:expressionStatus(expressionRegistryRegistered),ownerInputRevision:journal.db.prepare('SELECT COALESCE(max(rowid),0) AS n FROM user_request WHERE agent=?').get(id).n,management:factory.management.snapshot(id),bootId,revision:journal.db.prepare('SELECT total_changes() AS n').get().n+storage.ledger.rows.length,runtime:runtimeVersion,sessionId:id,provider:config.provider,model:config.model,reasoningEffort:config.reasoningEffort??'provider-default',retryableInput:!!retryCandidate(),agentBusy:!!agent.active,activeLane:agent.activeLane??null,canThink:autonomyEnabled||config.interactiveOnly||config.localQuotaEnabled===false||budgetRemaining>=1024+config.maxTokens,localQuotaEnabled:config.localQuotaEnabled!==false,desired:control.desired,cancelEpoch:control.epoch,pauseRevision:journal.value(id,'pauseRevision',0),status:agent.status,used:storage.ledger.used()-storage.ledger.budget.base,cumulativeUsed:storage.ledger.used(),budgetRound:journal.value(id,'budgetRound','legacy'),budget:config.localQuotaEnabled===false?null:config.tokenBudget,remaining:journal.value(id,'remaining',0),cycleLimit:journal.value(id,'driveMode','bounded')==='continuous'?null:autonomyEnabled?1:config.maxCycles===0?null:config.maxCycles,driveMode:journal.value(id,'driveMode','bounded'),nextTickAt:control.next_tick,longRun:journal.longRunStats(id),successes:journal.value(id,'successes',0),intervalMs:factory.config.intervalMs,interactiveOnly:autonomyEnabled?false:config.interactiveOnly,requestTimeoutMs:config.requestTimeoutMs,inbox:agent.inbox.nextStep.length+agent.inbox.nextTurn.length,lastUsage:journal.value(id,'lastUsage',null),lastUsageConfidence:journal.value(id,'lastUsageConfidence','legacy-unverified'),lastError:journal.value(id,'lastError',null),stopReason:journal.value(id,'stopReason',null),persona:factory.domain.persona(id).core,memory:journal.value(id,'memory','尚无简记。'),receipt:journal.value(id,'receipt',0),messages:rows,attempts,responseRecovery:{pending:journal.staged(id).length,committed:journal.db.prepare("SELECT count(*) AS n FROM response_stage WHERE agent=? AND state='committed'").get(id).n},deletion:{...deletionLab.status(),preview:deletionPreview?.expires>Date.now()?deletionPreview:null},safety:storage.ledger.status(),retirement:{operations:retirement.status(),preview:retirementPreview?.expires>Date.now()?retirementPreview:null},memories:factory.domain.list(id,{limit:20}),personaState:factory.domain.persona(id),goals:factory.domain.context(id).goals,reminders:factory.reminders.list(id),autonomy,modelGate:{inflight:factory.inflight,unbudgetedCalls:'denied',tools:autonomyEnabled?'public-research-and-exact-approved-report':'disabled',nativeUpload:'disabled',fork:'disabled',embedding:'disabled'},audit:journal.db.prepare('SELECT seq,kind,data FROM audit WHERE agent=? ORDER BY seq DESC LIMIT 12').all(id)};
+      return lastSafeState={workObservation:factory.workObservation.indicator(id),plugin:'dsh-become-human',version:'0.7.0-beta.6',expression:expressionStatus(expressionRegistryRegistered),ownerInputRevision:journal.db.prepare('SELECT COALESCE(max(rowid),0) AS n FROM user_request WHERE agent=?').get(id).n,management:factory.management.snapshot(id),bootId,revision:journal.db.prepare('SELECT total_changes() AS n').get().n+storage.ledger.rows.length,runtime:runtimeVersion,sessionId:id,provider:config.provider,model:config.model,reasoningEffort:config.reasoningEffort??'provider-default',retryableInput:!!retryCandidate(),agentBusy:!!agent.active,activeLane:agent.activeLane??null,canThink:autonomyEnabled||config.interactiveOnly||config.localQuotaEnabled===false||budgetRemaining>=1024+config.maxTokens,localQuotaEnabled:config.localQuotaEnabled!==false,desired:control.desired,cancelEpoch:control.epoch,pauseRevision:journal.value(id,'pauseRevision',0),status:agent.status,used:storage.ledger.used()-storage.ledger.budget.base,cumulativeUsed:storage.ledger.used(),budgetRound:journal.value(id,'budgetRound','legacy'),budget:config.localQuotaEnabled===false?null:config.tokenBudget,remaining:journal.value(id,'remaining',0),cycleLimit:journal.value(id,'driveMode','bounded')==='continuous'?null:autonomyEnabled?1:config.maxCycles===0?null:config.maxCycles,driveMode:journal.value(id,'driveMode','bounded'),nextTickAt:control.next_tick,longRun:journal.longRunStats(id),successes:journal.value(id,'successes',0),intervalMs:factory.config.intervalMs,interactiveOnly:autonomyEnabled?false:config.interactiveOnly,requestTimeoutMs:config.requestTimeoutMs,inbox:agent.inbox.nextStep.length+agent.inbox.nextTurn.length,lastUsage:journal.value(id,'lastUsage',null),lastUsageConfidence:journal.value(id,'lastUsageConfidence','legacy-unverified'),lastError:journal.value(id,'lastError',null),stopReason:journal.value(id,'stopReason',null),persona:factory.domain.persona(id).core,memory:journal.value(id,'memory','尚无简记。'),receipt:journal.value(id,'receipt',0),messages:rows,attempts,responseRecovery:{pending:journal.staged(id).length,committed:journal.db.prepare("SELECT count(*) AS n FROM response_stage WHERE agent=? AND state='committed'").get(id).n},deletion:{...deletionLab.status(),preview:deletionPreview?.expires>Date.now()?deletionPreview:null},safety:storage.ledger.status(),retirement:{operations:retirement.status(),preview:retirementPreview?.expires>Date.now()?retirementPreview:null},memories:factory.domain.list(id,{limit:20}),personaState:factory.domain.persona(id),goals:factory.domain.context(id).goals,reminders:factory.reminders.list(id),autonomy,modelGate:{inflight:factory.inflight,unbudgetedCalls:'denied',tools:autonomyEnabled?'public-research-and-exact-approved-report':'disabled',nativeUpload:'disabled',fork:'disabled',embedding:'disabled'},audit:journal.db.prepare('SELECT seq,kind,data FROM audit WHERE agent=? ORDER BY seq DESC LIMIT 12').all(id)};
     }
     let operations=Promise.resolve();
     const mutate=input=>operations=operations.catch(()=>{}).then(async()=>{
       let actionResult,mcpDiscovery;
       if(!input||typeof input!=='object')throw new Error('INVALID_REQUEST');
       if(input.op!=='pause'&&input.sessionId!==undefined&&input.sessionId!==id)throw new Error('STALE_SESSION');
-      if(boardOperations.has(input.op)){
+      if(input.op==='media-upload'||input.op==='media-discard'){
+        if(input.sessionId!==id)throw new Error('STALE_SESSION');storage.guard(id);
+        if(input.op==='media-upload')return factory.media.upload(id,input);
+        return factory.media.discard(id,input.id);
+      }else if(boardOperations.has(input.op)){
         if(input.sessionId!==id)throw new Error('STALE_SESSION');storage.guard(id);actionResult=controlBoard(agent,input);
       }else if(input.op==='capability-mcp-discover'){
         if(agent.active||agent.desired().desired!=='paused')throw new Error('PAUSE_REQUIRED');
         mcpDiscovery=await factory.customMcpCapabilities.discover(id,{server:input.server,expectedRevision:input.expectedRevision});
+      }else if(input.op.startsWith('work-observation-')){
+        if(input.sessionId!==id)throw new Error('STALE_SESSION');if(agent.active||agent.desired().desired!=='paused')throw new Error('PAUSE_REQUIRED');
+        if(input.op==='work-observation-configure')await factory.workObservation.configure(id,input.settings,input.expectedRevision);
+        else if(input.op==='work-observation-check'){if(!factory.workObservation.settings(id).enabled||!factory.tools.configuration(id).bridge.sessionReadEnabled)throw new Error('WORK_OBSERVATION_NOT_AUTHORIZED');if(factory.workObservation.read(id,{limit:1}).status.held)throw new Error('WORK_OBSERVATION_RETRY_REQUIRED');journal.put(id,'workObservationRequested',true);factory.workObservation.noteStatus(id,{phase:'queued',nextCheckAt:Date.now()});}
+        else if(input.op==='work-observation-retry'){factory.workObservation.releaseRetry(id);journal.put(id,'workObservationRequested',true);}
+        else if(input.op==='work-observation-forget')factory.workObservation.forget(id,input.id,{expectedVersion:input.expectedVersion});
+        else if(input.op==='work-observation-annotate')factory.workObservation.correct(id,input.id,{expectedVersion:input.expectedVersion,annotation:input.annotation});
+        else throw new Error('UNKNOWN_OPERATION');
       }else if(input.op==='capability-configure'){
         if(input.sessionId!==id)throw new Error('STALE_SESSION');if(agent.active||agent.desired().desired!=='paused')throw new Error('PAUSE_REQUIRED');
         await factory.tools.configure(id,input.settings,input.expectedRevision);
         await factory.customMcpCapabilities.sync(id);
       }else if(['tool-submit','tool-cancel','tool-approve'].includes(input.op)){
         if(input.sessionId!==id)throw new Error('STALE_SESSION');
-        if(input.op==='tool-submit')factory.tools.submit(id,input);else if(input.op==='tool-approve')await factory.tools.approve(id,input.jobId,input);else factory.tools.cancel(id,input.jobId,input.expectedVersion);
+        if(input.op==='tool-submit')factory.tools.submit(id,input);else if(input.op==='tool-approve')await factory.tools.approve(id,input.jobId,input);else {factory.tools.cancel(id,input.jobId,input.expectedVersion);await journal.safety?.anchor();}
         if(agent.desired().desired==='running'){agent.wake=true;agent.pump();}
       }else if(['action-propose-report','action-approve','action-cancel'].includes(input.op)){
         if(input.sessionId!==id)throw new Error('STALE_SESSION');
@@ -177,23 +193,30 @@ export async function apply(ctx,config){
         // Schedule the first periodic tick after the initial request interval.
         journal.tickAt(id,Date.now()+factory.config.intervalMs);await agent.control('running');
       }else if(input.op==='message'){
-        if(typeof input.text!=='string'||!input.text.trim()||input.text.length>1024)throw new Error('INVALID_MESSAGE');
+        if(input.text!==undefined&&typeof input.text!=='string'||(input.text??'').length>1024)throw new Error('INVALID_MESSAGE');
+        const attachmentIds=factory.media.ids(input.attachments??[]);
+        if(!(input.text??'').trim()&&!attachmentIds.length)throw new Error('INVALID_MESSAGE');
         const requestId=input.requestId??crypto.randomUUID();
         if(typeof requestId!=='string'||!/^[a-zA-Z0-9._:-]{8,128}$/.test(requestId))throw new Error('INVALID_REQUEST_ID');
         const target=input.target??'next-turn';if(!['next-turn','next-step'].includes(target))throw new Error('INVALID_MESSAGE');
         if(input.origin!==undefined&&(typeof input.origin!=='string'||!/^[a-zA-Z0-9._:-]{1,64}$/.test(input.origin)))throw new Error('INVALID_MESSAGE');
-        const text=input.text.trim();let row=journal.db.prepare('SELECT * FROM user_request WHERE agent=? AND request_id=?').get(id,requestId);const newRequest=!row;
+        const text=(input.text??'').trim();let row=journal.db.prepare('SELECT * FROM user_request WHERE agent=? AND request_id=?').get(id,requestId);const newRequest=!row;
         if(row&&row.text!==text)throw new Error('REQUEST_ID_CONFLICT');
+        if(row&&JSON.stringify(journal.value(id,'media:'+requestId,[]))!==JSON.stringify(attachmentIds))throw new Error('REQUEST_ID_CONFLICT');
         if(row&&journal.value(id,'target:'+requestId,'next-turn')!==target)throw new Error('REQUEST_ID_CONFLICT');
         if(!row){
           if(agent.inbox.nextTurn.length+agent.inbox.nextStep.length>=10)throw new Error('INVALID_MESSAGE');
           row={request_id:requestId,message_id:crypto.randomUUID(),text,status:'pending'};
+          factory.media.validate(id,attachmentIds,row.message_id);
+          if(attachmentIds.length)await factory.media.assertRoute(agent);
           let supplemented=false;
           journal.transaction(()=>{
             journal.db.prepare("INSERT INTO user_request VALUES(?,?,?,?,'pending')").run(id,requestId,text,row.message_id);
             journal.put(id,'target:'+requestId,target);
+            journal.put(id,'media:'+requestId,attachmentIds);
+            factory.media.bind(id,attachmentIds,row.message_id);
             if(input.origin!==undefined)journal.put(id,'origin:'+requestId,input.origin);
-            supplemented=supersedeOwnerBatch(agent,target,{id:row.message_id,role:'user',content:[{type:'text',text}]});
+            supplemented=supersedeOwnerBatch(agent,target,{id:row.message_id,role:'user',content:factory.media.messageContent(id,row.message_id,text)});
           });
           if(supplemented){agent.cause={kind:'owner-supplement'};agent.cancelController?.abort(agent.cause);agent.wake=true;}
         }
@@ -216,7 +239,7 @@ export async function apply(ctx,config){
       return actionResult?{state:state(),action:actionResult}:mcpDiscovery?{state:state(),mcpDiscovery}:state();
     });
     scoped.connection.fetch.register({path:'/api/become-human/state',methods:['GET'],requestBody:'buffered',fetch:async()=>Response.json(state(),{headers:{'Cache-Control':'no-store'}})});
-    scoped.connection.fetch.register({path:'/api/become-human/read',methods:['POST'],requestBody:'buffered',fetch:async request=>{try{const raw=await request.text();if(Buffer.byteLength(raw)>8192)throw new Error('TOO_LARGE');const input=JSON.parse(raw);storage.guard(id);if(input.sessionId&&input.sessionId!==id)throw new Error('STALE_SESSION');return Response.json(await factory.management.read(id,input));}catch(e){return Response.json({error:/^[A-Z_]{3,64}$/.test(e.message)?e.message:'READ_FAILED'},{status:400});}}});
+    scoped.connection.fetch.register({path:'/api/become-human/read',methods:['POST'],requestBody:'buffered',fetch:async request=>{try{const raw=await request.text();if(Buffer.byteLength(raw)>8192)throw new Error('TOO_LARGE');const input=JSON.parse(raw);storage.guard(id);if(input.sessionId&&input.sessionId!==id)throw new Error('STALE_SESSION');return Response.json(input.kind==='media'?await factory.media.read(id,input.id):input.kind==='multimodal-status'?await factory.media.status(agent):await factory.management.read(id,input));}catch(e){return Response.json({error:/^[A-Z_]{3,64}$/.test(e.message)?e.message:'READ_FAILED'},{status:400});}}});
     scoped.connection.fetch.register({path:'/api/become-human/events',methods:['GET'],requestBody:'buffered',fetch:async request=>{
       const after=Number(new URL(request.url).searchParams.get('after')??0);
       if(!Number.isSafeInteger(after)||after<0)return Response.json({error:'INVALID_CURSOR'},{status:400});
@@ -227,17 +250,17 @@ export async function apply(ctx,config){
         const attempt=assistant?journal.db.prepare('SELECT request FROM attempt WHERE agent=? AND turn=? ORDER BY started DESC LIMIT 1').get(id,assistant.data.turn):row.event_key?.startsWith('wait:')?journal.db.prepare('SELECT request FROM attempt WHERE agent=? AND id=?').get(id,row.event_key.slice(5)):undefined;
         const admittedIds=attempt?(JSON.parse(attempt.request).admittedIds??[]):assistant?journal.value(id,'local-admitted:'+assistant.data.message.id,[]):[];
         const replyToRequests=admittedIds.flatMap(mid=>{const r=journal.db.prepare('SELECT request_id FROM user_request WHERE agent=? AND message_id=?').get(id,mid);return r?[r.request_id]:[];});
-        return {...row,origin:request?journal.value(id,'origin:'+request.request_id,'web'):'agent',replyToRequests,...(assistant?{presentation:replyPresentation(journal,id,assistant,row.text)}:{})};
+        return {...row,attachments:row.kind==='user'?factory.media.messageDescriptors(id,row.event_key?.slice(5)):[],origin:request?journal.value(id,'origin:'+request.request_id,'web'):'agent',replyToRequests,...(assistant?{presentation:replyPresentation(journal,id,assistant,row.text)}:{})};
       });
       return Response.json({sessionId:id,events:rows,latest:journal.db.prepare('SELECT max(seq) AS n FROM outbox WHERE agent=?').get(id).n??0},{headers:{'Cache-Control':'no-store'}});
     }});
     scoped.connection.fetch.register({path:'/api/become-human/control',methods:['POST'],requestBody:'streaming',fetch:async request=>{
-      const size=Number(request.headers.get('content-length')??0);if(size>786432)return Response.json({error:'TOO_LARGE'},{status:413});
+      const size=Number(request.headers.get('content-length')??0);if(size>8388608)return Response.json({error:'TOO_LARGE'},{status:413});
       try{
         const reader=request.body?.getReader();let parts=[],bytes=0;
-        if(reader)while(true){const {done,value}=await reader.read();if(done)break;bytes+=value.byteLength;if(bytes>786432){await reader.cancel();return Response.json({error:'TOO_LARGE'},{status:413});}parts.push(Buffer.from(value));}
-        const text=Buffer.concat(parts).toString('utf8');return Response.json(await mutate(JSON.parse(text)));
-      }catch(e){return Response.json({error:['INVALID_REQUEST','INVALID_MESSAGE','INVALID_PERSONA','INVALID_RECEIPT','INVALID_REQUEST_ID','REQUEST_ID_CONFLICT','ALREADY_RUNNING','PAUSE_REQUIRED','NO_RETRYABLE_INPUT','BUDGET_EXHAUSTED','UNKNOWN_OPERATION','NOT_DISPOSABLE_FIXTURE','INVALID_DELETE_CONFIRMATION','DELETE_PREVIEW_STALE','SESSION_RETIRED','LINKED_ARTIFACT','DELETE_PENDING','STALE_SESSION','INVALID_MEMORY','SENSITIVE_MEMORY_REFUSED','INVALID_PERSONA_FIELD','INVALID_EVIDENCE','UNSUPPORTED_CLAIM','INTERACTIVE_ONLY','STALE_EPOCH'].includes(e.message)||/^(?:COGNITION_|MATTER_|ATTENTION_|REFLECTION_|OWNER_MATTER_|RUNTIME_MATTER_|STALE_|INVALID_|BUNDLED_|SKILL_|MODEL_ROUTE_|MEMORY_|USE_LEARNING_|NOTE_|TASK_|CONFIGURATION_|PROFILE_|GOAL_|ACTION_|REPORT_|CAPABILITY_|TOOL_|MCP_|CUSTOM_MCP_|DSH_|BROWSER_)/.test(e.message)||/^(INVALID_TASK_RETRY|INVALID_AUTONOMY_SETTINGS|INVALID_SEARCH_SETTINGS|INVALID_LEARNING_SOURCE|SOURCE_URL_NOT_ALLOWED|SIGNED_CONTROL_REQUIRED|INVALID_RESOURCE_GRANT|RESOURCE_GRANT_NOT_FOUND|INVALID_LEARNING_FEEDBACK|LEARNING_NOTE_NOT_FOUND)$/.test(e.message)?e.message:'CONTROL_FAILED'},{status:400});}
+        if(reader)while(true){const {done,value}=await reader.read();if(done)break;bytes+=value.byteLength;if(bytes>8388608){await reader.cancel();return Response.json({error:'TOO_LARGE'},{status:413});}parts.push(Buffer.from(value));}
+        const text=Buffer.concat(parts).toString('utf8'),input=JSON.parse(text);if(bytes>786432&&input.op!=='media-upload')return Response.json({error:'TOO_LARGE'},{status:413});return Response.json(await mutate(input));
+      }catch(e){return Response.json({error:['INVALID_REQUEST','INVALID_MESSAGE','INVALID_PERSONA','INVALID_RECEIPT','INVALID_REQUEST_ID','REQUEST_ID_CONFLICT','ALREADY_RUNNING','PAUSE_REQUIRED','NO_RETRYABLE_INPUT','BUDGET_EXHAUSTED','UNKNOWN_OPERATION','NOT_DISPOSABLE_FIXTURE','INVALID_DELETE_CONFIRMATION','DELETE_PREVIEW_STALE','SESSION_RETIRED','LINKED_ARTIFACT','DELETE_PENDING','STALE_SESSION','INVALID_MEMORY','SENSITIVE_MEMORY_REFUSED','INVALID_PERSONA_FIELD','INVALID_EVIDENCE','UNSUPPORTED_CLAIM','INTERACTIVE_ONLY','STALE_EPOCH'].includes(e.message)||/^(?:COGNITION_|MATTER_|ATTENTION_|REFLECTION_|OWNER_MATTER_|RUNTIME_MATTER_|STALE_|INVALID_|BUNDLED_|SKILL_|MODEL_ROUTE_|MEMORY_|USE_LEARNING_|NOTE_|TASK_|CONFIGURATION_|PROFILE_|GOAL_|ACTION_|REPORT_|WORK_|CAPABILITY_|TOOL_|MCP_|CUSTOM_MCP_|DSH_|BROWSER_|MEDIA_|MODEL_IMAGE_)/.test(e.message)||/^(INVALID_TASK_RETRY|INVALID_AUTONOMY_SETTINGS|INVALID_SEARCH_SETTINGS|INVALID_LEARNING_SOURCE|SOURCE_URL_NOT_ALLOWED|SIGNED_CONTROL_REQUIRED|INVALID_RESOURCE_GRANT|RESOURCE_GRANT_NOT_FOUND|INVALID_LEARNING_FEEDBACK|LEARNING_NOTE_NOT_FOUND)$/.test(e.message)?e.message:'CONTROL_FAILED'},{status:400});}
     }});
     scoped.webServer.register({path:'/become-human',kind:'exact',handler:async(req,res)=>{
       if(!scoped.connection.authorizeIndex(req,res))return;

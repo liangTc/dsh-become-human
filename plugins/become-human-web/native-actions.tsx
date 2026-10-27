@@ -34,6 +34,8 @@ function ActionPreviewContent({api,action,ui,onChanged}:any){
     {action.goal&&<p className="hn-note hn-mono" style={textStyle}>关联目标 {typeof action.goal==='string'?action.goal:action.goal.id??action.goal.goalId} {action.goal.stepId?'· 步骤 '+action.goal.stepId:''}</p>}
     <h3>本次准备写入的文件</h3><p className="hn-mono" style={textStyle}>{action.path}</p><p className="hn-note hn-mono" style={textStyle}>SHA-256 {digest||'—'} · {action.bytes??'—'} 字节</p>
     <h3>材料笔记编号</h3><div className="hn-note hn-mono" style={textStyle}>{(action.noteIds??[]).join('\n')||'—'}</div>
+    {action.annotationScope&&<Band>{action.annotationScope}</Band>}
+    {Array.isArray(action.ownerAnnotations)&&action.ownerAnnotations.length>0&&<p className="hn-note">本报告收录 {action.ownerAnnotations.length} 份人工批注：{action.ownerAnnotations.map((annotation:any)=>'v'+annotation.version+'（'+time(annotation.time)+'）').join('；')}。批注与原始学习结论分别展示。</p>}
     {action.sourceValid!==true&&<Band>当前材料已失效或尚未完成核验，不能批准此版本。请查看来源笔记后重新生成。</Band>}
     {action.reason&&<Band>等待原因：{ui.errorText(action.reason)}</Band>}
     {action.status==='approved'&&<Band>已批准这份具体内容。{action.approvalExpires?'本次授权有效至 '+time(action.approvalExpires)+'。':''}全局或自主暂停仍保留；恢复运行且轮到本行动后，才由当前唯一执行通道写入。</Band>}

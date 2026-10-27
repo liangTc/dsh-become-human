@@ -25,7 +25,7 @@ export class ToolExecutor {
     for(const name of ['read-public-page','compare-public-page'])this.register(name,{description:name==='read-public-page'?'读取公开网页正文与来源，不生成未经核验的知识':'与上次成功读取的公开正文指纹比较',inputSchema:urlSchema,effect:'read',backend:'public-read',scope:'public-web',retrySafe:true,autonomous:true,validate:input=>({url:researchUrl(input.url)}),execute:(input,signal,context)=>this.readPage(context.agent,input,signal,name==='compare-public-page')});
   }
   register(name,adapter){
-    if(!/^[a-zA-Z][a-zA-Z0-9_.-]{2,127}$/.test(name)||this.registry.has(name)||typeof adapter?.execute!=='function'||typeof adapter.description!=='string'||!['read','write'].includes(adapter.effect))fail('INVALID_TOOL_ADAPTER');
+    if(!/^[a-zA-Z][a-zA-Z0-9_.-]{2,127}$/.test(name)||this.registry.has(name)||typeof adapter?.execute!=='function'||typeof adapter.description!=='string'||!['read','write'].includes(adapter.effect)||adapter.cancelPrepared!==undefined&&typeof adapter.cancelPrepared!=='function')fail('INVALID_TOOL_ADAPTER');
     assertCapabilitySchema(adapter.inputSchema);
     if(adapter.outputSchema)assertCapabilitySchema(adapter.outputSchema);
     const definition={id:name,title:adapter.title??name,description:adapter.description,version:adapter.version??1,inputSchema:structuredClone(adapter.inputSchema),effect:adapter.effect,sideEffects:adapter.effect==='write',backend:adapter.backend??'local',scope:typeof adapter.scope==='function'?(adapter.scopeDescription??'specific-target'):adapter.scope??'explicit-input',timeoutMs:adapter.timeoutMs??60000,maxResultBytes:adapter.maxResultBytes??32768,retrySafe:adapter.effect==='read'&&adapter.retrySafe!==false,autonomous:adapter.effect==='read'&&adapter.autonomous===true,enabledWhen:adapter.enabledWhen??[],externalModel:adapter.externalModel===true,independentSession:false};
@@ -80,7 +80,14 @@ export class ToolExecutor {
     await this.journal.safety.prepare(key,'human-capability-approved',{agent,jobId:id,digest,definitionHash:adapter.definitionHash,policyRevision:policy.revision,expires});
     this.journal.transaction(()=>{this.db.prepare('UPDATE human_capability_job SET approval_key=?,approval_expires=? WHERE agent=? AND id=?').run(key,expires,agent,id);this.update(row,'queued');});return this.get(agent,id);
   }
-  cancel(agent,id,version){const row=this.get(agent,id);if(row.version!==version)fail('STALE_TOOL_JOB');if(!['queued','awaiting-approval','suspended','failed'].includes(row.status))fail('TOOL_JOB_NOT_CANCELLABLE');this.update(row,'cancelled');return this.get(agent,id);}
+  cancel(agent,id,version){
+    const row=this.get(agent,id);if(row.version!==version)fail('STALE_TOOL_JOB');if(!['queued','awaiting-approval','suspended','failed'].includes(row.status))fail('TOOL_JOB_NOT_CANCELLABLE');this.checkPreview(row);
+    return this.journal.transaction(()=>{
+      const adapter=this.registry.get(row.tool),result=adapter?.cancelPrepared?.(row.input,{agent,jobId:id,prepared:row.prepared});
+      if(result?.then)fail('INVALID_CAPABILITY_CANCELLATION');
+      this.update(row,'cancelled');return this.get(agent,id);
+    });
+  }
   recover(agent){this.journal.assertAdmitted(agent);for(const row of this.db.prepare("SELECT id FROM human_tool_job WHERE agent=? AND status='running'").all(agent)){const job=this.get(agent,row.id);this.update(job,job.capabilitySnapshot?.effect==='write'?'unknown':'suspended',{error:job.capabilitySnapshot?.effect==='write'?'CAPABILITY_OUTCOME_UNKNOWN':'CAPABILITY_RESTARTED'});}}
   next(agent){this.journal.assertAdmitted(agent);const now=Date.now();this.db.prepare("UPDATE human_tool_job SET status='expired',version=version+1,updated=? WHERE agent=? AND status IN ('queued','suspended','awaiting-approval') AND expires<=?").run(now,agent,now);const row=this.db.prepare("SELECT id FROM human_tool_job WHERE agent=? AND status IN ('queued','suspended') ORDER BY created,id LIMIT 1").get(agent);return row?this.get(agent,row.id):null;}
   update(row,status,{result=null,error=null}={}){this.journal.assertAdmitted(row.agent);const n=this.db.prepare('UPDATE human_tool_job SET status=?,version=version+1,updated=?,result=?,error=? WHERE agent=? AND id=? AND version=?').run(status,Date.now(),result?JSON.stringify(result):null,error,row.agent,row.id,row.version);if(n.changes!==1)fail('STALE_TOOL_JOB');this.journal.audit(row.agent,'tool-job-'+status,{jobId:row.id,tool:row.tool,lane:'action',code:error});}

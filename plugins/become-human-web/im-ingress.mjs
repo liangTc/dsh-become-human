@@ -1,13 +1,16 @@
 import {randomBytes,createHash} from 'node:crypto';
 import {IM_CHANNELS} from './im-catalog.mjs';
+import {mediaPolicy} from './runtime/multimodal.mjs';
 const hash=value=>createHash('sha256').update(value).digest('hex');
 const channelKey=(channel,botId)=>'im-'+hash(channel+':'+botId).slice(0,24);
 const canonical=channel=>channel==='wecomApp'?'wecom-app':channel;
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const mediaType=data=>data.length>=8&&data.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]))?'image/png':data.length>=3&&data[0]===255&&data[1]===216&&data[2]===255?'image/jpeg':data.length>=12&&data.toString('ascii',0,4)==='RIFF'&&data.toString('ascii',8,12)==='WEBP'?'image/webp':null;
 export class SingleImIngress {
   constructor(remote,runtime){
     this.remote=remote;this.runtime=runtime;this.service=null;this.activationStates=new Map();this.closed=false;this.directTail=Promise.resolve();this.ingressTail=Promise.resolve();
     remote.db.exec('CREATE TABLE IF NOT EXISTS im_pair(code TEXT PRIMARY KEY,channel TEXT,expires INTEGER,used INTEGER);');
+    remote.db.exec('CREATE TABLE IF NOT EXISTS im_image_admission(channel TEXT,message TEXT,session TEXT,fingerprint TEXT,attachments TEXT,status TEXT,PRIMARY KEY(channel,message));');
     const wrap=operation=>async({rpcId,payload={}})=>{try{return {rpcId,result:{ok:true,value:await operation(payload)}};}catch(error){return {rpcId,result:{ok:false,error:{code:error.code??'SINGLE_SESSION_ONLY',message:'该操作由自主 Agent 的统一会话管理。',details:{}}}};}};
     const listed=async()=>{const s=await runtime.state();return {items:[{sessionId:s.sessionId,running:s.agentBusy,title:'自主 Agent',workspaceId:'become-human',cwd:process.cwd()}]};};
     const catalog=async()=>{const s=await runtime.state();return {groups:[{id:s.provider,name:s.provider,models:[{id:s.model,name:s.model}]}],failures:[]};};
@@ -44,6 +47,44 @@ export class SingleImIngress {
     await this.remote.enable(key,true);return key;
   }
   accept(input){this.ingressTail=this.ingressTail.catch(()=>{}).then(()=>this.acceptOne(input));return this.ingressTail;}
+  async receiveImages({key,channel,botId,message,state,reply,signal,text,expectedFingerprint,expectedGeneration}){
+    const remoteId='msg-'+hash(channel+':'+botId+':'+message.messageId).slice(0,40),already=this.remote.db.prepare('SELECT status FROM inbound WHERE channel=? AND message=?').get(key,remoteId);
+    if(already?.status==='committed'){await state?.markSeen?.(message.messageId);return;}
+    if(message.files?.length||message.hasFiles||!Array.isArray(message.images)||!message.images.length){await state?.markSeen?.(message.messageId);await reply('暂时只能读取图片；语音、视频和文件尚未接入。');return;}
+    if(message.images.length>mediaPolicy.maxPerMessage){await state?.markSeen?.(message.messageId);await reply('一次最多发送四张图片，请减少图片后再试。');return;}
+    if(text.trimStart().startsWith('/')){await state?.markSeen?.(message.messageId);await reply('请将命令和图片分开发送，避免把图片说明当作会话命令。');return;}
+    const current=await this.runtime.state(),fingerprint=hash(JSON.stringify([text,message.imageFingerprint??message.images.map(image=>({name:image.name??null,size:image.size??null}))]));
+    const previous=this.remote.db.prepare('SELECT * FROM im_image_admission WHERE channel=? AND message=?').get(key,remoteId);
+    if(previous&&(previous.session!==current.sessionId||previous.fingerprint!==fingerprint))throw new Error('REMOTE_MESSAGE_ID_CONFLICT');
+    if(previous&&['forwarding','unknown'].includes(previous.status)){await state?.markSeen?.(message.messageId);await reply('这张图片的提交结果暂未确认，我不会重复提交。请在 Web 查看当前消息。');return;}
+    const capability=await this.runtime.read({kind:'multimodal-status',sessionId:current.sessionId});
+    if(capability.route?.authoritative!==true||capability.route.imageInput!=='supported'){
+      await state?.markSeen?.(message.messageId);await reply(capability.route?.imageInput==='unsupported'?'当前对话模型不支持看图，我还没有下载这张图片。请在 Web 选择支持图片的模型后重新发送。':'当前模型的图片能力尚未确认，我还没有下载图片。请先在 Web 核对模型能力。');return;
+    }
+    let attachments=previous?JSON.parse(previous.attachments):[],bytes=0;
+    const sameBinding=()=>{const row=this.remote.channel(key);return row?.enabled&&row.config.botId===botId&&row.config.ownerId===String(message.senderId)&&row.config.fingerprint===expectedFingerprint&&(row.config.bindingGeneration??0)===expectedGeneration;};
+    if(!previous){
+      try{
+        for(const image of message.images){
+          signal?.throwIfAborted();if(!sameBinding())throw new Error('CHANNEL_REPLACED');
+          if(Number.isFinite(image?.size)&&image.size>mediaPolicy.maxBytes)throw new Error('MEDIA_TOO_LARGE');
+          if(typeof image?.load!=='function')throw new Error('MEDIA_SOURCE_UNAVAILABLE');
+          const limit=AbortSignal.any([...(signal?[signal]:[]),AbortSignal.timeout(20000)]),value=await image.load({signal:limit,maxBytes:mediaPolicy.maxBytes}),raw=Buffer.isBuffer(value)||value instanceof Uint8Array?value:value?.data??value?.buffer;
+          if(!Buffer.isBuffer(raw)&&!(raw instanceof Uint8Array))throw new Error('MEDIA_IMAGE_INVALID');
+          const data=Buffer.from(raw);bytes+=data.length;if(!data.length||data.length>mediaPolicy.maxBytes||bytes>mediaPolicy.maxMessageBytes)throw new Error('MEDIA_TOO_LARGE');
+          const mime=mediaType(data);if(!mime)throw new Error('MEDIA_TYPE_UNSUPPORTED');
+          signal?.throwIfAborted();if(!sameBinding())throw new Error('CHANNEL_REPLACED');
+          const result=await this.runtime.control({op:'media-upload',sessionId:current.sessionId,name:String(image.name??'手机图片').slice(0,100),mime,base64:data.toString('base64')});
+          if(!result.attachment?.id)throw new Error('MEDIA_IMAGE_INVALID');attachments.push({id:result.attachment.id});
+        }
+        this.remote.db.prepare("INSERT INTO im_image_admission VALUES(?,?,?,?,?,'prepared')").run(key,remoteId,current.sessionId,fingerprint,JSON.stringify(attachments));
+      }catch(error){for(const attachment of attachments)await this.runtime.control({op:'media-discard',sessionId:current.sessionId,id:attachment.id}).catch(()=>{});await state?.markSeen?.(message.messageId);await reply(signal?.aborted?'图片处理已中止，没有提交对话。':/LARGE|MANY/u.test(error.code??error.message??'')?'图片超出处理上限：单张最多5 MiB、四张、总计12 MiB。':'图片未能安全读取或保存，没有提交模型。请重新发送 PNG、JPEG 或 WebP 图片。');return;}
+    }
+    signal?.throwIfAborted();if(!sameBinding())throw new Error('CHANNEL_REPLACED');
+    this.remote.db.prepare("UPDATE im_image_admission SET status='forwarding' WHERE channel=? AND message=?").run(key,remoteId);
+    try{await this.remote.receive(key,{messageId:remoteId,senderId:String(message.senderId),chatId:String(message.conversationId),privateChat:true,text,attachments,target:'next-turn'});this.remote.db.prepare("UPDATE im_image_admission SET status='committed' WHERE channel=? AND message=?").run(key,remoteId);await state?.markSeen?.(message.messageId);}
+    catch(error){this.remote.db.prepare("UPDATE im_image_admission SET status='unknown' WHERE channel=? AND message=?").run(key,remoteId);throw error;}
+  }
   async acceptOne({channel,botId,message,state,reply,signal,beforePair}){
     channel=canonical(channel);if(signal?.aborted||this.closed||!botId||!message?.messageId||!message.senderId||message.senderIsBot||message.kind==='group')return;
     if(state?.hasSeen?.(message.messageId))return;
@@ -56,9 +97,9 @@ export class SingleImIngress {
     if(!text&&!hasMedia)return;
     // Only the verified current owner can refresh conversation capability.
     // A picture/file is still a genuine interaction even when its contents are
-    // outside the current text-only thinking contract.
+    // outside this channel's currently supported input contract.
     await beforePair?.();
-    if(hasMedia){await state?.markSeen?.(message.messageId);await reply('当前自主 Agent 的输入合同为文字。渠道附件收发代码已保留，附件进入思考需要另行启用。');return;}
+    if(hasMedia){await this.receiveImages({key,channel,botId,message,state,reply,signal,text,expectedFingerprint:b.config.fingerprint,expectedGeneration:b.config.bindingGeneration??0});return;}
     if(text.length>1024){await reply('当前每条输入上限为 1024 字符，请分段发送；内容不会被截断。');await state?.markSeen?.(message.messageId);return;}
     if(text.startsWith('/')&&!/^\/(?:pause|resume|status|stop|steer|help|remind|reminders|cancel-reminder|goals|goal)(?:\s|$)/.test(text)){await reply('本 Agent 只有一个会话；会话、模型、角色与工作区请在 Web 统一管理。');await state?.markSeen?.(message.messageId);return;}
     if(text==='/help'){await reply('/pause 暂停运行；/resume 恢复运行许可（不改变手机回复开关）；/status 查看唯一会话；/steer 内容 显式插话。\n可直接说“10分钟后提醒我休息”或“每天晚上10点提醒我收工”。/reminders 查看；/cancel-reminder 编号 取消。时间按 Human 配置时区，不明确时先澄清。\n/goals 查看目标；/goal 编号 查看详情；/goal confirm|pause|cancel|retry 编号 确认、暂停、取消或明确重试。');await state?.markSeen?.(message.messageId);return;}

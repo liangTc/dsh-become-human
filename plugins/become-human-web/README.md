@@ -1,8 +1,10 @@
 # Become Human · DSH Web 插件
 
-> **0.7.0-beta.5 · 测试发行（Prerelease），尚未开发完成。** 面向 Windows、Node.js 24+、DeepSeek Harness 0.2.0-rc.2 的 web profile。完整验收边界见[测试状态](https://github.com/liangTc/dsh-become-human/blob/main/docs/TESTING_STATUS.md)。
+> **测试版本，尚未开发完成。** 本目录为 `0.7.0-beta.6` 开发源码，尚未公开发行；可下载的测试包仍为 `0.7.0-beta.5`（Prerelease）。面向 Windows、Node.js 24+、DeepSeek Harness 0.2.0-rc.2 的 web profile。完整验收边界见[测试状态](https://github.com/liangTc/dsh-become-human/blob/main/docs/TESTING_STATUS.md)。
 
 为 DSH Web 增加一个拥有统一人格、记忆、学习与主动行为的 Human。管理插件嵌入 Web，独立运行模块处理事件循环；一个 Human 只有一个持久主会话，同时只绑定一个有效 IM 渠道。
+
+beta.6 开发中新增完整轮次上下文与滚动摘要、首版图片输入、关系驱动的普通请求协商，以及学习动机、自然分享和授权会话观察。会话压缩按需使用聊天模型，费用单列；图片需要支持视觉的模型，关系变化不扩大工具权限。上述能力不包含在下方 beta.5 安装包中，完整变化见[变更记录](https://github.com/liangTc/dsh-become-human/blob/main/CHANGELOG.md)。
 
 ## 安装
 
@@ -11,6 +13,8 @@
 ```powershell
 npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./dsh-become-human-web-0.7.0-beta.5.tgz
 ```
+
+beta.5 有首次创建 Human 可能失败的已知初始化问题；修复在 beta.6 开发源码中，尚无对应公开 Release 包。已有安装升级记录不证明干净安装通过，首次使用请先核对测试状态。
 
 安装后启动 DSH，进入 Human，按“选择已有模型 → 人物与额度 → 创建并启动”完成首次设置。路径、私有 profile 和内部空闲端口自动准备，无需另装后台或手工编辑 YAML。模型凭据通过 DSH 的 apiKeyEnv 引用解析；向导不接收明文密钥。详见 [安装与升级](https://github.com/liangTc/dsh-become-human/blob/main/docs/INSTALLATION.md)。单独安装内部 runtime 不属于支持方式。
 

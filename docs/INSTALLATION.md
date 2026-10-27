@@ -7,6 +7,8 @@
 
 本页下载链接与命令均指向 beta.5 组合包。历史 beta.4 包仍可查阅，但不包含 beta.5 的新增能力。原生 DeepSeek 全新安装整链仍保留待测；发布测试包不等于该流程已经通过。
 
+**已知问题：** beta.5 首次创建 Human 可能因初始化顺序失败；修复已纳入 beta.6 开发源码，尚无对应公开 Release 包。`main` 的开发源码需要自行构建，滚动摘要、图片输入等 beta.6 能力不在上述 beta.5 下载中。最新干净安装仍需单独验收。
+
 ## 支持范围
 
 | 项目 | 当前要求 |
@@ -45,7 +47,7 @@ npx @deepseek-ai/dsh@0.2.0-rc.2 web
 
 凭据使用 DSH 的 `apiKeyEnv` 引用；原生 DeepSeek 默认引用 `DEEPSEEK_API_KEY`。后台按 **宿主进程环境变量 → 源 `$DSH_HOME/.credentials.yaml` → 宿主启动项目的 `.env` → 源 `$DSH_HOME/.env`** 的顺序解析。凭据值仅供后台进程使用，不会回传首次设置页面，也不会写入首次设置记录或生成的 profile。全新 DSH 尚未配置 API 时，先在 DSH 模型设置中完成，再回 Human 点击“重新检查”。
 
-当前未接入 DeepSeek 账号登录通道，不导入内联 `apiKey` 或任意自定义 `headers`。原生通道使用官方 Messages 协议，默认地址为 `https://api.deepseek.com/anthropic`；不要为它填写 OpenAI Chat Completions 地址。地址可通过原生配置的 `baseURL` 或宿主进程环境变量 `DEEPSEEK_BASE_URL` 指定，不能通过 `.env` 设置该地址。后台沿用 Human 的准入、超时与取消控制，并将适配器自动重试次数设为 `0`，避免隐藏重试增加实际调用。模型配置字段见 [DSH 模型配置指南](https://deepseek-harness.github.io/deepseek-harness/guide/providers)。
+当前未接入 DeepSeek 账号登录通道，不导入内联 `apiKey` 或任意自定义 `headers`。原生通道使用官方 Messages 协议，默认地址为 `https://api.deepseek.com/anthropic`；不要为它填写 OpenAI Chat Completions 地址。地址遵循官方适配器规则，可通过原生配置的 `baseURL` 或宿主启动环境的 `DEEPSEEK_BASE_URL` 指定，宿主已加载的 `.env` 也可提供该变量。后台沿用 Human 的准入、超时与取消控制，并将适配器自动重试次数设为 `0`，避免隐藏重试增加实际调用。模型配置字段见 [DSH 模型配置指南](https://deepseek-harness.github.io/deepseek-harness/guide/providers)。
 
 **原生通道验收尚未完成。** beta.5 已有语法检查、本地构建、已有环境安装一致性核对、服务恢复和只读模型目录发现记录；此前 179 个文件属于历史部署快照，重新打包后的清单以实际 Release 包为准。已检查的源 DSH 尚未配置原生凭据。全新安装后“配置 Key → 发现可用原生模型 → 凭据复用 → 后台启动 → 真实模型请求”整链流程已列入[优先待测试项](TESTING_STATUS.md#优先待测试项)，本轮暂缓。目录中存在模型不等于凭据可用，后台能启动也不等于真实网络请求成功。
 

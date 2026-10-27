@@ -2,7 +2,7 @@
 
 [返回首页](../README.md) · [配置](CONFIGURATION.md) · [插件集发布](PLUGIN_SUBMISSION.md)
 
-> **测试版本 · 尚未开发完成。** 本页对应 [`0.7.0-beta.5` Prerelease](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.5)。图示和架构说明不代表真实闭环或完整稳定性验收，原生 DeepSeek 全新安装整链仍待测试。
+> **测试版本 · 尚未开发完成。** 公开安装包为 [`0.7.0-beta.5` Prerelease](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.5)；本页另行标明 beta.6 开发架构。图示和架构说明不代表真实闭环或完整稳定性验收，原生 DeepSeek 全新安装整链仍待测试。
 
 ## 结构
 
@@ -28,6 +28,12 @@ Human 保持一个持久主 Session。定时唤醒、聊天、学习、提醒与
 事实、推断、主人原话和 Agent 学习笔记有不同来源标识。修订、撤回、过期和开发测试数据会影响其可用性；来源摘录不当作完整语义总结。详细公开资料分析会减少不必要的主人私人上下文。
 
 选择下一步的顺序是：**当前人物配置 → 有效记忆、反馈与目标 → 模型选题**。文本 Skill 补充方法与表达，不能成为隐藏人物覆盖或绕过权限的入口。
+
+### 前台会话连续性 · beta.6 开发中
+
+`dialogue-history.mjs` 用持久输入批次与回复归属重建完整轮次；`dialogue-summary.mjs` 保存有来源版本的滚动块；`dialogue-compaction.mjs` 在主人回复前按需串行压缩已移出近期窗口的原文。三者继续共用唯一 Session 与单模型执行线，失败不阻断聊天，不创建独立评分或记忆人格。
+
+前台组合为 **当前输入 → 近期完整问答 + 有效滚动摘要 + 最多三轮待压缩原文 + 相关长期记忆**，由实际预算决定装入范围。摘要来源及依赖在提交和读取时重新核验，原文不删除，摘要是未独立语义核验的模型推断。压缩使用聊天模型并单独计量，归属前台处理，不消耗自主额度；公共资料研究不携带私聊摘要。容量、重试与导出边界见[配置说明](CONFIGURATION.md#滚动会话摘要)。
 
 ### 人格偏移层 · beta.5
 
@@ -80,6 +86,7 @@ plugins/
     cognition*.mjs      # beta.5：共用事项、自我状态、注意力与反思
     persona-development.mjs # 有依据、可撤回的人格偏移记录
     memory-lifecycle.mjs    # 记忆冷热覆盖层、摘要批次与恢复
+    dialogue-*.mjs          # beta.6：完整问答、滚动摘要与前台串行压缩
   become-human-web/      # 对外分发的 DSH bundle
     manager.mjs         # 宿主服务、Web 与 IM 入口
     supervisor.mjs      # 私有运行进程生命周期与桥接

@@ -1,9 +1,21 @@
 import {createHash} from 'node:crypto';
 import {currentPersonaProfile,PERSONA_CONTEXT_VERSION} from './persona-profile.mjs';
-import {researchUrl,learningCoverage} from './learning.mjs';
+import {researchUrl,learningCoverage,claimTextProjection} from './learning.mjs';
 import {quotaView,quotaWindow} from './quota.mjs';
 import {socialDefaults,socialStatus} from './social.mjs';
+import {developmentInput} from './knowledge-signals.mjs';
 const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
+export function learningMemoryPayload(result,source){
+  const {text:summary,...summaryProjection}=claimTextProjection(result.claims,{maxChars:400});
+  const payload={title:result.title,summary,url:source.url,sourceDigest:source.digest,knowledgeStatus:'source-linked-interpretation',summaryProjection};
+  // Source refs retain the complete URL outside this small recall overview.
+  // Drop optional metadata rather than cutting a condition or negation out of
+  // the accepted claim. Agent-proposed purpose is not stored as source fact.
+  if(Buffer.byteLength(JSON.stringify(payload),'utf8')>2048)delete payload.url;
+  if(Buffer.byteLength(JSON.stringify(payload),'utf8')>2048)delete payload.title;
+  if(Buffer.byteLength(JSON.stringify(payload),'utf8')>2048)throw new Error('LEARNING_MEMORY_OVERVIEW_TOO_LARGE');
+  return payload;
+}
 const defaults={...socialDefaults,enabled:false,presetId:'custom',learningEnabled:false,proactiveEnabled:false,quotaEnabled:true,tokenQuotaEnabled:true,requestQuotaEnabled:true,roundQuotaEnabled:false,roundLimit:24,roundTimeoutMs:300000,budgetWindow:'utc-day',wakeIntervalMs:600000,quotaTransitionStart:0,quotaTransitionUntil:0,goalProposalsEnabled:false,goalAutoActivateEnabled:false,searchEnabled:false,searchProvider:'bing',searchEndpoint:'',sources:[],tokenLimit:40000,requestLimit:24,sourceIntervalMs:3600000,contactCooldownMs:3600000,quietStart:22,quietEnd:8,timeZoneOffsetMinutes:480};
 export class AutonomyStore {
   constructor(journal,domain){
@@ -54,7 +66,16 @@ export class AutonomyStore {
   events(id){return this.db.prepare("SELECT id,kind,data,created FROM autonomy_event WHERE agent=? AND status='pending' ORDER BY created LIMIT 16").all(id).map(r=>({...r,data:JSON.parse(r.data)}));}
   completeEvents(id){this.db.prepare("UPDATE autonomy_event SET status='handled' WHERE agent=? AND status='pending'").run(id);}
   task(id,kind,checkpoint,version){
-    this.db.prepare("DELETE FROM autonomy_task WHERE agent=? AND status IN ('completed','cancelled','failed') AND id NOT IN (SELECT id FROM autonomy_task WHERE agent=? ORDER BY created DESC LIMIT 128)").run(id,id);
+    // Failed work is durable evidence, never an automatic cleanup candidate.
+    // Completed/cancelled work still needed by notes or goal attempt history
+    // must also survive. Keep the newest 128 *unreferenced* final tasks; the
+    // pending queue and referenced provenance do not consume that allowance.
+    // GoalEngine may not have initialized its table yet. Malformed JSON makes
+    // reference discovery uncertain, so conservatively skip cleanup for this
+    // agent rather than deleting evidence or throwing during task creation.
+    const goals=!!this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='human_goal_plan'").get();
+    const goalProtection=goals?"AND NOT EXISTS(SELECT 1 FROM human_goal_plan p WHERE p.agent=t.agent AND json_valid(p.steps) IS NOT 1) AND NOT EXISTS(SELECT 1 FROM human_goal_plan p,json_tree(CASE WHEN json_valid(p.steps) THEN p.steps ELSE '[]' END) r WHERE p.agent=t.agent AND r.key='taskId' AND r.value=t.id)":"";
+    this.db.prepare("WITH unreferenced AS (SELECT t.id,t.created FROM autonomy_task t WHERE t.agent=? AND t.status IN ('completed','cancelled') AND NOT EXISTS(SELECT 1 FROM learning_note n WHERE n.agent=t.agent AND json_valid(n.data) IS NOT 1) AND NOT EXISTS(SELECT 1 FROM learning_note n WHERE n.agent=t.agent AND json_extract(CASE WHEN json_valid(n.data) THEN n.data ELSE '{}' END,'$.taskId')=t.id) "+goalProtection+"),removable AS (SELECT id FROM unreferenced ORDER BY created DESC,id DESC LIMIT -1 OFFSET 128) DELETE FROM autonomy_task WHERE id IN (SELECT id FROM removable)").run(id);
     const tid=crypto.randomUUID(),now=Date.now();this.db.prepare("INSERT INTO autonomy_task VALUES(?,?,?,'ready',?,?,?,?)").run(tid,id,kind,JSON.stringify(checkpoint),version,now,now);this.journal.audit(id,'task-created',{taskId:tid,kind,question:checkpoint.candidate?.question??null});return this.getTask(tid);
   }
   getTask(tid){const row=this.db.prepare('SELECT * FROM autonomy_task WHERE id=?').get(tid);return row?{...row,checkpoint:JSON.parse(row.checkpoint)}:null;}
@@ -88,11 +109,20 @@ export class AutonomyStore {
   // The latest-note panel is intentionally small. Exact references and work
   // queues must never use this display window as an existence check.
   notes(id){const now=this.domain.now(id);return this.db.prepare("SELECT n.* FROM learning_note n JOIN memory_record m ON m.id=n.memory_id AND m.agent=n.agent JOIN source_record s ON s.id=n.source_id AND s.agent=n.agent WHERE n.agent=? AND n.status='active' AND m.status='active' AND (m.valid_to IS NULL OR m.valid_to>?) AND s.status='active' ORDER BY n.created DESC,n.id DESC LIMIT 10").all(id,now).map(r=>this.noteRow(id,r)).filter(Boolean);}
+  offerableNote(id,note){
+    if(!note||note.data.developmentOnly||developmentInput(note.data.title)||developmentInput(note.data.researchQuestion)||developmentInput(note.feedback?.comment)||developmentInput(note.data.ownerRevision?.summary))return null;
+    const task=note.data.taskId?this.getTask(note.data.taskId):null,goalId=task?.checkpoint?.goal?.id;
+    const description=goalId?this.db.prepare('SELECT description FROM goal_record WHERE agent=? AND id=?').get(id,goalId)?.description:'';
+    // Developer fixtures remain available for explicit review/reporting, but
+    // they are not evidence that the owner wants protocol lessons in chat.
+    if(developmentInput(description)||developmentInput(task?.checkpoint?.candidate?.question)||developmentInput(task?.checkpoint?.correction?.comment))return null;
+    return note;
+  }
   shareCandidates(id,{limit=20,cursor=null}={}){
     if(!Number.isInteger(limit)||limit<1||limit>100||cursor!==null&&(!Number.isSafeInteger(cursor.created)||typeof cursor.id!=='string'||cursor.id.length>128))throw new Error('INVALID_SHARE_QUERY');
     const now=this.domain.now(id),rows=this.db.prepare("SELECT n.* FROM learning_note n JOIN memory_record m ON m.id=n.memory_id AND m.agent=n.agent JOIN source_record s ON s.id=n.source_id AND s.agent=n.agent WHERE n.agent=? AND n.status='active' AND m.status='active' AND (m.valid_to IS NULL OR m.valid_to>?) AND s.status='active' AND COALESCE(json_extract(n.feedback,'$.value'),'')<>'not-now' AND NOT EXISTS(SELECT 1 FROM metadata d WHERE d.agent=n.agent AND d.key='learning-shared:'||n.id AND d.value='true')"+(cursor?" AND (n.created>? OR (n.created=? AND n.id>?))":"")+" ORDER BY n.created,n.id LIMIT ?").all(id,now,...(cursor?[cursor.created,cursor.created,cursor.id]:[]),limit+1);
     const page=rows.slice(0,limit),last=page.at(-1);
-    return {items:page.map(r=>this.noteRow(id,r)).filter(Boolean),nextCursor:rows.length>limit&&last?{created:last.created,id:last.id}:null};
+    return {items:page.map(r=>this.offerableNote(id,this.noteRow(id,r))).filter(Boolean),nextCursor:rows.length>limit&&last?{created:last.created,id:last.id}:null};
   }
   commitNote(id,task,source,result){
     this.journal.assertAdmitted(id);
@@ -102,10 +132,11 @@ export class AutonomyStore {
     const sourceId=crypto.randomUUID(),noteId=crypto.randomUUID();
     this.domain.source(id,{id:sourceId,kind:'imported',body:JSON.stringify({origin:'untrusted-public-web',url:source.url,digest:source.digest,fetchedAt:source.fetchedAt,excerpt:source.excerpt.slice(0,2800),excerptOffset:source.excerptOffset??0,excerptSelection:source.excerptSelection??'prefix'})});
     let memoryId;
-    const payload={title:result.title,summary:result.summary.slice(0,400),relevance:result.relevance.slice(0,160),url:source.url,sourceDigest:source.digest,knowledgeStatus:'source-linked-interpretation'};
-    while(JSON.stringify(payload).length>2048&&payload.summary.length>80)payload.summary=payload.summary.slice(0,-40);
+    const payload=learningMemoryPayload(result,source);
     try{memoryId=this.domain.save(id,{type:'skill',truth:'inferred',confidence:.6,refs:[sourceId],payload});}catch(e){this.db.prepare('DELETE FROM source_record WHERE id=?').run(sourceId);throw e;}
-    this.db.prepare("INSERT INTO learning_note VALUES(?,?,?,?,?,'active',?,NULL)").run(noteId,id,memoryId,sourceId,JSON.stringify({...result,coverage:learningCoverage(result,source,task.checkpoint.plan?.question??source.topic??''),researchQuestion:task.checkpoint.plan?.question??null,source:{url:source.url,requestedUrl:source.requestedUrl,digest:source.digest,digestScope:source.digestScope??'extracted-text',fetchedAt:source.fetchedAt,partial:source.partial,excerptOffset:source.excerptOffset??0,excerptSelection:source.excerptSelection??'prefix',transportTruncated:source.transportTruncated??false,publishedAt:source.publishedAt??null,publishedAtStatus:source.publishedAtStatus??'unknown',discovery:source.discovery??null,signals:source.signals??source.discovery?.sourceSignals??null,trust:'untrusted-public-web'},taskId:task.id}),Date.now());
+    const goalDescription=task.checkpoint.goal?this.db.prepare('SELECT description FROM goal_record WHERE agent=? AND id=?').get(id,task.checkpoint.goal.id)?.description:'';
+    const developmentOnly=developmentInput(goalDescription)||developmentInput(task.checkpoint.candidate?.question)||developmentInput(result.title);
+    this.db.prepare("INSERT INTO learning_note VALUES(?,?,?,?,?,'active',?,NULL)").run(noteId,id,memoryId,sourceId,JSON.stringify({...result,learningIntent:task.checkpoint.plan?.learningIntent??null,developmentOnly,coverage:learningCoverage(result,source,task.checkpoint.plan?.question??source.topic??''),researchQuestion:task.checkpoint.plan?.question??null,source:{url:source.url,requestedUrl:source.requestedUrl,digest:source.digest,digestScope:source.digestScope??'extracted-text',fetchedAt:source.fetchedAt,partial:source.partial,excerptOffset:source.excerptOffset??0,excerptSelection:source.excerptSelection??'prefix',transportTruncated:source.transportTruncated??false,publishedAt:source.publishedAt??null,publishedAtStatus:source.publishedAtStatus??'unknown',discovery:source.discovery??null,signals:source.signals??source.discovery?.sourceSignals??null,trust:'untrusted-public-web'},taskId:task.id}),Date.now());
     this.journal.put(id,'learned:'+createHash('sha256').update(source.url).digest('hex'),source.digest);
     if(task.checkpoint.correction)this.journal.put(id,'learning-correction:'+hash(source.requestedUrl??source.url),null);
     this.journal.audit(id,'learning-remembered',{taskId:task.id,noteId,memoryId,sourceId});this.update(task.id,'completed',{...task.checkpoint,noteId});return noteId;

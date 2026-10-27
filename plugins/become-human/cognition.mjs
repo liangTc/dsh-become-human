@@ -15,7 +15,7 @@ const actors=new Set(['owner','agent','system']);
 const terminal=new Set(['completed','dropped']);
 const taskTerminal=new Set(['completed','failed','cancelled']);
 export const cognitionPolicy=Object.freeze({version:1,statuses:['inbox','watching','paused','completed','dropped','blocked'],kinds:['research','conversation','question','goal','commitment','other'],activeLimit:128,historyLimit:100,decisionLimit:512,taskLinkLimit:8,defaultCooldownMs:3600000,maxFocusLeaseMs:3600000,sourceKinds:['owner-config','agent-inference','runtime-fact']});
-const linkTypes=Object.freeze({task:'autonomy_task',goal:'goal_record',memory:'memory_record',action:'human_action',source:'source_record',note:'learning_note',tool:'human_tool_job'});
+const linkTypes=Object.freeze({'work-memory':'human_work_observation_memory',task:'autonomy_task',goal:'goal_record',memory:'memory_record',action:'human_action',source:'source_record',note:'learning_note',tool:'human_tool_job'});
 const transitions=Object.freeze({watch:'watching',pause:'paused',complete:'completed',drop:'dropped',block:'blocked',reopen:'inbox'});
 
 // These records describe software state and explicit intentions. They are not
@@ -43,7 +43,7 @@ export class CognitionStore {
     // Focus leases, task outcome reviews and mechanically generated task cards
     // are runtime activity, not a new owner direction. They must not invalidate
     // an otherwise resumable plan after every foreground interruption.
-    return hash(this.db.prepare("SELECT id,version FROM human_matter WHERE agent=? AND request_id NOT LIKE 'autonomy-task:%' ORDER BY id").all(agent));
+    return hash(this.db.prepare("SELECT id,version FROM human_matter WHERE agent=? AND request_id NOT LIKE 'autonomy-task:%' AND NOT (request_id LIKE 'work-observation:%' AND origin='agent' AND status='inbox') ORDER BY id").all(agent));
   }
   table(name){return !!this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name);}
   actor(actor){if(!actors.has(actor))fail('INVALID_MATTER_ACTOR');return actor;}
@@ -56,6 +56,7 @@ export class CognitionStore {
     return links.map(ref=>({type:ref.type,id:ref.id}));
   }
   linkState(agent,ref){
+    if(ref.type==='work-memory'){let record;try{record=this.factory?.workObservation?.get(agent,ref.id);}catch{}return {...ref,exists:record?.exists===true,valid:record?.valid===true,status:record?.status??'missing',label:'工作观察记忆'};}
     if(ref.type==='topic'){
       const stored=this.journal.value(agent,'socialTopicMemory',null)?.records??[],legacy=this.journal.value(agent,'socialContacts',[]),row=[...stored,...legacy].find(r=>r.messageId===ref.id);
       const valid=!!row&&(!row.ownerAnchor||this.sourceValid(agent,row.ownerAnchor))&&row.at>this.journal.value(agent,'memoryContextBarrierAt',0);

@@ -1,5 +1,5 @@
 import {createHash,randomUUID} from 'node:crypto';
-import {developmentInput,retrievalTerms} from './knowledge-signals.mjs';
+import {retrievalTerms} from './knowledge-signals.mjs';
 
 const DAY=86400000;
 const defaults=Object.freeze({enabled:true,intervalMs:DAY,newRecordThreshold:30,hotDays:7,coldDays:30});
@@ -12,6 +12,23 @@ const clean=(value,max,required=true)=>typeof value==='string'&&value.trim().len
 const tiers=new Set(['hot','warm','cold']);
 const protectedTypes=new Set(['identity','fact','goal','working']);
 const unique=values=>Array.isArray(values)&&values.length===new Set(values).size;
+const quoteId=(batchId,source,start,end)=>'MQ-'+hash(['literal-memory-evidence-v1',batchId,source.id,source.hash,start,end]).slice(0,24);
+
+// Model output chooses these IDs, not its own reconstruction of an excerpt.
+// Offsets are UTF-16 source-body offsets and are never accepted from the model.
+function literalQuote(batchId,source,maxChars){
+  if(typeof source?.body!=='string')return null;
+  let start=0;while(start<source.body.length&&/\s/u.test(source.body[start]))start++;
+  let end=Math.min(source.body.length,start+maxChars);
+  if(end<source.body.length&&/[\uD800-\uDBFF]/u.test(source.body[end-1])&&/[\uDC00-\uDFFF]/u.test(source.body[end]))end--;
+  while(end>start&&/\s/u.test(source.body[end-1]))end--;
+  const text=source.body.slice(start,end);
+  if(!text||secret(text)||/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/u.test(text))return null;
+  // A one-to-three-character greeting is quotable only as the entire literal
+  // source content, never as a permissive short substring of a longer source.
+  if(text.length<4&&text!==source.body.trim())return null;
+  return {quoteId:quoteId(batchId,source,start,end),sourceId:source.id,text,sourceHash:source.hash,start,end,occurred:source.occurred};
+}
 
 // Lifecycle state is an overlay. Source text, memory facts, withdrawal state and
 // evidence versions are owned by DomainMemory and are never rewritten here.
@@ -43,7 +60,7 @@ export class MemoryLifecycle {
   validMemory(agent,row){return !!row&&row.status==='active'&&row.namespace==='real'&&(row.valid_to===null||row.valid_to>this.now(agent))&&Array.isArray(parse(row.refs))&&parse(row.refs).every(id=>this.validSource(agent,id));}
   memory(agent,id){this.admitted(agent);const row=this.db.prepare('SELECT * FROM memory_record WHERE agent=? AND id=?').get(agent,id);if(!this.validMemory(agent,row))fail('MEMORY_NOT_FOUND');return row;}
   current(agent){return this.db.prepare("SELECT * FROM memory_record WHERE agent=? AND status='active' AND namespace='real' ORDER BY valid_from,id").all(agent).filter(row=>this.validMemory(agent,row));}
-  isDevelopment(agent,row){return (parse(row.refs)??[]).some(id=>developmentInput(this.source(agent,id)?.body??''));}
+  isDevelopment(agent,row){return (parse(row.refs)??[]).some(id=>this.domain.sourceIsDevelopmentTest(agent,id));}
   goalProtected(agent,row){
     if(!this.table('goal_record'))return false;
     const refs=new Set(parse(row.refs)??[]);
@@ -123,6 +140,12 @@ export class MemoryLifecycle {
     this.journal.transaction(()=>{this.db.prepare("UPDATE human_memory_batch SET status='failed',version=version+1,completed=?,data=? WHERE agent=? AND id=? AND status='proposed'").run(this.now(agent),JSON.stringify({...batch.data,error:code}),agent,batchId);this.audit(agent,'batch-failed',{batchId,code});});return {batchId,status:'failed',version:batch.version+1,error:code};
   }
   currentBatchItems(agent,batch){return batch.data.memoryIds.map(id=>this.evidenceItem(agent,this.memory(agent,id)));}
+  quoteCatalog(agent,batchId,{maxChars=240}={}){
+    if(!Number.isSafeInteger(maxChars)||maxChars<32||maxChars>240)fail('INVALID_MEMORY_QUOTE_CATALOG');
+    const batch=this.rawBatch(agent,batchId);if(batch.status!=='proposed')fail('MEMORY_BATCH_NOT_PROPOSED');
+    const items=this.currentBatchItems(agent,batch);if(this.fingerprint(items)!==batch.data.baseFingerprint)fail('STALE_MEMORY_BATCH');
+    return [...new Set(items.flatMap(item=>item.refs))].flatMap(id=>{const source=this.source(agent,id);if(!this.validSource(agent,id))fail('STALE_MEMORY_BATCH');const quote=literalQuote(batch.id,source,maxChars);return quote?[quote]:[];});
+  }
   commitSummary(agent,input){
     this.admitted(agent);if(!plain(input))fail('INVALID_MEMORY_SUMMARY');const batch=this.rawBatch(agent,input.batchId);
     if(batch.status!=='proposed')fail('MEMORY_BATCH_NOT_PROPOSED');if(input.baseFingerprint!==batch.data.baseFingerprint)fail('STALE_MEMORY_BATCH');
@@ -132,7 +155,16 @@ export class MemoryLifecycle {
     const selected=items.filter(item=>memoryIds.includes(item.id)),expectedRefs=[...new Set(selected.flatMap(item=>item.refs))],refs=input.refs??expectedRefs;
     if(!unique(refs)||refs.length!==expectedRefs.length||refs.some(id=>!expectedRefs.includes(id)))fail('INVALID_MEMORY_SUMMARY_EVIDENCE');
     if(!Array.isArray(input.quotes)||input.quotes.length<1||input.quotes.length>24)fail('INVALID_MEMORY_SUMMARY_EVIDENCE');
-    const quotes=input.quotes.map(quote=>{if(!plain(quote)||!refs.includes(quote.sourceId))fail('INVALID_MEMORY_SUMMARY_EVIDENCE');const excerpt=clean(quote.text,240);if(excerpt.length<4||!this.source(agent,quote.sourceId).body.includes(excerpt))fail('UNSUPPORTED_MEMORY_SUMMARY_QUOTE');return {sourceId:quote.sourceId,text:excerpt};});
+    const quotes=input.quotes.map(quote=>{
+      if(!plain(quote)||!refs.includes(quote.sourceId))fail('INVALID_MEMORY_SUMMARY_EVIDENCE');
+      const source=this.source(agent,quote.sourceId),excerpt=clean(quote.text,240);
+      if(quote.quoteId!==undefined){
+        if(Object.keys(quote).some(k=>!['quoteId','sourceId','text','sourceHash','start','end','occurred'].includes(k))||!Number.isSafeInteger(quote.start)||!Number.isSafeInteger(quote.end)||quote.start<0||quote.end<=quote.start||quote.end>source.body.length||quote.end-quote.start>240||quote.sourceHash!==source.hash||quote.quoteId!==quoteId(batch.id,source,quote.start,quote.end)||quote.text!==excerpt||source.body.slice(quote.start,quote.end)!==excerpt||excerpt.length<4&&excerpt!==source.body.trim())fail('UNSUPPORTED_MEMORY_SUMMARY_QUOTE');
+        return {sourceId:quote.sourceId,text:excerpt,quoteId:quote.quoteId,sourceHash:source.hash,start:quote.start,end:quote.end};
+      }
+      // Historical/manual raw-quote callers retain their stricter contract.
+      if(excerpt.length<4||!source.body.includes(excerpt))fail('UNSUPPORTED_MEMORY_SUMMARY_QUOTE');return {sourceId:quote.sourceId,text:excerpt};
+    });
     if(refs.some(id=>!quotes.some(quote=>quote.sourceId===id)))fail('INCOMPLETE_MEMORY_SUMMARY_EVIDENCE');
     const summaryId=randomUUID(),created=this.now(agent),data={id:summaryId,batchId:batch.id,title,text,memoryIds,refs,quotes,items:selected.map(({payload,evidence,...item})=>({...item,evidence:evidence.map(({text,...source})=>source)})),kind:'derived-model-summary',truth:'inferred',semanticValidation:'unverified-model-inference',temporalValidity:'historical-observations-not-current-state',originalsRetained:true,created};
     this.journal.transaction(()=>{

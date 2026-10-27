@@ -1,4 +1,5 @@
 import { BusyMessageDispatcher, canAutomaticallySteer } from '../shared/busy-message-dispatcher.mjs';
+import {createHash} from 'node:crypto';
 import { createDeferredDeliveryCoordinator, deferredOutcomeText } from '../shared/deferred-delivery-coordinator.mjs';
 import {
   DEFAULT_WEIXIN_MAX_MESSAGE_CHARS,
@@ -384,7 +385,7 @@ export class WeixinHarnessBridge {
     if(this.#harness.singleSessionIngress){
       const sender=nonEmptyString(message?.from_user_id),messageId=weixinMessageId(message),contextToken=nonEmptyString(message?.context_token);
       if(message?.message_type===2||!sender||!messageId)return Promise.resolve();
-      return this.#harness.singleSessionIngress.accept({channel:'weixin',botId:this.#contextEnhancement?.botId,state:this.#state,signal:this.#signal,message:{messageId,senderId:sender,conversationId:sender,kind:'direct',content:extractWeixinText(message),hasMedia:hasWeixinImageItems(message)||hasWeixinFileItems(message)},beforePair:()=>this.#state.rememberContextToken?.({userId:sender,contextToken,seq:message.seq,messageId,messageTimeMs:message.create_time_ms??weixinMessageTimestampMs(messageId)}),reply:text=>this.#send(sender,text,contextToken,nonEmptyString(message?.run_id))});
+      return this.#harness.singleSessionIngress.accept({channel:'weixin',botId:this.#contextEnhancement?.botId,state:this.#state,signal:this.#signal,message:{messageId,senderId:sender,conversationId:sender,kind:'direct',content:extractWeixinText(message),hasMedia:hasWeixinImageItems(message)||hasWeixinFileItems(message),hasFiles:hasWeixinFileItems(message),images:typeof this.#api?.inboundImages==='function'?this.#api.inboundImages(message):extractWeixinImages(message),imageFingerprint:createHash('sha256').update(JSON.stringify(message.item_list??[])).digest('hex')},beforePair:()=>this.#state.rememberContextToken?.({userId:sender,contextToken,seq:message.seq,messageId,messageTimeMs:message.create_time_ms??weixinMessageTimestampMs(messageId)}),reply:text=>this.#send(sender,text,contextToken,nonEmptyString(message?.run_id))});
     }
     if (this.#signal?.aborted) return Promise.resolve();
     if (message?.message_type === 2) return Promise.resolve();

@@ -3,8 +3,10 @@ import {installTaskSchema,taskView,saveTask,toggleTask,commitTask,occurrence,sto
 import {modelRequest,requestCost} from './autonomy.mjs';
 import {contextMessages} from './context.mjs';
 import {quotaAllows,roundDuration} from './quota.mjs';
-import {conversationPolicy,conversationalText,wantsSources} from './conversation.mjs';
+import {conversationPolicy as baseConversationPolicy,experienceGroundingPolicy,conversationalText,conversationOptions} from './conversation.mjs';
 import {parseScheduleIntent} from './schedule-intent.mjs';
+import {assertAgentExperience,outputDiagnostic} from './learning.mjs';
+const conversationPolicy=baseConversationPolicy+experienceGroundingPolicy;
 
 const MAX_LATENESS=15*60000;
 const requestKey=value=>typeof value==='string'&&/^[a-zA-Z0-9._:-]{8,128}$/.test(value);
@@ -120,7 +122,7 @@ export async function runReminderTurn(agent,signal,row){
       signal=AbortSignal.any([parentSignal,AbortSignal.timeout(remainingMs)]);agent.activeRoundId=roundId;agent.activeLane='scheduled';modelPhase=true;
       j.audit(id,'schedule-executing',{scheduleId:row.id,title:storedRule(row).title,roundId,occurrenceAt:row.occurrenceAt??row.due_at});
       response=await modelRequest(agent,signal,{turn,epoch,lane:'scheduled',taskId:'schedule:'+row.id,messages:input});modelPhase=false;
-      text=conversationalText(response.text,{includeSources:wantsSources(row.text)});if(!text)throw new Error('EMPTY_SCHEDULE_OUTPUT');
+      assertAgentExperience(response.text);text=conversationalText(response.text,conversationOptions(row.text));if(!text)throw new Error('EMPTY_SCHEDULE_OUTPUT');
     }
     const message={...createAssistantMessage({content:[{type:'text',text}],source:{provider:response?.provider??'local-reminder',model:response?.model??'scheduled'}}),id:row.message_id};
     const data={turn,step:1,message,stream:[],...(response?.usage?{usage:response.usage}:{})};stageId=response?.rid??crypto.randomUUID();
@@ -132,7 +134,7 @@ export async function runReminderTurn(agent,signal,row){
       const existing=agent.session.snapshotEvents().some(e=>e.type==='assistant/message'&&e.data.message.id===row.message_id);
       if(existing){await agent.flush();if(stageId)j.commitResponse(stageId);store.recover(agent.session);}
       else{if(stageId)j.db.prepare("UPDATE response_stage SET state='discarded',payload='null' WHERE id=?").run(stageId);j.db.prepare("UPDATE reminder SET status='pending',stage_id=NULL,updated=? WHERE id=? AND status='staged'").run(Date.now(),row.id);}
-    }else if(row.mode==='prompt'&&(modelPhase||signal.aborted||['EMPTY_SCHEDULE_OUTPUT','CONTEXT_BUDGET_TOO_SMALL'].includes(error.message))){const code=signal.aborted?'AUTONOMOUS_ROUND_TIMEOUT':/^[A-Z_]{3,64}$/.test(error.message)?error.message:'SCHEDULE_MODEL_FAILED';store.block(id,row.id,code);reason={kind:'error',error:{code,message:code}};}
+    }else if(row.mode==='prompt'&&(modelPhase||signal.aborted||['EMPTY_SCHEDULE_OUTPUT','CONTEXT_BUDGET_TOO_SMALL','UNSUPPORTED_AGENT_EXPERIENCE'].includes(error.message))){const code=signal.aborted?'AUTONOMOUS_ROUND_TIMEOUT':/^[A-Z_]{3,64}$/.test(error.message)?error.message:'SCHEDULE_MODEL_FAILED';if(code==='UNSUPPORTED_AGENT_EXPERIENCE'&&response){j.audit(id,'schedule-output-rejected',{scheduleId:row.id,attemptId:response.rid,code,validationDiagnostic:outputDiagnostic(error,{phase:'execution',text:response.text})});j.endAttempt(response.rid,{state:'validation-rejected',usage:response.usage,usageConfidence:response.usage?'reported':'unknown',error:code,textChars:response.text.length,reasoningChars:response.reasoningChars});response=null;}store.block(id,row.id,code);reason={kind:'error',error:{code,message:code}};}
     else{reason={kind:'error',error:{code:'REMINDER_COMMIT_FAILED',message:'REMINDER_COMMIT_FAILED'}};throw error;}
   }finally{
     if(response&&!stageId)j.endAttempt(response.rid,{state:parentSignal.aborted?'cancelled':'failed',usage:response.usage,usageConfidence:response.usage?'reported':'unknown',error:'RESPONSE_NOT_COMMITTED'});

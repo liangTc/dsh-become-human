@@ -21,9 +21,9 @@ export function nextActionWork(agent){
   const action=agent.factory.actions.next(agent.id,{excludeIds});return action?{execute:action}:pendingNotice(agent);
 }
 function noticeText(row){
-  if(row.status==='proposed')return `《${row.title}》的报告草稿已准备好。请在 Web 配置的“行动与产物”中查看完整内容、路径和来源；你批准后我才会保存文件。\n行动编号：${row.id}`;
-  if(row.status==='completed'){const r=row.receipt;return `《${row.title}》已保存为本地文件，并核对了文件内容。\n位置：${r.path}\n大小：${r.bytes} 字节\nSHA-256：${r.digest??r.sha256}\n可以在“行动与产物”中查看。这里只确认文件写入，不代表报告中的现实建议已经执行。`;}
-  return `《${row.title}》的文件行动${row.status==='expired'?'授权已到期':'需要处理'}，本次没有继续写入。请在“行动与产物”查看状态；不会自动覆盖已有文件或重试失败行动。\n行动编号：${row.id}`;
+  if(row.status==='proposed')return `《${row.title}》的草稿准备好了，Web 的“行动与产物”里可以查看。你确认后，我再保存。`;
+  if(row.status==='completed')return `《${row.title}》已经保存好了，内容也核对过了。需要时可以在 Web 的“行动与产物”里打开。`;
+  return `《${row.title}》${row.status==='expired'?'的保存授权到期了':'的保存需要你看一下'}，这次没有继续写入。Web 的“行动与产物”里有具体状态。`;
 }
 // This is one serial driver turn. It uses no model and never expands a grant.
 export async function runActionTurn(agent,signal,work){
