@@ -7,10 +7,14 @@ const fail=code=>{throw new Error(code);};
 const safeCode=error=>/^[A-Z_]{3,80}$/u.test(error?.message??'')?error.message:'CUSTOM_MCP_REQUEST_FAILED';
 const toolId=(server,name)=>`mcp-${server}-${customMcpHash(name).slice(0,16)}`;
 const byteLength=value=>Buffer.byteLength(JSON.stringify(value));
-function boundedResult(result,server,tool){
+export function boundedCustomMcpResult(result,server,tool){
   if(!plain(result)||!Array.isArray(result.content)||result.content.length>128)fail('MCP_INVALID_TOOL_RESULT');
   if(result.isError)fail('CUSTOM_MCP_TOOL_ERROR');
-  const data={serverId:server,tool,backend:'custom-mcp',untrusted:true,evidenceStatus:'external-tool-result-not-verified',content:result.content.slice(0,16).map(item=>item?.type==='text'?{type:'text',text:String(item.text??'').slice(0,8192)}:{type:item?.type??'unknown',omitted:true}),...(result.structuredContent!==undefined?{structuredContent:result.structuredContent}:{})};
+  const textPrefix=value=>{let end=Math.min(value.length,8192);if(end<value.length&&/[\uD800-\uDBFF]/u.test(value[end-1]??''))end--;return value.slice(0,end);};
+  const content=result.content.slice(0,16).map(item=>item?.type==='text'?{type:'text',text:textPrefix(String(item.text??''))}:{type:item?.type??'unknown',omitted:true});
+  const projection={receivedItems:result.content.length,retainedItems:content.length,receivedTextChars:result.content.reduce((n,item)=>n+(item?.type==='text'?String(item.text??'').length:0),0),retainedTextChars:content.reduce((n,item)=>n+(item.type==='text'?item.text.length:0),0),omittedNonText:content.some(item=>item.omitted===true)};
+  const partial=projection.receivedItems!==projection.retainedItems||projection.receivedTextChars!==projection.retainedTextChars||projection.omittedNonText;
+  const data={serverId:server,tool,backend:'custom-mcp',untrusted:true,evidenceStatus:'external-tool-result-not-verified',content,projection,...(partial?{truncated:true}:{}),...(result.structuredContent!==undefined?{structuredContent:result.structuredContent}:{})};
   if(byteLength(data)<=MAX_RESULT_BYTES)return data;
   const serialized=JSON.stringify(data),wrap=size=>({serverId:server,tool,backend:'custom-mcp',untrusted:true,evidenceStatus:'external-tool-result-not-verified',truncated:true,originalBytes:Buffer.byteLength(serialized),format:'json-excerpt',text:serialized.slice(0,size)});
   let low=0,high=serialized.length;while(low<high){const mid=Math.ceil((low+high)/2);if(byteLength(wrap(mid))<=MAX_RESULT_BYTES)low=mid;else high=mid-1;}return wrap(low);
@@ -79,7 +83,7 @@ class CustomMcpProvider {
       const current=describeCustomMcpTool(raw);if(!current.supported||current.schemaHash!==grant.schemaHash)fail('MCP_TOOL_DEFINITION_CHANGED');
       valid?.();deadline.throwIfAborted();
       const result=await client.callTool({name:grant.name,arguments:input},{signal:deadline,timeout:this.server.timeoutMs,toolDefinition:raw});
-      deadline.throwIfAborted();valid?.();return boundedResult(result,this.server.id,grant.name);
+      deadline.throwIfAborted();valid?.();return boundedCustomMcpResult(result,this.server.id,grant.name);
     },signal);
   }
   async disconnect(){

@@ -33,7 +33,7 @@ function ResultSummary({row,ui}:any){
   const r=row.result??{},notes=list(r.notes??r.noteIds),receipt=r.fileReceipt??r.receipt,{Band}=ui;
   return <div className="hn-task-result">
     {text(r.summary??r.meaning)?<p>{text(r.summary??r.meaning)}</p>:null}
-    {row.source==='goal'?<p>步骤执行：{r.executionComplete?'已结束':'尚未全部结束'} · 目标验收：{r.achieved===true?'符合已配置的验收规则':r.achieved===false?'尚未达成':'待核对'}</p>:null}
+    {row.source==='goal'?<p>步骤执行：{['cancelled','expired'].includes(row.status)?'已终止':r.executionComplete?'已结束':'尚未全部结束'} · 目标验收：{row.status==='cancelled'?'目标已取消':row.status==='expired'?'目标已到期':r.achieved===true?'符合已配置的验收规则':r.achieved===false?'尚未达成':'待核对'}</p>:null}
     {notes.length?<p>关联笔记 {notes.length} 份{r.semanticVerified===false?' · 内容完整性尚未确认':''}</p>:null}
     {r.noteId?<p className="hn-mono">笔记 {r.noteId}</p>:null}
     {row.source==='schedule'?<p>{['pending','paused','blocked','staged'].includes(row.status)?'下次计划':'原计划'} {time(r.nextAt)} · 已写入会话 {r.deliveryCount??0} 次{r.lastCommittedAt?' · 最近 '+time(r.lastCommittedAt):''}</p>:null}

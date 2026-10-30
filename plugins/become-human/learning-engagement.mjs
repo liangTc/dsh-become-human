@@ -5,7 +5,7 @@ import {createHash} from 'node:crypto';
 import {developmentInput,questionSignals,retrievalTerms} from './knowledge-signals.mjs';
 
 const DAY=86400000,HOUR=3600000,KEY='learningEngagement';
-export const learningEngagementPolicy=Object.freeze({version:1,maxOffers:64,maxRoutes:128,maxOwnerRows:512,maxOfferChars:120,retentionMs:90*DAY,responseWindowMs:24*HOUR,silentAfterMs:24*HOUR,silentCooldownMs:3*DAY,rejectionCooldownMs:7*DAY,decayMs:14*DAY});
+export const learningEngagementPolicy=Object.freeze({version:3,maxOffers:64,maxRoutes:128,maxOwnerRows:512,maxOfferChars:120,retentionMs:90*DAY,responseWindowMs:24*HOUR,silentAfterMs:24*HOUR,silentCooldownMs:3*DAY,rejectionCooldownMs:7*DAY,decayMs:14*DAY});
 const normalize=text=>String(text??'').normalize('NFKC').toLowerCase();
 const safeId=value=>typeof value==='string'&&value.length>0&&value.length<=160;
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
@@ -14,6 +14,26 @@ const clean=text=>normalize(text).replace(/https?:\/\/\S+/gu,' ').replace(/【[^
 const compactNoteTitle=value=>String(value??'').normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]/gu,'');
 const noteTitleCore=value=>String(value??'').normalize('NFKC').split(/[_|—–]/u)[0].replace(/^(?:原文摘录|来源原文摘录|来源摘录)\s*[·•:：-]?\s*/u,'');
 const noteMessageText=message=>Array.isArray(message?.content)?message.content.filter(c=>c?.type==='text'&&typeof c.text==='string').map(c=>c.text).join('\n'):'';
+
+// Exact selectors and ambiguity remain explicit. A natural reference without
+// either can be interpreted by the model through the existing read-only tools.
+export function delegateLearningLookup(probe,messages){
+  if(!probe?.requested||probe.noteId||probe.ambiguous||probe.reason!=='explicit-note-not-found')return false;
+  const text=(messages??[]).map(noteMessageText).join('\n');
+  return !/\b[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\b|[“「『《"][^”」』》"\n]{1,200}[”」』》"]/iu.test(text);
+}
+
+// This records a model-interpreted reference only after its reply commits.
+// It changes bounded route attention, never a user preference or permission.
+export function commitLearningFollowUp(journal,id,value){
+  if(!value||!['noteId','ownerSourceId','assistantMessageId','sourceId'].every(k=>safeId(value[k]))||!Number.isSafeInteger(value.memoryVersion)||typeof value.sourceHash!=='string')return false;
+  const origin=journal.value(id,'dialogue-origin:'+value.assistantMessageId,null);
+  if(origin?.lane!=='foreground'||!Array.isArray(origin.inputIds)||!origin.inputIds.includes(value.ownerSourceId))return false;
+  const now=Math.max(Date.now(),journal.value(id,'timeHighWater',0));
+  const row=journal.db.prepare("SELECT n.source_id,m.version,m.refs,s.hash,s.root FROM learning_note n JOIN memory_record m ON m.agent=n.agent AND m.id=n.memory_id JOIN source_record s ON s.agent=n.agent AND s.id=n.source_id WHERE n.agent=? AND n.id=? AND n.status='active' AND m.status='active' AND (m.valid_to IS NULL OR m.valid_to>?) AND s.status='active'").get(id,value.noteId,now);
+  if(!row||row.source_id!==value.sourceId||row.version!==value.memoryVersion||row.hash!==value.sourceHash||!JSON.parse(row.refs).includes(row.source_id)||journal.db.prepare('SELECT 1 FROM extraction_block WHERE agent=? AND source=?').get(id,row.root))return false;
+  journal.audit(id,'learning-follow-up-committed',{noteId:value.noteId,ownerSourceId:value.ownerSourceId,assistantMessageId:value.assistantMessageId,sourceId:value.sourceId,sourceHash:value.sourceHash,memoryVersion:value.memoryVersion,scope:'model-interpreted-current-owner-reference',isUserPreference:false});return true;
+}
 
 /** Resolve a current, explicit saved-note request without inventing an offer,
  * owner interest or new permission. The caller supplies only currently usable
@@ -65,7 +85,9 @@ export function learningRoute(text){
   // Preserve concrete code/API names separately from shared protocol acronyms.
   // A common "HTTP" or "API" must not hide two different named subjects.
   const specificIdentifiers=[...new Set([...httpStatusCodes,...(value.match(/[A-Za-z][A-Za-z0-9_.+-]{1,}/g)??[]).filter(word=>/[a-z][A-Z]|[A-Za-z]\d/u.test(word)).map(normalize)])].sort().slice(0,8);
-  const signature=specificIdentifiers.length?'specific:'+specificIdentifiers.join('|'):identifiers.length?'identifiers:'+identifiers.join('|'):'terms:'+terms.join('|');
+  // Identifiers are anchors, not a complete topic. A shared publisher, product
+  // or API name must not merge all questions about it into one feedback route.
+  const signature=JSON.stringify({specificIdentifiers,identifiers,terms});
   return {key:createHash('sha256').update(signature).digest('hex').slice(0,24),terms,identifiers,specificIdentifiers,httpStatusCodes,lexicalOnly:true,empty:terms.length===0};
 }
 
@@ -136,6 +158,7 @@ function foregroundReads(journal,id,since,now){
     try{
       const job=journal.db.prepare('SELECT CASE WHEN length(input)<=16384 THEN input END AS input,CASE WHEN length(result)<=131072 THEN result END AS result FROM human_tool_job WHERE agent=? AND id=?').get(id,row.jobId),input=JSON.parse(job?.input??'null'),result=JSON.parse(job?.result??'null');url=materialUrl(input?.url);digest=typeof result?.digest==='string'?result.digest:null;
       if(row.tool==='list-learning-notes'&&Array.isArray(result?.items)&&result.truncated!==true&&result.hasMore!==true&&(!Number.isFinite(result.total)||result.total<=result.items.length))noteIds=result.items.slice(0,16).map(note=>note?.id).filter(safeId);
+      if(row.tool==='read-learning-note'&&safeId(result?.note?.id)&&result.truncated!==true)noteIds=[result.note.id];
     }catch{}
     events.push({at:row.time,seq:row.seq,url,digest,noteIds});
   }
@@ -145,7 +168,13 @@ function foregroundReads(journal,id,since,now){
 function ownerRows(journal,domain,id,since,now){
   if(typeof domain?.sourceUsable!=='function')return {rows:[],coverageSince:now};
   const raw=journal.db.prepare("SELECT event_key,text,created FROM outbox WHERE agent=? AND kind='user' AND event_key LIKE 'user:%' AND created>=? AND created<=? ORDER BY created DESC,seq DESC LIMIT ?").all(id,since,now,learningEngagementPolicy.maxOwnerRows).reverse();
-  return {rows:raw.map(row=>({sourceId:row.event_key.slice(5),text:row.text,at:row.created})).filter(row=>usable(domain,id,row.sourceId)&&!developmentInput(row.text)),coverageSince:raw.length===learningEngagementPolicy.maxOwnerRows?raw[0].created:since};
+  const resolved=new Map();
+  const references=journal.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='audit'").get()?journal.db.prepare("SELECT data FROM audit WHERE agent=? AND kind='learning-follow-up-committed' ORDER BY seq DESC LIMIT ?").all(id,learningEngagementPolicy.maxOwnerRows):[];
+  for(const row of references){let ref;try{ref=JSON.parse(row.data);}catch{continue;}const origin=journal.value(id,'dialogue-origin:'+ref.assistantMessageId,null);
+    if(!Number.isSafeInteger(ref.time)||ref.time<since||ref.time>now||origin?.lane!=='foreground'||!origin.inputIds?.includes(ref.ownerSourceId)||!usable(domain,id,ref.sourceId)||!journal.db.prepare("SELECT 1 FROM outbox WHERE agent=? AND kind='assistant' AND event_key=?").get(id,'assistant:'+ref.assistantMessageId))continue;
+    const ids=resolved.get(ref.ownerSourceId)??new Set();ids.add(ref.noteId);resolved.set(ref.ownerSourceId,ids);
+  }
+  return {rows:raw.map(row=>({sourceId:row.event_key.slice(5),text:row.text,at:row.created,resolvedNoteIds:[...(resolved.get(row.event_key.slice(5))??[])]})).filter(row=>usable(domain,id,row.sourceId)&&!developmentInput(row.text)),coverageSince:raw.length===learningEngagementPolicy.maxOwnerRows?raw[0].created:since};
 }
 
 function related(a,b){
@@ -153,17 +182,14 @@ function related(a,b){
   if(a.key===b.key)return true;
   const concreteA=a.specificIdentifiers??[],concreteB=b.specificIdentifiers??[];
   if(concreteA.length&&concreteB.length&&!concreteA.some(term=>concreteB.includes(term)))return false;
-  const identifierHits=a.identifiers.filter(term=>b.terms.includes(term));
-  if(identifierHits.length>0||b.identifiers.some(term=>a.terms.includes(term)))return true;
-  // A title-only publisher name must not lock the whole route. Two explicit,
-  // conflicting topic identifiers still stay distinct (e.g. HTTP 200/204).
-  if(a.identifiers.length&&b.identifiers.length)return false;
-  const common=a.terms.filter(term=>b.terms.includes(term)).length;
-  return common>=2&&common/Math.max(1,Math.min(a.terms.length,b.terms.length))>=.4;
+  const anchors=new Set([...(a.identifiers??[]),...(b.identifiers??[]),...concreteA,...concreteB]);
+  const topicsA=a.terms.filter(term=>!anchors.has(term)),topicsB=b.terms.filter(term=>!anchors.has(term));
+  const common=topicsA.filter(term=>topicsB.includes(term)).length;
+  return common>=2&&common/Math.max(1,Math.min(topicsA.length,topicsB.length))>=.4;
 }
 
-function responseKind(offer,row,{deicticAllowed=true}={}){
-  const text=normalize(row.text),conflict=conflictingMaterial(offer,text),named=!conflict&&related(offer.route,learningRoute(text)),recent=row.at-offer.at<=learningEngagementPolicy.responseWindowMs,implicit=deicticAllowed&&!conflict&&implicitReferenceOnly(text);
+function responseKind(offer,row,{deicticAllowed=true,resolvedNote=false}={}){
+  const text=normalize(row.text),conflict=conflictingMaterial(offer,text),named=!conflict&&(resolvedNote||related(offer.route,learningRoute(text))),recent=row.at-offer.at<=learningEngagementPolicy.responseWindowMs,implicit=deicticAllowed&&!conflict&&implicitReferenceOnly(text);
   const deictic=/(?:刚才|你说的|你提的|这个|那个|这件|那件|这方面|那方面|这话题|那话题)/u.test(text);
   const rejects=/(?:不想|不要|别|不用|不必|不感兴趣|没兴趣|停止|不再).{0,12}(?:听|聊|讲|分享|推送|介绍|讨论|学)|(?:不感兴趣|没兴趣)(?:[。！!，,\s]|$)/u.test(text);
   const switches=/(?:换|转)(?:个|一?个)?话题|(?:先|今天|现在).{0,8}(?:聊点别的|聊别的|说别的)|(?:晚点|以后|稍后|改天).{0,6}(?:再说|再聊|再讲)/u.test(text);
@@ -171,6 +197,7 @@ function responseKind(offer,row,{deicticAllowed=true}={}){
   const directSwitch=/^(?:(?:我们)?(?:先)?(?:换|转)(?:个|一个)?话题|(?:先|今天|现在)?(?:聊点别的|聊别的|说别的)|(?:晚点|以后|稍后|改天)再(?:说|聊|讲))[。！!，,\s]*$/u.test(text);
   if(rejects&&(named||recent&&deicticAllowed&&!conflict&&(directDecline||deictic&&implicit)))return 'declined';
   if(switches&&(named||recent&&deicticAllowed&&!conflict&&(directSwitch||deictic&&implicit)))return 'changed-topic';
+  if(resolvedNote&&!conflict)return 'interested';
   // An acknowledgement, greeting, or generic "continue" is never interest.
   // Omitted subjects require an explicit learning/previous-message reference.
   const ask=/(?:讲讲|说说|展开|详细|具体|怎么|如何|为什么|什么原理|有何|有什么|什么用|有用吗|学到了什么|在学什么|学的什么|想听|说来听听|tell me more|explain|how does|why does|what is|what are|\?)/iu.test(text);
@@ -187,7 +214,7 @@ function evaluatedOffer(offer,replies,nextAt,now,coverageSince,reads){
   const later=replies.filter(row=>row.at>offer.at&&row.at<nextAt),meaningful=[];let deicticAllowed=reads.coverageSince<=offer.at&&coverageSince<=offer.at,previousAt=offer.at;
   for(const row of later){
     if(reads.events.some(event=>event.at>previousAt&&event.at<=row.at&&!(event.url&&offer.sourceUrls?.includes(event.url)&&event.digest&&event.digest===offer.sourceDigest)&&!(event.noteIds?.length===1&&event.noteIds[0]===offer.noteId)))deicticAllowed=false;
-    const kind=responseKind(offer,row,{deicticAllowed});if(kind)meaningful.push({row,kind});
+    const kind=responseKind(offer,row,{deicticAllowed,resolvedNote:row.resolvedNoteIds?.includes(offer.noteId)});if(kind)meaningful.push({row,kind});
     // A new, explicitly named interest can reopen its own route. Unrelated
     // conversation, an acknowledgement, or a refusal closes omitted subjects.
     deicticAllowed=kind==='interested';previousAt=row.at;
@@ -198,7 +225,8 @@ function evaluatedOffer(offer,replies,nextAt,now,coverageSince,reads){
   const effect=penalty*Math.max(0,1-(now-responseAt)/learningEngagementPolicy.decayMs);
   const cooldownUntil=status==='interested'?null:status==='declined'?responseAt+learningEngagementPolicy.rejectionCooldownMs:['changed-topic','owner-replied-elsewhere'].includes(status)?responseAt+learningEngagementPolicy.silentCooldownMs:offer.at+(status==='no-follow-up'?learningEngagementPolicy.silentCooldownMs:learningEngagementPolicy.silentAfterMs);
   const {materialText,sourceUrls,sourceDigest,...publicOffer}=offer;
-  return {...publicOffer,status,responseSourceId:last?.row.sourceId??later.at(-1)?.sourceId??null,interestedSourceId:status==='interested'?last.row.sourceId:null,responseAt:last?.row.at??later.at(-1)?.at??null,weight:clamp(1+effect,.25,1.5),cooldownUntil:cooldownUntil>now?cooldownUntil:null,reason:status,evidenceKind:['no-follow-up','owner-replied-elsewhere'].includes(status)?'weak-attention-signal':status==='unobserved-window'?'insufficient-observation':status==='awaiting-owner-interest'?'pending':'explicit-owner-response',isUserPreference:false};
+  const modelReference=status==='interested'&&last?.row.resolvedNoteIds?.includes(offer.noteId);
+  return {...publicOffer,status,responseSourceId:last?.row.sourceId??later.at(-1)?.sourceId??null,interestedSourceId:status==='interested'?last.row.sourceId:null,responseAt:last?.row.at??later.at(-1)?.at??null,weight:clamp(1+effect,.25,1.5),cooldownUntil:cooldownUntil>now?cooldownUntil:null,reason:status,evidenceKind:modelReference?'model-interpreted-owner-reference':['no-follow-up','owner-replied-elsewhere'].includes(status)?'weak-attention-signal':status==='unobserved-window'?'insufficient-observation':status==='awaiting-owner-interest'?'pending':'explicit-owner-response',semanticVerified:false,isUserPreference:false};
 }
 
 export function learningEngagementSnapshot(journal,domain,id,now=Date.now()){
@@ -227,7 +255,7 @@ export function learningEngagementSnapshot(journal,domain,id,now=Date.now()){
     const selected=lastInterest&&lastInterest.at>=last.at?[lastInterest]:recent;
     return {key,terms:last.route.terms,identifiers:last.route.identifiers,specificIdentifiers:last.route.specificIdentifiers,httpStatusCodes:last.route.httpStatusCodes,lexicalOnly:true,weight:clamp(1+selected.reduce((sum,row)=>sum+row.weight-1,0),.25,1.5),cooldownUntil:last.cooldownUntil,reason:last.status,lastOfferedAt:last.at,offers:offers.length,responseSourceId:last.responseSourceId,interestedSourceId:last.interestedSourceId,isUserPreference:false};
   }).sort((a,b)=>b.lastOfferedAt-a.lastOfferedAt).slice(0,learningEngagementPolicy.maxRoutes);
-  return {version:learningEngagementPolicy.version,method:'bounded-lexical-owner-follow-up',routes,offers:evaluated,latestOffer:evaluated.at(-1)??null,retainedContactCount:stored.offers.length,limitations:['Silence is weak attention evidence, never dislike or a durable user preference.','Topic matching is lexical; unknown or ambiguous responses do not authorize a lesson.','Explicit owner requests and active goals should bypass autonomous route ranking.']};
+  return {version:learningEngagementPolicy.version,method:'committed-note-reference-with-lexical-fallback',routes,offers:evaluated,latestOffer:evaluated.at(-1)??null,retainedContactCount:stored.offers.length,limitations:['Silence is weak attention evidence, never dislike or a durable user preference.','Model-selected current note references are source checked, not semantically verified owner preferences.','Fallback topic matching is lexical; unknown or ambiguous responses do not authorize a lesson.','Explicit owner requests and active goals should bypass autonomous route ranking.']};
 }
 
 // Invoke only when the assistant response has durably committed. This helper
@@ -249,10 +277,10 @@ export function commitLearningOffer(journal,id,offer){
 
 export function routeDisposition(journal,domain,id,text,now=Date.now()){
   const candidate=learningRoute(text),snapshot=learningEngagementSnapshot(journal,domain,id,now),matches=snapshot.routes.filter(row=>related(candidate,{...row,empty:false}));
-  const exact=matches.find(row=>row.key===candidate.key),selected=exact??matches[0];
+  const exact=matches.find(row=>row.key===candidate.key),selected=exact??(matches.length===1?matches[0]:null);
   if(selected)return {...selected,key:candidate.key,matchedKey:selected.key,known:true,lexicalOnly:true};
   // An opaque exact key permits short contact cooldowns after source removal,
   // without reviving its text, interest inference, or learning weight.
   const prior=ledger(journal,id,now).routes.find(row=>row.key===candidate.key),cooldownUntil=prior&&prior.lastOfferedAt+DAY>now?prior.lastOfferedAt+DAY:null;
-  return {key:candidate.key,known:!!prior,weight:1,cooldownUntil,reason:prior?'contact-metadata-only':'new-or-unmatched-route',lexicalOnly:true,isUserPreference:false};
+  return {key:candidate.key,known:!!prior,weight:1,cooldownUntil,reason:prior?'contact-metadata-only':matches.length>1?'ambiguous-topic-match':'new-or-unmatched-route',lexicalOnly:true,isUserPreference:false};
 }

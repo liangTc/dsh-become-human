@@ -14,7 +14,10 @@ export function researchUrl(value){
   let u;try{u=new URL(value);}catch{throw new Error('SOURCE_URL_NOT_ALLOWED');}
   const host=u.hostname.replace(/^\[|\]$/g,'').replace(/\.$/,'').toLowerCase();
   if(!['https:','http:'].includes(u.protocol)||u.username||u.password||u.port||!host.includes('.')&&!net.isIP(host)||host==='localhost'||host.endsWith('.localhost')||host.endsWith('.local')||host.endsWith('.internal')||net.isIP(host)&&!publicAddress(host)||[...u.searchParams.keys()].some(k=>/^(?:access[_-]?token|token|api[_-]?key|password|secret|authorization|signature)$/i.test(k)))throw new Error('SOURCE_URL_NOT_ALLOWED');
-  u.hash='';if(u.href.length>2400)throw new Error('SOURCE_URL_NOT_ALLOWED');return u.href;
+  // Retain ordinary element IDs as local selection hints. Fragments are never
+  // sent in HTTP requests; opaque payloads and text directives stay excluded.
+  try{const fragment=decodeURIComponent(u.hash.slice(1));if(fragment.length>200||fragment&&!/^[\p{L}\p{N}_.:-]+$/u.test(fragment)||/sk-[\w-]{16,}/iu.test(fragment))u.hash='';}catch{u.hash='';}
+  if(u.href.length>2400)throw new Error('SOURCE_URL_NOT_ALLOWED');return u.href;
 }
 export function publicAddress(address){
   if(net.isIP(address)===4){const [a,b,c]=address.split('.').map(Number);return !(a===0||a===10||a===127||a===169&&b===254||a===172&&b>=16&&b<=31||a===192&&(b===168||b===0&&(c===0||c===2))||a===100&&b>=64&&b<=127||a>=224||a===198&&([18,19].includes(b)||b===51&&c===100)||a===203&&b===0&&c===113);}
@@ -23,38 +26,65 @@ export function publicAddress(address){
 }
 function decode(text){return text.replace(/&#(x[0-9a-f]+|\d+);/gi,(_,n)=>{const v=n[0].toLowerCase()==='x'?parseInt(n.slice(1),16):Number(n);return v>0&&v<=0x10ffff?String.fromCodePoint(v):'';}).replace(/&(?:nbsp|amp|lt|gt|quot|apos);/g,x=>({'&nbsp;':' ','&amp;':'&','&lt;':'<','&gt;':'>','&quot;':'"','&apos;':"'"}[x]));}
 function decodeBody(chunks,type){try{return new TextDecoder(/charset\s*=\s*["']?([^\s;"']+)/i.exec(type)?.[1]??'utf-8').decode(Buffer.concat(chunks));}catch{return Buffer.concat(chunks).toString('utf8');}}
-function contentFragment(html){
-  const candidates=[],excluded=[],visibleChars=html.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim().length;
-  for(const opening of html.matchAll(/<([a-z][a-z0-9:-]*)\b([^>]*)>/gi)){
+const markupTags=()=>/<\/?[a-z][a-z0-9:-]*\b(?:[^"'<>]|"[^"]*"|'[^']*')*>/giu;
+const withoutMarkup=text=>text.replace(markupTags(),' ');
+function contentFragment(html,{fragment}={}){
+  let requested='';try{requested=decodeURIComponent(String(fragment??'').replace(/^#/u,''));}catch{}
+  if(requested.length>500||/[\u0000-\u001f]/u.test(requested))requested='';
+  const candidates=[],excluded=[],headings=[],anchors=[],visibleChars=withoutMarkup(html).replace(/\s+/g,' ').trim().length;
+  for(const token of html.matchAll(markupTags())){
+    const opening=/^<([a-z][a-z0-9:-]*)\b([\s\S]*)>$/iu.exec(token[0]);if(!opening)continue;opening.index=token.index;
     if(excluded.some(range=>opening.index>=range.start&&opening.index<range.end))continue;
     const tag=opening[1].toLowerCase(),attrs=opening[2];
     const attributes=Object.fromEntries([...attrs.matchAll(/\s+([\w:-]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g)].map(match=>[match[1].toLowerCase(),match[2]??match[3]??match[4]??'']));
     const containers=[attributes.id,attributes.class,attributes.role].filter(Boolean).join(' ');
+    // Layout state such as "has-sidebar" describes a content container,
+    // rather than making that container navigation. Keep actual sidebar/nav
+    // tokens and explicit roles eligible for chrome removal.
+    const chromeClasses=(attributes.class??'').split(/\s+/u).filter(token=>!/^(?:has|with|without|no)[-_]/iu.test(token)).join(' ');
+    const chromeContainers=[attributes.id,chromeClasses,attributes.role].filter(Boolean).join(' ');
     const inBody=candidates.some(candidate=>candidate.rank>=2&&opening.index>=candidate.start&&opening.index<candidate.end);
     // A visible article/main-local header often contains the title and actual
     // introductory definition. Its class name is not evidence of navigation.
     // Site-level headers and explicit banner/navigation roles remain chrome.
-    const headerChrome=!inBody&&(tag==='header'||/(?:^|[\s_-])header(?=[\s_-]|$)/i.test(containers));
-    const omit=Object.hasOwn(attributes,'hidden')||attributes['aria-hidden']?.trim().toLowerCase()==='true'||/(?:^|;)\s*display\s*:\s*none(?:\s*!important)?\s*(?:;|$)/i.test(attributes.style??'')||/(?:^|[\s_-])(?:nav|menu|sidebar|footer|related)(?=[\s_-]|$)/i.test(containers)||headerChrome||/^(?:navigation|complementary|banner|contentinfo)$/i.test(attributes.role??'');
+    const headerChrome=!inBody&&(tag==='header'||/(?:^|[\s_-])header(?=[\s_-]|$)/i.test(chromeContainers));
+    const omit=Object.hasOwn(attributes,'hidden')||attributes['aria-hidden']?.trim().toLowerCase()==='true'||/(?:^|;)\s*display\s*:\s*none(?:\s*!important)?\s*(?:;|$)/i.test(attributes.style??'')||/(?:^|[\s_-])(?:nav|menu|sidebar|footer|related)(?=[\s_-]|$)/i.test(chromeContainers)||headerChrome||/^(?:navigation|complementary|banner|contentinfo)$/i.test(attributes.role??'');
     // A chapter identifier such as "content.negotiation" describes a section,
     // not a page-wide content container. Match complete container tokens.
     const generic=[attributes.id??'',attributes.class??''].some(value=>value.split(/\s+/u).some(token=>/^(?:(?:main|page)[-_]?)?content(?:[-_](?:container|area|wrapper|body))?$/iu.test(token)));
     const rank=['article','main','div','section'].includes(tag)?/articlebody|trs[_ -]?(?:editor|ueditor)|(?:article|post|entry)[-_ ](?:body|content|text)/i.test(containers+' '+(attributes.itemprop??''))?4:tag==='article'?3:tag==='main'?2:generic?1:0:0;
-    if(!omit&&(!rank||candidates.length>=40))continue;
-    const endTag=new RegExp('<\\/?'+tag+'\\b[^>]*>','gi');endTag.lastIndex=opening.index+opening[0].length;let depth=1,end,after;
-    for(let next;(next=endTag.exec(html));){depth+=next[0].startsWith('</')?-1:next[0].endsWith('/>')?0:1;if(!depth){end=next.index;after=end+next[0].length;break;}}
-    if(end!==undefined){if(omit){excluded.push({start:opening.index,end:after});continue;}const start=opening.index+opening[0].length,body=html.slice(start,end),chars=body.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim().length;candidates.push({rank,start,end,chars});}
+    const anchored=!!requested&&(decode(attributes.id??'')===requested||tag==='a'&&decode(attributes.name??'')===requested);
+    if(!omit&&/^h[1-6]$/u.test(tag))headings.push({start:opening.index,level:Number(tag[1])});
+    if(anchored&&!omit)anchors.push({start:opening.index,tag});
+    if(!omit&&(!rank||candidates.length>=40)&&!(anchored&&['section','article','main','div'].includes(tag)))continue;
+    const endTag=markupTags();endTag.lastIndex=opening.index+opening[0].length;let depth=1,end,after;
+    for(let next;(next=endTag.exec(html));){if(/^<\/?([a-z][a-z0-9:-]*)/iu.exec(next[0])?.[1].toLowerCase()!==tag)continue;depth+=next[0].startsWith('</')?-1:next[0].endsWith('/>')?0:1;if(!depth){end=next.index;after=end+next[0].length;break;}}
+    if(end!==undefined){if(omit){excluded.push({start:opening.index,end:after});continue;}const start=opening.index+opening[0].length,body=html.slice(start,end),chars=withoutMarkup(body).replace(/\s+/g,' ').trim().length;candidates.push({rank,start,end,chars,...(anchored?{anchorStart:opening.index}:{})});}
   }
   // A weakly named div must cover a substantial part of the page before it
   // can replace the document. Otherwise retain it all for query-based slicing.
-  const selected=candidates.filter(x=>x.chars>=100&&(x.rank>1||x.chars>=visibleChars/3)).sort((a,b)=>b.rank-a.rank||b.chars-a.chars)[0],start=selected?.start??0,end=selected?.end??html.length,parts=[];let cursor=start;
+  const hidden=at=>excluded.some(range=>at>=range.start&&at<range.end),visibleAnchors=anchors.filter(anchor=>!hidden(anchor.start));
+  let bounded,fragmentMatched=false;
+  // Duplicate visible IDs are ambiguous: never choose a convenient occurrence.
+  if(visibleAnchors.length===1){
+    const anchor=visibleAnchors[0],container=candidates.find(row=>row.anchorStart===anchor.start),heading=headings.filter(row=>row.start<=anchor.start&&!hidden(row.start)).at(-1);
+    if(container)bounded={start:container.start,end:container.end,kind:'container'};
+    else if(heading){const next=headings.find(row=>row.start>anchor.start&&row.level<=heading.level&&!hidden(row.start));bounded={start:heading.start,end:next?.start??html.length,kind:'heading'};}
+    fragmentMatched=!!bounded;
+  }
+  const selected=bounded??candidates.filter(x=>x.chars>=100&&(x.rank>1||x.chars>=visibleChars/3)).sort((a,b)=>b.rank-a.rank||b.chars-a.chars)[0],start=selected?.start??0,end=selected?.end??html.length,parts=[];let cursor=start;
   for(const range of excluded){if(range.end<=start||range.start>=end)continue;parts.push(html.slice(cursor,Math.max(cursor,range.start)));cursor=Math.min(end,Math.max(cursor,range.end));}
-  parts.push(html.slice(cursor,end));return parts.join(' ');
+  parts.push(html.slice(cursor,end));return {text:parts.join(' '),scope:{version:1,kind:bounded?'url-fragment-section':'document-body',fragmentRequested:!!requested,fragmentMatched,...(bounded?{boundary:bounded.kind}:{})}};
 }
-export function sourceText(text,type){
-  if(/html|xml/.test(type)){text=text.replace(/<(script|style|nav|aside|footer)\b[^>]*>[\s\S]*?<\/\1>/gi,' ').replace(/<(script|style)\b[^>]*>[\s\S]*$/gi,' ').replace(/<!--[\s\S]*?-->/g,' ');if(type.includes('html'))text=contentFragment(text);text=text.replace(/<[^>]+>/g,' ');}
-  return decode(text).replace(/\s+/g,' ').trim();
+function sourceProjection(text,type,{fragment,markdown=false}={}){
+  let scope={version:1,kind:markdown?'markdown-visible-text':'document-body',fragmentRequested:!!fragment,fragmentMatched:false};
+  if(/html|xml/.test(type)){text=text.replace(/<(script|style|nav|aside|footer)\b[^>]*>[\s\S]*?<\/\1>/gi,' ').replace(/<(script|style)\b[^>]*>[\s\S]*$/gi,' ').replace(/<!--[\s\S]*?-->/g,' ');if(type.includes('html')){const projected=contentFragment(text,{fragment});text=projected.text;scope=projected.scope;}text=withoutMarkup(text);}
+  else if(markdown||/markdown/iu.test(type)){
+    text=text.replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/u,'').replace(/^[ \t]*(?:\x60{3,}|~{3,})[^\r\n]*$/gmu,'').replace(/^[ \t]*(?:>[ \t]*)+/gmu,'').replace(/^[ \t]*\[![A-Z]+\][ \t]*$/gmu,'').replace(/^[ \t]*(?:#{1,6}[ \t]+|[-*+][ \t]+(?::[ \t]*)?)/gmu,'').replace(/\[([^\]\r\n]+)\]\([^\s)]+\)/gu,'$1').replace(/\x60+([^\x60\r\n]+)\x60+/gu,'$1');
+  }
+  return {text:decode(text).replace(/\s+/g,' ').trim(),scope};
 }
+export function sourceText(text,type,options){return sourceProjection(text,type,options).text;}
 // Pick one contiguous slice of the observed body, never a generated summary or
 // search snippet. A later relevant paragraph can otherwise be lost behind a
 // long page introduction. No match keeps the original leading-window behavior.
@@ -69,14 +99,26 @@ export function researchExcerpt(text,topic,{maxChars=2800}={}){
     start=Math.max(0,Math.min(start,Math.max(0,text.length-maxChars)));
     if(!start)return 0;
     const nearby=text.slice(Math.max(0,start-180),start),last=[...nearby.matchAll(/[。！？!?\n]|\.(?=\s)/gu)].at(-1);
-    return last?Math.max(0,start-180)+last.index+last[0].length:start;
+    if(last)return Math.max(0,start-180)+last.index+last[0].length;
+    // No nearby sentence boundary: advance past a clipped word instead of
+    // presenting a tail such as "nt includes" as the start of source evidence.
+    if(start&&/[\p{L}\p{N}_]/u.test(text[start-1])&&/[\p{L}\p{N}_]/u.test(text[start]??'')){
+      const next=/\s/u.exec(text.slice(start,start+180));if(next)start+=next.index+1;
+    }
+    return start;
   };
   for(const term of terms){let at=0;for(let n=0;n<24;n++){at=observed.indexOf(term,at);if(at<0)break;candidates.add(boundary(at-Math.floor(maxChars/5)));candidates.add(boundary(at-maxChars+180));at+=term.length;}}
-  const score=start=>{const slice=observed.slice(start,start+maxChars);let value=0;for(const term of terms){let at=0,count=0;const numeric=/^\d+$/u.test(term);while(count<3&&(at=slice.indexOf(term,at))>=0){const found=at;at+=term.length;if(numeric&&(/[a-z0-9]/u.test(slice[found-1]??'')||/[a-z0-9]/u.test(slice[at]??'')))continue;count++;}if(count)value+=(4+count)*(identifiers.has(term)?numeric?8:4:1);}return value;};
+  const score=start=>{const slice=observed.slice(start,start+maxChars);let value=0;for(const term of terms){let at=0,count=0;const numeric=/^\d+$/u.test(term);while(count<3&&(at=slice.indexOf(term,at))>=0){const found=at;at+=term.length;if(/^[a-z0-9_.+#-]+$/u.test(term)&&(/[a-z0-9_]/u.test(slice[found-1]??'')||/[a-z0-9_]/u.test(slice[at]??'')))continue;count++;}if(count)value+=(4+count)*(identifiers.has(term)?numeric?8:4:1);}for(let n=0;n<terms.length-1;n++){const pair=terms[n]+' '+terms[n+1];if(slice.includes(pair))value+=3;}return value;};
   let start=0,best=score(0);for(const candidate of candidates){const value=score(candidate);if(value>best||value===best&&candidate<start){start=candidate;best=value;}}
   // Keep selection bounded to an exact slice even when a query used fullwidth
   // characters. Query normalization may help term matching; offsets never use it.
-  const excerpt=text.slice(start,start+maxChars);
+  let end=Math.min(text.length,start+maxChars);
+  if(end<text.length){
+    const window=text.slice(start,end),sentence=[...window.matchAll(/[。！？?]|!(?=\s|$)|\.(?=\s|$)/gu)].at(-1);
+    if(sentence&&sentence.index>=maxChars/2)end=start+sentence.index+1;
+    else if(/[\p{L}\p{N}_]/u.test(text[end-1])&&/[\p{L}\p{N}_]/u.test(text[end]??'')){const gap=window.lastIndexOf(' ');if(gap>=maxChars*.6)end=start+gap;}
+  }
+  const excerpt=text.slice(start,end);
   return {excerpt,start,end:start+excerpt.length,selection:start?'query-window':'leading-window'};
 }
 const connectionRetryCodes=new Set(['ECONNRESET','ECONNREFUSED','ETIMEDOUT','EHOSTUNREACH','ENETUNREACH','EADDRNOTAVAIL','ECONNABORTED','CONNECT_TIMEOUT']);
@@ -152,7 +194,7 @@ async function requestText(url,signal,{resolveAddresses=resolvePublicAddresses,r
 // runtime config, environment variable, tool input or public caller sets it.
 export async function fetchPublicDocument(input,signal,dependencies){
   const combined=AbortSignal.any([signal,AbortSignal.timeout(20000)]);let url=researchUrl(input),result;
-  try{for(let i=0;i<4;i++){result=await requestText(url,combined,dependencies);combined.throwIfAborted();if(!result.redirect)break;url=researchUrl(result.redirect);if(i===3)throw new Error('SOURCE_REDIRECT_LIMIT');}}
+  try{for(let i=0;i<4;i++){result=await requestText(url,combined,dependencies);combined.throwIfAborted();if(!result.redirect)break;const next=new URL(result.redirect);if(!result.redirect.includes('#'))next.hash=new URL(url).hash;url=researchUrl(next.href);if(i===3)throw new Error('SOURCE_REDIRECT_LIMIT');}}
   catch(error){if(signal.aborted)throw signal.reason??error;if(combined.aborted)throw Object.assign(new Error('SOURCE_TIMEOUT'),error.sourceDiagnostic?{sourceDiagnostic:error.sourceDiagnostic}:{});if(['ENOTFOUND','EAI_AGAIN'].includes(error.code))throw new Error('SOURCE_DNS_FAILED');throw error;}
   return {...result,url,fetchedAt:Date.now()};
 }
@@ -167,12 +209,12 @@ export async function fetchResearch(source,signal){
   if(researchUrl(source.url).length>1200)throw new Error('SOURCE_URL_TOO_LONG');
   const result=await fetchPublicDocument(source.url,signal),{url}=result;
   if(url.length>1200)throw new Error('SOURCE_URL_TOO_LONG');
-  const text=sourceText(result.body,result.type);if(text.length<100)throw new Error('SOURCE_CONTENT_TOO_SHORT');
+  const observed=new URL(url),projection=sourceProjection(result.body,result.type,{fragment:observed.hash,markdown:/\.md(?:own)?$/iu.test(observed.pathname)}),text=projection.text;if(text.length<100)throw new Error('SOURCE_CONTENT_TOO_SHORT');
   let maxChars=2800,selection=researchExcerpt(text,String(source.topic??source.title??''),{maxChars});
   while(JSON.stringify({url,excerpt:selection.excerpt,digest:'0'.repeat(64),fetchedAt:Date.now()}).length>3800&&maxChars>100){maxChars-=100;selection=researchExcerpt(text,String(source.topic??source.title??''),{maxChars});}
   const {excerpt}=selection;
   const metadata=pageMetadata(result.body,result.type);
-  return {url,title:metadata.title||source.title,topic:source.topic,excerpt,excerptOffset:selection.start,excerptSelection:selection.selection,digest:createHash('sha256').update(text).digest('hex'),digestScope:'observed-extracted-text',fetchedAt:result.fetchedAt,partial:!!result.truncated||text.length>excerpt.length,transportTruncated:!!result.truncated,publishedAt:metadata.publishedAt??null,publishedAtStatus:metadata.publishedAtStatus??'unknown',signals:sourceSignals({url,title:metadata.title||source.title}),...(source.discovery?{discovery:source.discovery}:{})};
+  return {url,title:metadata.title||source.title,topic:source.topic,excerpt,excerptOffset:selection.start,excerptSelection:selection.selection,contentScope:projection.scope,digest:createHash('sha256').update(text).digest('hex'),digestScope:'observed-extracted-text',fetchedAt:result.fetchedAt,partial:!!result.truncated||text.length>excerpt.length,transportTruncated:!!result.truncated,publishedAt:metadata.publishedAt??null,publishedAtStatus:metadata.publishedAtStatus??'unknown',signals:sourceSignals({url,title:metadata.title||source.title}),...(source.discovery?{discovery:source.discovery}:{})};
 }
 const outputError=(code,field,reason,extra={})=>Object.assign(new Error(code),{validationDiagnostic:{field,reason,...extra}});
 const valueType=value=>value===null?'null':Array.isArray(value)?'array':typeof value;
@@ -321,12 +363,15 @@ export function insightResult(text,{evidenceIds=[]}={}){
 }
 export function evidenceUnits(source){
   if(typeof source?.excerpt!=='string')throw new Error('INVALID_LEARNING_SOURCE');
-  const units=[],text=source.excerpt;
+  const units=[],text=source.excerpt,segmented=text.replace(/\[![A-Z]+\]/gu,marker=>marker.replace('!','x')),boundaries=[...new Intl.Segmenter('en',{granularity:'sentence'}).segment(segmented)].map(row=>row.index+row.segment.length),starts=new Set([0,...boundaries]),ends=new Set(boundaries);
   for(let offset=0;offset<text.length;){
     let end=Math.min(offset+240,text.length);
-    if(end<text.length){const punctuation=[...text.slice(offset,end).matchAll(/[。！？!?\n]|\.(?=\s)/gu)].at(-1);if(punctuation&&punctuation.index>=80)end=offset+punctuation.index+1;}
-    const start=end-offset<8?Math.max(0,end-8):offset;
-    units.push({id:'E'+(units.length+1),quote:text.slice(start,end),start,end});offset=end;
+    const sentenceEnd=boundaries.find(at=>at>=offset+8&&at<=end);
+    if(sentenceEnd)end=sentenceEnd;
+    else if(end<text.length&&/[\p{L}\p{N}_]/u.test(text[end-1])&&/[\p{L}\p{N}_]/u.test(text[end]??'')){const gap=text.slice(offset,end).lastIndexOf(' ');if(gap>=120)end=offset+gap+1;}
+    if(end<text.length&&text.length-end<8){if(ends.has(end)){if(text.length-offset<=240)end=text.length;}else end-=8-(text.length-end);}
+    const start=offset;
+    units.push({id:'E'+(units.length+1),quote:text.slice(start,end),start,end,sentenceStart:starts.has(start),sentenceEnd:ends.has(end)});offset=end;
   }
   return units;
 }
@@ -367,7 +412,7 @@ export function normalizeEvidenceReferences(value,units,{singular=false}={}){
   if(ids.some((id,index)=>index>0&&evidence.get(id).index!==evidence.get(ids[index-1]).index+1))throw evidenceError('non-contiguous-reference',ids.length,units.length);
   return ids;
 }
-export function learningResult(text,source){
+export function learningResult(text,source,{strictSelection=false}={}){
   const value=structured(text),keys=['title','summary','claims','relevance','question','share','evidenceStatus'];
   if(value.evidenceStatus==='insufficient'){
     const unexpected=Object.keys(value).filter(k=>!['evidenceStatus','reason'].includes(k));
@@ -390,13 +435,22 @@ export function learningResult(text,source){
     modelDraft.claims.push({claimIndex,text:c.text});
     if(Object.hasOwn(c,'evidenceId')||Object.hasOwn(c,'evidenceIds')){
       if(Object.hasOwn(c,'evidenceId')&&Object.hasOwn(c,'evidenceIds'))throw evidenceError('ambiguous-reference-fields',null,units.length);
-      if(Object.keys(c).some(k=>!['text','evidenceId','evidenceIds'].includes(k)))throw evidenceError('unexpected-reference-field',null,units.length);
+      if(Object.keys(c).some(k=>!['text','evidenceId','evidenceIds','quote'].includes(k)))throw evidenceError('unexpected-reference-field',null,units.length);
       const singular=Object.hasOwn(c,'evidenceId'),ids=normalizeEvidenceReferences(singular?c.evidenceId:c.evidenceIds,units,{singular});
       const selected=ids.map(id=>evidence.get(id));
-      const quote=source.excerpt.slice(selected[0].start,selected.at(-1).end);assertClaimEvidence(c.text,quote);
-      const scope=evidenceScope(source,{start:selected[0].start,end:selected.at(-1).end});assertScopedInterpretation(c.text,scope,quote);
+      const block=source.excerpt.slice(selected[0].start,selected.at(-1).end);let start=selected[0].start,end=selected.at(-1).end,quote=block;
+      if(Object.hasOwn(c,'quote')){
+        if(typeof c.quote!=='string'||c.quote.length<8||c.quote.length>400||!block.includes(c.quote)||block.indexOf(c.quote)!==block.lastIndexOf(c.quote))throw evidenceError('ambiguous-or-invalid-selected-span',ids.length,units.length);
+        quote=c.quote;start+=block.indexOf(quote);end=start+quote.length;
+        const word=char=>/[\p{L}\p{N}_]/u.test(char??'');
+        if(word(source.excerpt[start-1])&&word(quote[0])||word(source.excerpt[end])&&word(quote.at(-1)))throw evidenceError('selected-span-cuts-word',ids.length,units.length);
+      }else if(strictSelection&&(!selected[0].sentenceStart||!selected.at(-1).sentenceEnd))throw evidenceError('partial-sentence-selection',ids.length,units.length);
+      const scope=evidenceScope(source,{start,end});
+      if(strictSelection)assertScopedInterpretation(quote,scope,quote);
+      else{assertClaimEvidence(c.text,quote);assertScopedInterpretation(c.text,scope,quote);}
       return {text:selectedSourceText(quote,{claimIndex}),quote,evidenceIds:ids,...(scope.types.length?{scope}:{}),textRole:'observed-source-excerpt'};
     }
+    if(strictSelection)throw evidenceError('explicit-unit-selection-required',null,units.length);
     if(Object.keys(c).some(k=>!['text','quote'].includes(k)))throw outputError('UNSUPPORTED_LEARNING_CLAIM','claims','unexpected-claim-fields',{claimIndex,unexpectedFieldCount:Object.keys(c).filter(k=>!['text','quote'].includes(k)).length});
     if(typeof c.quote!=='string'||c.quote.length<8||c.quote.length>200||!source.excerpt.includes(c.quote))throw outputError('UNSUPPORTED_LEARNING_CLAIM','claims.quote',typeof c.quote!=='string'?'quote-string-required':c.quote.length<8||c.quote.length>200?'quote-length-out-of-range':'quote-outside-source',{claimIndex,length:typeof c.quote==='string'?c.quote.length:0,maximum:200});
     assertClaimEvidence(c.text,c.quote);

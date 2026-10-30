@@ -137,7 +137,7 @@
   <text class="text body muted" x="880" y="638">指定 DSH 会话读取与权限范围</text>
   <text class="text body muted" x="880" y="670">写操作先预览，再逐项授权</text>
   <rect x="880" y="695" width="196" height="24" fill="#102c47"/>
-  <text class="text small amber" x="892" y="712">浏览器操作待继续验证</text>
+  <text class="text small amber" x="892" y="712">外部写入仍需逐笔批准</text>
 
   <path d="M40 774H1240" stroke="#254560" stroke-width="2"/>
   <rect x="40" y="800" width="8" height="8" fill="#69d8ff"/>

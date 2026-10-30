@@ -4,7 +4,7 @@ const HOUR=3600000,DAY=24*HOUR;
 const parse=value=>{try{return typeof value==='string'?JSON.parse(value):value??null;}catch{return null;}};
 const count=value=>Number.isSafeInteger(value)&&value>=0?value:null;
 const label=value=>String(value??'unknown').replace(/(?:Bearer\s+\S+|sk-[\w-]{16,})/giu,'[隐藏]').replace(/([?&](?:token|api[_-]?key|access[_-]?token|password|secret|authorization|signature)=)[^\s&#]+/giu,'$1[隐藏]').replace(/[\u0000-\u001f]/gu,'').slice(0,160)||'unknown';
-const kinds=[['work-observation','工作观察'],['owner-chat','主人沟通'],['conversation-summary','会话压缩'],['research-learning','搜索与学习'],['proactive-chat','主动闲聊'],['proactive-care','主动关心'],['knowledge-share','知识分享'],['goal-work','目标推进'],['memory-persona-review','记忆与人格回顾'],['scheduled-task','定时任务'],['other','其他 / 历史未分类']];
+const kinds=[['work-observation','工作观察'],['owner-chat','主人沟通'],['conversation-review','回复校验'],['conversation-summary','会话压缩'],['research-learning','搜索与学习'],['proactive-chat','主动闲聊'],['proactive-care','主动关心'],['knowledge-share','知识分享'],['goal-work','目标推进'],['memory-persona-review','记忆与人格回顾'],['scheduled-task','定时任务'],['other','其他 / 历史未分类']];
 const taskKinds={'research':'research-learning','learn-ai':'research-learning','chat':'proactive-chat','care':'proactive-care','share-insight':'knowledge-share'};
 const failed=new Set(['failed','output-limit','validation-rejected','interrupted','evidence-insufficient']);
 
@@ -66,6 +66,7 @@ function taskIndex(db,id,tables,attempts){
   return {tasks,goalTasks};
 }
 function category(row,index){
+  if(row.contextKind==='conversation-review')return 'conversation-review';
   if(row.contextKind==='conversation-summary'||String(row.taskId??'').startsWith('conversation-summary:'))return 'conversation-summary';
   if(row.foreground)return 'owner-chat';
   const taskId=typeof row.taskId==='string'?row.taskId:typeof row.roundId==='string'?row.roundId:'';

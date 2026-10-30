@@ -75,7 +75,7 @@ export function runBundledPublicMcp({input=process.stdin,output=process.stdout}=
     const task={controller:new AbortController(),cancelled:false};active.set(id,task);
     try{
       const source=await fetchResearch({url:args.url,title:'公开网页',topic:args.topic??''},task.controller.signal);
-      const page={url:source.url,title:source.title,digest:source.digest,digestScope:source.digestScope,fetchedAt:source.fetchedAt,excerpt:source.excerpt,excerptOffset:source.excerptOffset,partial:source.partial===true,transportTruncated:source.transportTruncated===true,publishedAt:source.publishedAt??null,publishedAtStatus:source.publishedAtStatus,evidenceStatus:'read-not-verified',semanticVerified:false,untrusted:true};
+      const page={url:source.url,title:source.title,digest:source.digest,digestScope:source.digestScope,fetchedAt:source.fetchedAt,excerpt:source.excerpt,excerptOffset:source.excerptOffset,excerptSelection:source.excerptSelection,contentScope:source.contentScope,partial:source.partial===true,transportTruncated:source.transportTruncated===true,publishedAt:source.publishedAt??null,publishedAtStatus:source.publishedAtStatus,evidenceStatus:'read-not-verified',semanticVerified:false,untrusted:true};
       if(!task.cancelled)result(id,{content:[{type:'text',text:JSON.stringify(page)}],structuredContent:page,isError:false});
     }catch(error){
       if(!task.cancelled)result(id,{content:[{type:'text',text:errorCode(error)}],isError:true});

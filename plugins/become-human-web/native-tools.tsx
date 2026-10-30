@@ -7,11 +7,11 @@ const catalogOf=(data:any)=>Array.isArray(data)?data:Array.isArray(data?.items)?
 const time=(value:any)=>value?new Date(value).toLocaleString('zh-CN',{hour12:false}):'—';
 const print=(value:any)=>typeof value==='string'?value:JSON.stringify(value,null,2);
 const previewStyle:any={whiteSpace:'pre-wrap',overflowWrap:'anywhere',maxHeight:'none'};
-const fieldLabels:Record<string,string>={url:'网页地址',sessionId:'DSH 会话 ID',targetId:'浏览器标签页 ID',expectedOrigin:'目标页面当前来源',text:'文本内容',selector:'元素 CSS 选择器',replace:'替换输入框已有文字',limit:'最多读取条数',beforeSeq:'读取此序号之前的消息',throughSeq:'截至此消息序号',maxChars:'最多读取字符数',title:'报告标题',noteIds:'学习笔记 ID'};
-const fieldHints:Record<string,string>={expectedOrigin:'填写当前页面的协议、域名与端口，例如 https://example.com。执行前会核对，页面已变化时停止操作。',targetId:'使用浏览器工具返回的精确标签页 ID，并先在“工具与连接”中授权。',sessionId:'填写当前授权范围内的外部 DSH 会话 ID；可先用会话列表工具查看。授权全部会话时无需逐个添加 ID。',selector:'需要唯一匹配一个可见元素；匹配不到或出现多个结果时停止操作。'};
+const fieldLabels:Record<string,string>={url:'网页地址',sessionId:'DSH 会话 ID',expectedTurn:'要取消的轮次',expectedTurnStartSeq:'该轮开始事件序号',text:'文本内容',limit:'最多读取条数',beforeSeq:'读取此序号之前的消息',throughSeq:'截至此消息序号',title:'报告标题',noteIds:'学习笔记 ID'};
+const fieldHints:Record<string,string>={sessionId:'填写当前授权范围内的外部 DSH 会话 ID；可先用会话列表工具查看。授权全部会话时无需逐个添加 ID。',expectedTurn:'先读取目标会话，填写结果 activeTurn.turn。任务已结束或切换时，旧取消操作会被拒绝。',expectedTurnStartSeq:'填写同一次读取结果中的 activeTurn.turnStartSeq；与轮次一起核对，不会取消后来开始的工作。'};
 const schemaFields=(schema:any)=>Object.entries(schema?.properties??{}) as [string,any][];
 const supported=(schema:any):boolean=>schema?.type==='object'&&schemaFields(schema).every(([,field])=>['string','integer','number','boolean','object'].includes(field.type)||field.type==='array'&&field.items?.type==='string'||Array.isArray(field.enum));
-const initialInput=(schema:any)=>Object.fromEntries(schemaFields(schema).filter(([,field])=>field.default!==undefined||field.type==='boolean').map(([key,field])=>[key,field.default??false]));
+const initialInput=(schema:any)=>Object.fromEntries(schemaFields(schema).filter(([,field])=>field.default!==undefined&&field.default!==null||field.type==='boolean').map(([key,field])=>[key,field.default??false]));
 
 function normalizeInput(schema:any,value:any){
   const input:any={};

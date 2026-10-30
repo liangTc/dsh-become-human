@@ -21,9 +21,9 @@ export function nextActionWork(agent){
   const action=agent.factory.actions.next(agent.id,{excludeIds});return action?{execute:action}:pendingNotice(agent);
 }
 function noticeText(row){
-  if(row.status==='proposed')return `《${row.title}》的草稿准备好了，Web 的“行动与产物”里可以查看。你确认后，我再保存。`;
-  if(row.status==='completed')return `《${row.title}》已经保存好了，内容也核对过了。需要时可以在 Web 的“行动与产物”里打开。`;
-  return `《${row.title}》${row.status==='expired'?'的保存授权到期了':'的保存需要你看一下'}，这次没有继续写入。Web 的“行动与产物”里有具体状态。`;
+  if(row.status==='proposed')return `《${row.title}》的草稿准备好了，Web 的“任务 → 报告与文件”里可以查看。你确认后，我再保存。`;
+  if(row.status==='completed')return `《${row.title}》已经保存好了，内容也核对过了。需要时可以在 Web 的“任务 → 报告与文件”里打开。`;
+  return `《${row.title}》${row.status==='expired'?'的保存授权到期了':'的保存需要你看一下'}，这次没有继续写入。Web 的“任务 → 报告与文件”里有具体状态。`;
 }
 // This is one serial driver turn. It uses no model and never expands a grant.
 export async function runActionTurn(agent,signal,work){

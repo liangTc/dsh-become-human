@@ -49,7 +49,7 @@ export function questionSignals(query){
   return {terms,identifiers,httpStatusCodes};
 }
 
-const signalMatch=(value,term)=>/^\d+$/u.test(term)?new RegExp('(?:^|[^a-z0-9])'+term+'(?:$|[^a-z0-9])','u').test(value):value.includes(term);
+const signalMatch=(value,term)=>contains(value,term);
 
 export function sourceSignals(row={}){
   let u;try{u=new URL(row.url);}catch{return {type:'unknown',primaryCandidate:false,authorityVerified:false};}
@@ -78,10 +78,25 @@ export function scoreResearchResult(query,row,{question=''}={}){
   // codes may stand alone; they are still retrieval hints, not evidence.
   const precise=[...(query+' '+question).matchAll(/[A-Za-z][A-Za-z0-9_.+-]{1,}/g)].map(m=>m[0]).filter(w=>/[a-z][A-Z]|[A-Za-z]\d/u.test(w)).map(normalized);
   const numericProtocolContext=!codes.length&&/\bhttp\b/iu.test(query)&&/\d/u.test(query)&&hits.includes('http');
-  const topicMatch=numericProtocolContext|| (precise.length?precise.some(term=>signalMatch(title,term)||signalMatch(snippet,term)||signalMatch(url,term)):hits.length>=Math.min(2,terms.length));
+  const topicTerms=terms.filter(term=>!identifiers.includes(term)),contentTopicHits=topicTerms.filter(term=>signalMatch(title,term)||signalMatch(snippet,term));
+  // Generic URL routes are not topic evidence. Require words in the visible
+  // title/snippet beyond a publisher acronym. Latin keyword coverage also
+  // prevents an entity overview from satisfying a longer mechanism question;
+  // Chinese bigrams are not independent words and do not use that ratio.
+  const latinKeywords=topicTerms.length>=4&&topicTerms.every(term=>/^[a-z0-9_.+#-]+$/u.test(term));
+  const topicalContent=topicTerms.length?contentTopicHits.length>=Math.min(2,topicTerms.length)&&(!latinKeywords||contentTopicHits.length/topicTerms.length>=.4):identifierHits.length>0;
+  const literalElement=topicTerms.some(term=>/^[a-z][a-z0-9:-]+$/u.test(term)&&(title.includes('<'+term+'>')||snippet.includes('<'+term+'>')));
+  const genericContext=new Set(['api','http','https','docs','documentation','reference','specification','specifications','official','primary','source','guide']);
+  const qualifiers=[...new Set([...terms,...questionProfile.terms])].filter(term=>!identifiers.includes(term)&&/^[a-z][a-z0-9_.+#-]*$/u.test(term)&&!genericContext.has(term));
+  const qualifierHits=qualifiers.filter(term=>signalMatch(title,term)||signalMatch(snippet,term));
+  // A CamelCase token may be a product or publisher, not an API. When the
+  // question also names another concrete topic, require visible context for
+  // that topic. A bare exact API lookup can still match its actual URL path.
+  const preciseMatch=precise.some(term=>signalMatch(title,term)||signalMatch(snippet,term)||signalMatch(url,term))&&(!qualifiers.length||qualifierHits.length>0);
+  const topicMatch=numericProtocolContext||literalElement||(precise.length?preciseMatch:topicalContent);
   const statusMatch=!codes.length||codes.some(code=>signalMatch(title,code)||signalMatch(snippet,code)||signalMatch(url,code));
   const score=hits.reduce((sum,term)=>sum+(signalMatch(title,term)?3:0)+(signalMatch(snippet,term)?1:0)+(signalMatch(url,term)?1:0),0)+identifierHits.length*5+Math.min(3,questionHits.length)+(signals.primaryCandidate?2:0);
-  return {...row,sourceSignals:signals,relevance:{version:2,score,matchedCount:hits.length,termCount:terms.length,identifierHits:identifierHits.length,identifierCount:identifiers.length,questionMatchedCount:questionHits.length,lexicalOnly:true,specificQuestion:specific},_relevant:statusMatch&&(!terms.length||(codes.length?hits.length>0:topicMatch))};
+  return {...row,sourceSignals:signals,relevance:{version:4,score,matchedCount:hits.length,termCount:terms.length,identifierHits:identifierHits.length,identifierCount:identifiers.length,questionMatchedCount:questionHits.length,topicMatchedCount:contentTopicHits.length,topicTermCount:topicTerms.length,qualifierCount:qualifiers.length,qualifierHits:qualifierHits.length,lexicalOnly:true,specificQuestion:specific},_relevant:statusMatch&&(!terms.length||(codes.length?hits.length>0:topicMatch))};
 }
 
 export function lexicalCoverage(question,text){

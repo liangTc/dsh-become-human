@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "package": "dsh-become-human-web",
-  "version": "0.7.0-beta.6",
+  "version": "0.7.0-beta.11",
   "upstream": {
     "name": "dsh-im",
     "version": "4.39.0",
@@ -30,660 +30,8 @@
   ],
   "host": {
     "file": "lib/index.js",
-    "sha256": "e705cec345fe6c0215c26a15c9a1d13ed778d36042b35af69612839104adf0b7",
+    "sha256": "99d6aecded2ced4c365125551162c94c01f1dd2021e587a35e64b353f6b4edec",
     "inputs": [
-      {
-        "file": "im/node_modules/@larksuiteoapi/node-sdk/lib/index.js",
-        "bytes": 6256284
-      },
-      {
-        "file": "im/node_modules/@protobufjs/aspromise/index.js",
-        "bytes": 1592
-      },
-      {
-        "file": "im/node_modules/@protobufjs/base64/index.js",
-        "bytes": 3943
-      },
-      {
-        "file": "im/node_modules/@protobufjs/eventemitter/index.js",
-        "bytes": 2348
-      },
-      {
-        "file": "im/node_modules/@protobufjs/float/index.js",
-        "bytes": 11448
-      },
-      {
-        "file": "im/node_modules/@protobufjs/pool/index.js",
-        "bytes": 1240
-      },
-      {
-        "file": "im/node_modules/@protobufjs/utf8/index.js",
-        "bytes": 3929
-      },
-      {
-        "file": "im/node_modules/agent-base/dist/src/index.js",
-        "bytes": 7910
-      },
-      {
-        "file": "im/node_modules/agent-base/dist/src/promisify.js",
-        "bytes": 495
-      },
-      {
-        "file": "im/node_modules/asynckit/index.js",
-        "bytes": 156
-      },
-      {
-        "file": "im/node_modules/asynckit/lib/abort.js",
-        "bytes": 497
-      },
-      {
-        "file": "im/node_modules/asynckit/lib/async.js",
-        "bytes": 599
-      },
-      {
-        "file": "im/node_modules/asynckit/lib/defer.js",
-        "bytes": 441
-      },
-      {
-        "file": "im/node_modules/asynckit/lib/iterate.js",
-        "bytes": 1794
-      },
-      {
-        "file": "im/node_modules/asynckit/lib/state.js",
-        "bytes": 941
-      },
-      {
-        "file": "im/node_modules/asynckit/lib/terminator.js",
-        "bytes": 533
-      },
-      {
-        "file": "im/node_modules/asynckit/parallel.js",
-        "bytes": 1017
-      },
-      {
-        "file": "im/node_modules/asynckit/serial.js",
-        "bytes": 501
-      },
-      {
-        "file": "im/node_modules/asynckit/serialOrdered.js",
-        "bytes": 1751
-      },
-      {
-        "file": "im/node_modules/axios/dist/node/axios.cjs",
-        "bytes": 231875
-      },
-      {
-        "file": "im/node_modules/call-bind-apply-helpers/actualApply.js",
-        "bytes": 280
-      },
-      {
-        "file": "im/node_modules/call-bind-apply-helpers/functionApply.js",
-        "bytes": 99
-      },
-      {
-        "file": "im/node_modules/call-bind-apply-helpers/functionCall.js",
-        "bytes": 97
-      },
-      {
-        "file": "im/node_modules/call-bind-apply-helpers/index.js",
-        "bytes": 511
-      },
-      {
-        "file": "im/node_modules/call-bind-apply-helpers/reflectApply.js",
-        "bytes": 132
-      },
-      {
-        "file": "im/node_modules/call-bound/index.js",
-        "bytes": 687
-      },
-      {
-        "file": "im/node_modules/combined-stream/lib/combined_stream.js",
-        "bytes": 4687
-      },
-      {
-        "file": "im/node_modules/debug/src/browser.js",
-        "bytes": 6103
-      },
-      {
-        "file": "im/node_modules/debug/src/common.js",
-        "bytes": 6915
-      },
-      {
-        "file": "im/node_modules/debug/src/index.js",
-        "bytes": 314
-      },
-      {
-        "file": "im/node_modules/debug/src/node.js",
-        "bytes": 4728
-      },
-      {
-        "file": "im/node_modules/delayed-stream/lib/delayed_stream.js",
-        "bytes": 2319
-      },
-      {
-        "file": "im/node_modules/dunder-proto/get.js",
-        "bytes": 980
-      },
-      {
-        "file": "im/node_modules/es-define-property/index.js",
-        "bytes": 288
-      },
-      {
-        "file": "im/node_modules/es-errors/eval.js",
-        "bytes": 75
-      },
-      {
-        "file": "im/node_modules/es-errors/index.js",
-        "bytes": 66
-      },
-      {
-        "file": "im/node_modules/es-errors/range.js",
-        "bytes": 77
-      },
-      {
-        "file": "im/node_modules/es-errors/ref.js",
-        "bytes": 79
-      },
-      {
-        "file": "im/node_modules/es-errors/syntax.js",
-        "bytes": 79
-      },
-      {
-        "file": "im/node_modules/es-errors/type.js",
-        "bytes": 75
-      },
-      {
-        "file": "im/node_modules/es-errors/uri.js",
-        "bytes": 73
-      },
-      {
-        "file": "im/node_modules/es-object-atoms/index.js",
-        "bytes": 67
-      },
-      {
-        "file": "im/node_modules/es-set-tostringtag/index.js",
-        "bytes": 1213
-      },
-      {
-        "file": "im/node_modules/follow-redirects/debug.js",
-        "bytes": 315
-      },
-      {
-        "file": "im/node_modules/follow-redirects/index.js",
-        "bytes": 21539
-      },
-      {
-        "file": "im/node_modules/form-data/lib/form_data.js",
-        "bytes": 15086
-      },
-      {
-        "file": "im/node_modules/form-data/lib/populate.js",
-        "bytes": 232
-      },
-      {
-        "file": "im/node_modules/function-bind/implementation.js",
-        "bytes": 2043
-      },
-      {
-        "file": "im/node_modules/function-bind/index.js",
-        "bytes": 126
-      },
-      {
-        "file": "im/node_modules/get-intrinsic/index.js",
-        "bytes": 14439
-      },
-      {
-        "file": "im/node_modules/get-proto/index.js",
-        "bytes": 821
-      },
-      {
-        "file": "im/node_modules/get-proto/Object.getPrototypeOf.js",
-        "bytes": 156
-      },
-      {
-        "file": "im/node_modules/get-proto/Reflect.getPrototypeOf.js",
-        "bytes": 150
-      },
-      {
-        "file": "im/node_modules/gopd/gOPD.js",
-        "bytes": 97
-      },
-      {
-        "file": "im/node_modules/gopd/index.js",
-        "bytes": 206
-      },
-      {
-        "file": "im/node_modules/has-symbols/index.js",
-        "bytes": 447
-      },
-      {
-        "file": "im/node_modules/has-symbols/shams.js",
-        "bytes": 1922
-      },
-      {
-        "file": "im/node_modules/has-tostringtag/shams.js",
-        "bytes": 189
-      },
-      {
-        "file": "im/node_modules/hasown/index.js",
-        "bytes": 206
-      },
-      {
-        "file": "im/node_modules/https-proxy-agent/dist/agent.js",
-        "bytes": 7841
-      },
-      {
-        "file": "im/node_modules/https-proxy-agent/dist/index.js",
-        "bytes": 579
-      },
-      {
-        "file": "im/node_modules/https-proxy-agent/dist/parse-proxy-response.js",
-        "bytes": 2460
-      },
-      {
-        "file": "im/node_modules/lodash.identity/index.js",
-        "bytes": 761
-      },
-      {
-        "file": "im/node_modules/lodash.merge/index.js",
-        "bytes": 51155
-      },
-      {
-        "file": "im/node_modules/lodash.pickby/index.js",
-        "bytes": 64343
-      },
-      {
-        "file": "im/node_modules/long/umd/index.js",
-        "bytes": 50994
-      },
-      {
-        "file": "im/node_modules/math-intrinsics/abs.js",
-        "bytes": 73
-      },
-      {
-        "file": "im/node_modules/math-intrinsics/floor.js",
-        "bytes": 77
-      },
-      {
-        "file": "im/node_modules/math-intrinsics/isNaN.js",
-        "bytes": 121
-      },
-      {
-        "file": "im/node_modules/math-intrinsics/max.js",
-        "bytes": 73
-      },
-      {
-        "file": "im/node_modules/math-intrinsics/min.js",
-        "bytes": 73
-      },
-      {
-        "file": "im/node_modules/math-intrinsics/pow.js",
-        "bytes": 73
-      },
-      {
-        "file": "im/node_modules/math-intrinsics/round.js",
-        "bytes": 77
-      },
-      {
-        "file": "im/node_modules/math-intrinsics/sign.js",
-        "bytes": 214
-      },
-      {
-        "file": "im/node_modules/mime-db/db.json",
-        "bytes": 185882
-      },
-      {
-        "file": "im/node_modules/mime-db/index.js",
-        "bytes": 189
-      },
-      {
-        "file": "im/node_modules/mime-types/index.js",
-        "bytes": 3663
-      },
-      {
-        "file": "im/node_modules/ms/index.js",
-        "bytes": 3024
-      },
-      {
-        "file": "im/node_modules/object-inspect/index.js",
-        "bytes": 19059
-      },
-      {
-        "file": "im/node_modules/object-inspect/util.inspect.js",
-        "bytes": 42
-      },
-      {
-        "file": "im/node_modules/protobufjs/minimal.js",
-        "bytes": 96
-      },
-      {
-        "file": "im/node_modules/protobufjs/src/index-minimal.js",
-        "bytes": 925
-      },
-      {
-        "file": "im/node_modules/protobufjs/src/reader_buffer.js",
-        "bytes": 1252
-      },
-      {
-        "file": "im/node_modules/protobufjs/src/reader.js",
-        "bytes": 12363
-      },
-      {
-        "file": "im/node_modules/protobufjs/src/roots.js",
-        "bytes": 471
-      },
-      {
-        "file": "im/node_modules/protobufjs/src/rpc.js",
-        "bytes": 1204
-      },
-      {
-        "file": "im/node_modules/protobufjs/src/rpc/service.js",
-        "bytes": 4763
-      },
-      {
-        "file": "im/node_modules/protobufjs/src/util/longbits.js",
-        "bytes": 5393
-      },
-      {
-        "file": "im/node_modules/protobufjs/src/util/minimal.js",
-        "bytes": 14686
-      },
-      {
-        "file": "im/node_modules/protobufjs/src/writer_buffer.js",
-        "bytes": 2356
-      },
-      {
-        "file": "im/node_modules/protobufjs/src/writer.js",
-        "bytes": 12077
-      },
-      {
-        "file": "im/node_modules/qs/lib/formats.js",
-        "bytes": 476
-      },
-      {
-        "file": "im/node_modules/qs/lib/index.js",
-        "bytes": 211
-      },
-      {
-        "file": "im/node_modules/qs/lib/parse.js",
-        "bytes": 16015
-      },
-      {
-        "file": "im/node_modules/qs/lib/stringify.js",
-        "bytes": 12153
-      },
-      {
-        "file": "im/node_modules/qs/lib/utils.js",
-        "bytes": 12593
-      },
-      {
-        "file": "im/node_modules/react/cjs/react.development.js",
-        "bytes": 87593
-      },
-      {
-        "file": "im/node_modules/react/cjs/react.production.min.js",
-        "bytes": 6930
-      },
-      {
-        "file": "im/node_modules/react/index.js",
-        "bytes": 190
-      },
-      {
-        "file": "im/node_modules/semver/classes/comparator.js",
-        "bytes": 3631
-      },
-      {
-        "file": "im/node_modules/semver/classes/range.js",
-        "bytes": 15647
-      },
-      {
-        "file": "im/node_modules/semver/classes/semver.js",
-        "bytes": 9891
-      },
-      {
-        "file": "im/node_modules/semver/functions/clean.js",
-        "bytes": 205
-      },
-      {
-        "file": "im/node_modules/semver/functions/cmp.js",
-        "bytes": 961
-      },
-      {
-        "file": "im/node_modules/semver/functions/coerce.js",
-        "bytes": 2004
-      },
-      {
-        "file": "im/node_modules/semver/functions/compare-build.js",
-        "bytes": 281
-      },
-      {
-        "file": "im/node_modules/semver/functions/compare-loose.js",
-        "bytes": 132
-      },
-      {
-        "file": "im/node_modules/semver/functions/compare.js",
-        "bytes": 170
-      },
-      {
-        "file": "im/node_modules/semver/functions/diff.js",
-        "bytes": 1423
-      },
-      {
-        "file": "im/node_modules/semver/functions/eq.js",
-        "bytes": 126
-      },
-      {
-        "file": "im/node_modules/semver/functions/gt.js",
-        "bytes": 124
-      },
-      {
-        "file": "im/node_modules/semver/functions/gte.js",
-        "bytes": 127
-      },
-      {
-        "file": "im/node_modules/semver/functions/inc.js",
-        "bytes": 478
-      },
-      {
-        "file": "im/node_modules/semver/functions/lt.js",
-        "bytes": 124
-      },
-      {
-        "file": "im/node_modules/semver/functions/lte.js",
-        "bytes": 127
-      },
-      {
-        "file": "im/node_modules/semver/functions/major.js",
-        "bytes": 136
-      },
-      {
-        "file": "im/node_modules/semver/functions/minor.js",
-        "bytes": 136
-      },
-      {
-        "file": "im/node_modules/semver/functions/neq.js",
-        "bytes": 128
-      },
-      {
-        "file": "im/node_modules/semver/functions/parse.js",
-        "bytes": 331
-      },
-      {
-        "file": "im/node_modules/semver/functions/patch.js",
-        "bytes": 136
-      },
-      {
-        "file": "im/node_modules/semver/functions/prerelease.js",
-        "bytes": 234
-      },
-      {
-        "file": "im/node_modules/semver/functions/rcompare.js",
-        "bytes": 132
-      },
-      {
-        "file": "im/node_modules/semver/functions/rsort.js",
-        "bytes": 163
-      },
-      {
-        "file": "im/node_modules/semver/functions/satisfies.js",
-        "bytes": 247
-      },
-      {
-        "file": "im/node_modules/semver/functions/sort.js",
-        "bytes": 161
-      },
-      {
-        "file": "im/node_modules/semver/functions/truncate.js",
-        "bytes": 1021
-      },
-      {
-        "file": "im/node_modules/semver/functions/valid.js",
-        "bytes": 176
-      },
-      {
-        "file": "im/node_modules/semver/index.js",
-        "bytes": 2691
-      },
-      {
-        "file": "im/node_modules/semver/internal/constants.js",
-        "bytes": 873
-      },
-      {
-        "file": "im/node_modules/semver/internal/debug.js",
-        "bytes": 240
-      },
-      {
-        "file": "im/node_modules/semver/internal/identifiers.js",
-        "bytes": 525
-      },
-      {
-        "file": "im/node_modules/semver/internal/lrucache.js",
-        "bytes": 802
-      },
-      {
-        "file": "im/node_modules/semver/internal/parse-options.js",
-        "bytes": 338
-      },
-      {
-        "file": "im/node_modules/semver/internal/re.js",
-        "bytes": 8139
-      },
-      {
-        "file": "im/node_modules/semver/ranges/gtr.js",
-        "bytes": 231
-      },
-      {
-        "file": "im/node_modules/semver/ranges/intersects.js",
-        "bytes": 224
-      },
-      {
-        "file": "im/node_modules/semver/ranges/ltr.js",
-        "bytes": 227
-      },
-      {
-        "file": "im/node_modules/semver/ranges/max-satisfying.js",
-        "bytes": 593
-      },
-      {
-        "file": "im/node_modules/semver/ranges/min-satisfying.js",
-        "bytes": 591
-      },
-      {
-        "file": "im/node_modules/semver/ranges/min-version.js",
-        "bytes": 1514
-      },
-      {
-        "file": "im/node_modules/semver/ranges/outside.js",
-        "bytes": 2204
-      },
-      {
-        "file": "im/node_modules/semver/ranges/simplify.js",
-        "bytes": 1355
-      },
-      {
-        "file": "im/node_modules/semver/ranges/subset.js",
-        "bytes": 7478
-      },
-      {
-        "file": "im/node_modules/semver/ranges/to-comparators.js",
-        "bytes": 282
-      },
-      {
-        "file": "im/node_modules/semver/ranges/valid.js",
-        "bytes": 326
-      },
-      {
-        "file": "im/node_modules/side-channel-list/index.js",
-        "bytes": 3289
-      },
-      {
-        "file": "im/node_modules/side-channel-map/index.js",
-        "bytes": 1981
-      },
-      {
-        "file": "im/node_modules/side-channel-weakmap/index.js",
-        "bytes": 2708
-      },
-      {
-        "file": "im/node_modules/side-channel/index.js",
-        "bytes": 1222
-      },
-      {
-        "file": "im/node_modules/ws/index.js",
-        "bytes": 796
-      },
-      {
-        "file": "im/node_modules/ws/lib/buffer-util.js",
-        "bytes": 3056
-      },
-      {
-        "file": "im/node_modules/ws/lib/constants.js",
-        "bytes": 503
-      },
-      {
-        "file": "im/node_modules/ws/lib/event-target.js",
-        "bytes": 7321
-      },
-      {
-        "file": "im/node_modules/ws/lib/extension.js",
-        "bytes": 6183
-      },
-      {
-        "file": "im/node_modules/ws/lib/limiter.js",
-        "bytes": 1034
-      },
-      {
-        "file": "im/node_modules/ws/lib/permessage-deflate.js",
-        "bytes": 14669
-      },
-      {
-        "file": "im/node_modules/ws/lib/receiver.js",
-        "bytes": 17439
-      },
-      {
-        "file": "im/node_modules/ws/lib/sender.js",
-        "bytes": 16886
-      },
-      {
-        "file": "im/node_modules/ws/lib/stream.js",
-        "bytes": 4204
-      },
-      {
-        "file": "im/node_modules/ws/lib/subprotocol.js",
-        "bytes": 1498
-      },
-      {
-        "file": "im/node_modules/ws/lib/validation.js",
-        "bytes": 3903
-      },
-      {
-        "file": "im/node_modules/ws/lib/websocket-server.js",
-        "bytes": 17022
-      },
-      {
-        "file": "im/node_modules/ws/lib/websocket.js",
-        "bytes": 37848
-      },
       {
         "file": "im/package.json",
         "bytes": 3165
@@ -1942,7 +1290,7 @@
       },
       {
         "file": "im/src/channels/weixin/weixin-bridge.mjs",
-        "bytes": 59713
+        "bytes": 59711
       },
       {
         "file": "im/src/channels/weixin/weixin-controller.mjs",
@@ -1951,56 +1299,688 @@
       {
         "file": "im/src/channels/weixin/weixin-runtime.mjs",
         "bytes": 16279
+      },
+      {
+        "file": "node_modules/@larksuiteoapi/node-sdk/lib/index.js",
+        "bytes": 6256284
+      },
+      {
+        "file": "node_modules/@protobufjs/aspromise/index.js",
+        "bytes": 1592
+      },
+      {
+        "file": "node_modules/@protobufjs/base64/index.js",
+        "bytes": 3943
+      },
+      {
+        "file": "node_modules/@protobufjs/eventemitter/index.js",
+        "bytes": 2348
+      },
+      {
+        "file": "node_modules/@protobufjs/float/index.js",
+        "bytes": 11448
+      },
+      {
+        "file": "node_modules/@protobufjs/pool/index.js",
+        "bytes": 1240
+      },
+      {
+        "file": "node_modules/@protobufjs/utf8/index.js",
+        "bytes": 3929
+      },
+      {
+        "file": "node_modules/asynckit/index.js",
+        "bytes": 156
+      },
+      {
+        "file": "node_modules/asynckit/lib/abort.js",
+        "bytes": 497
+      },
+      {
+        "file": "node_modules/asynckit/lib/async.js",
+        "bytes": 599
+      },
+      {
+        "file": "node_modules/asynckit/lib/defer.js",
+        "bytes": 441
+      },
+      {
+        "file": "node_modules/asynckit/lib/iterate.js",
+        "bytes": 1794
+      },
+      {
+        "file": "node_modules/asynckit/lib/state.js",
+        "bytes": 941
+      },
+      {
+        "file": "node_modules/asynckit/lib/terminator.js",
+        "bytes": 533
+      },
+      {
+        "file": "node_modules/asynckit/parallel.js",
+        "bytes": 1017
+      },
+      {
+        "file": "node_modules/asynckit/serial.js",
+        "bytes": 501
+      },
+      {
+        "file": "node_modules/asynckit/serialOrdered.js",
+        "bytes": 1751
+      },
+      {
+        "file": "node_modules/axios/dist/node/axios.cjs",
+        "bytes": 231875
+      },
+      {
+        "file": "node_modules/call-bind-apply-helpers/actualApply.js",
+        "bytes": 280
+      },
+      {
+        "file": "node_modules/call-bind-apply-helpers/functionApply.js",
+        "bytes": 99
+      },
+      {
+        "file": "node_modules/call-bind-apply-helpers/functionCall.js",
+        "bytes": 97
+      },
+      {
+        "file": "node_modules/call-bind-apply-helpers/index.js",
+        "bytes": 511
+      },
+      {
+        "file": "node_modules/call-bind-apply-helpers/reflectApply.js",
+        "bytes": 132
+      },
+      {
+        "file": "node_modules/call-bound/index.js",
+        "bytes": 687
+      },
+      {
+        "file": "node_modules/combined-stream/lib/combined_stream.js",
+        "bytes": 4687
+      },
+      {
+        "file": "node_modules/debug/src/browser.js",
+        "bytes": 4734
+      },
+      {
+        "file": "node_modules/debug/src/debug.js",
+        "bytes": 4394
+      },
+      {
+        "file": "node_modules/debug/src/index.js",
+        "bytes": 263
+      },
+      {
+        "file": "node_modules/debug/src/node.js",
+        "bytes": 6015
+      },
+      {
+        "file": "node_modules/delayed-stream/lib/delayed_stream.js",
+        "bytes": 2319
+      },
+      {
+        "file": "node_modules/dunder-proto/get.js",
+        "bytes": 980
+      },
+      {
+        "file": "node_modules/es-define-property/index.js",
+        "bytes": 288
+      },
+      {
+        "file": "node_modules/es-errors/eval.js",
+        "bytes": 75
+      },
+      {
+        "file": "node_modules/es-errors/index.js",
+        "bytes": 66
+      },
+      {
+        "file": "node_modules/es-errors/range.js",
+        "bytes": 77
+      },
+      {
+        "file": "node_modules/es-errors/ref.js",
+        "bytes": 79
+      },
+      {
+        "file": "node_modules/es-errors/syntax.js",
+        "bytes": 79
+      },
+      {
+        "file": "node_modules/es-errors/type.js",
+        "bytes": 75
+      },
+      {
+        "file": "node_modules/es-errors/uri.js",
+        "bytes": 73
+      },
+      {
+        "file": "node_modules/es-object-atoms/index.js",
+        "bytes": 67
+      },
+      {
+        "file": "node_modules/es-set-tostringtag/index.js",
+        "bytes": 1213
+      },
+      {
+        "file": "node_modules/follow-redirects/debug.js",
+        "bytes": 315
+      },
+      {
+        "file": "node_modules/follow-redirects/index.js",
+        "bytes": 21539
+      },
+      {
+        "file": "node_modules/form-data/lib/form_data.js",
+        "bytes": 15086
+      },
+      {
+        "file": "node_modules/form-data/lib/populate.js",
+        "bytes": 232
+      },
+      {
+        "file": "node_modules/form-data/node_modules/mime-db/db.json",
+        "bytes": 185882
+      },
+      {
+        "file": "node_modules/form-data/node_modules/mime-db/index.js",
+        "bytes": 189
+      },
+      {
+        "file": "node_modules/form-data/node_modules/mime-types/index.js",
+        "bytes": 3663
+      },
+      {
+        "file": "node_modules/function-bind/implementation.js",
+        "bytes": 2043
+      },
+      {
+        "file": "node_modules/function-bind/index.js",
+        "bytes": 126
+      },
+      {
+        "file": "node_modules/get-intrinsic/index.js",
+        "bytes": 14439
+      },
+      {
+        "file": "node_modules/get-proto/index.js",
+        "bytes": 821
+      },
+      {
+        "file": "node_modules/get-proto/Object.getPrototypeOf.js",
+        "bytes": 156
+      },
+      {
+        "file": "node_modules/get-proto/Reflect.getPrototypeOf.js",
+        "bytes": 150
+      },
+      {
+        "file": "node_modules/gopd/gOPD.js",
+        "bytes": 97
+      },
+      {
+        "file": "node_modules/gopd/index.js",
+        "bytes": 206
+      },
+      {
+        "file": "node_modules/has-symbols/index.js",
+        "bytes": 447
+      },
+      {
+        "file": "node_modules/has-symbols/shams.js",
+        "bytes": 1922
+      },
+      {
+        "file": "node_modules/has-tostringtag/shams.js",
+        "bytes": 189
+      },
+      {
+        "file": "node_modules/hasown/index.js",
+        "bytes": 206
+      },
+      {
+        "file": "node_modules/https-proxy-agent/dist/agent.js",
+        "bytes": 7841
+      },
+      {
+        "file": "node_modules/https-proxy-agent/dist/index.js",
+        "bytes": 579
+      },
+      {
+        "file": "node_modules/https-proxy-agent/dist/parse-proxy-response.js",
+        "bytes": 2460
+      },
+      {
+        "file": "node_modules/https-proxy-agent/node_modules/agent-base/dist/src/index.js",
+        "bytes": 7910
+      },
+      {
+        "file": "node_modules/https-proxy-agent/node_modules/agent-base/dist/src/promisify.js",
+        "bytes": 495
+      },
+      {
+        "file": "node_modules/https-proxy-agent/node_modules/debug/src/browser.js",
+        "bytes": 6103
+      },
+      {
+        "file": "node_modules/https-proxy-agent/node_modules/debug/src/common.js",
+        "bytes": 6915
+      },
+      {
+        "file": "node_modules/https-proxy-agent/node_modules/debug/src/index.js",
+        "bytes": 314
+      },
+      {
+        "file": "node_modules/https-proxy-agent/node_modules/debug/src/node.js",
+        "bytes": 4728
+      },
+      {
+        "file": "node_modules/https-proxy-agent/node_modules/ms/index.js",
+        "bytes": 3024
+      },
+      {
+        "file": "node_modules/lodash.identity/index.js",
+        "bytes": 761
+      },
+      {
+        "file": "node_modules/lodash.merge/index.js",
+        "bytes": 51155
+      },
+      {
+        "file": "node_modules/lodash.pickby/index.js",
+        "bytes": 64343
+      },
+      {
+        "file": "node_modules/long/umd/index.js",
+        "bytes": 50994
+      },
+      {
+        "file": "node_modules/math-intrinsics/abs.js",
+        "bytes": 73
+      },
+      {
+        "file": "node_modules/math-intrinsics/floor.js",
+        "bytes": 77
+      },
+      {
+        "file": "node_modules/math-intrinsics/isNaN.js",
+        "bytes": 121
+      },
+      {
+        "file": "node_modules/math-intrinsics/max.js",
+        "bytes": 73
+      },
+      {
+        "file": "node_modules/math-intrinsics/min.js",
+        "bytes": 73
+      },
+      {
+        "file": "node_modules/math-intrinsics/pow.js",
+        "bytes": 73
+      },
+      {
+        "file": "node_modules/math-intrinsics/round.js",
+        "bytes": 77
+      },
+      {
+        "file": "node_modules/math-intrinsics/sign.js",
+        "bytes": 214
+      },
+      {
+        "file": "node_modules/ms/index.js",
+        "bytes": 2764
+      },
+      {
+        "file": "node_modules/object-inspect/index.js",
+        "bytes": 19059
+      },
+      {
+        "file": "node_modules/object-inspect/util.inspect.js",
+        "bytes": 42
+      },
+      {
+        "file": "node_modules/protobufjs/minimal.js",
+        "bytes": 96
+      },
+      {
+        "file": "node_modules/protobufjs/src/index-minimal.js",
+        "bytes": 925
+      },
+      {
+        "file": "node_modules/protobufjs/src/reader_buffer.js",
+        "bytes": 1252
+      },
+      {
+        "file": "node_modules/protobufjs/src/reader.js",
+        "bytes": 12363
+      },
+      {
+        "file": "node_modules/protobufjs/src/roots.js",
+        "bytes": 471
+      },
+      {
+        "file": "node_modules/protobufjs/src/rpc.js",
+        "bytes": 1204
+      },
+      {
+        "file": "node_modules/protobufjs/src/rpc/service.js",
+        "bytes": 4763
+      },
+      {
+        "file": "node_modules/protobufjs/src/util/longbits.js",
+        "bytes": 5393
+      },
+      {
+        "file": "node_modules/protobufjs/src/util/minimal.js",
+        "bytes": 14686
+      },
+      {
+        "file": "node_modules/protobufjs/src/writer_buffer.js",
+        "bytes": 2356
+      },
+      {
+        "file": "node_modules/protobufjs/src/writer.js",
+        "bytes": 12077
+      },
+      {
+        "file": "node_modules/qs/lib/formats.js",
+        "bytes": 476
+      },
+      {
+        "file": "node_modules/qs/lib/index.js",
+        "bytes": 211
+      },
+      {
+        "file": "node_modules/qs/lib/parse.js",
+        "bytes": 19010
+      },
+      {
+        "file": "node_modules/qs/lib/stringify.js",
+        "bytes": 12167
+      },
+      {
+        "file": "node_modules/qs/lib/utils.js",
+        "bytes": 17756
+      },
+      {
+        "file": "node_modules/react/cjs/react.development.js",
+        "bytes": 87593
+      },
+      {
+        "file": "node_modules/react/cjs/react.production.min.js",
+        "bytes": 6930
+      },
+      {
+        "file": "node_modules/react/index.js",
+        "bytes": 190
+      },
+      {
+        "file": "node_modules/semver/classes/comparator.js",
+        "bytes": 3631
+      },
+      {
+        "file": "node_modules/semver/classes/range.js",
+        "bytes": 15647
+      },
+      {
+        "file": "node_modules/semver/classes/semver.js",
+        "bytes": 9891
+      },
+      {
+        "file": "node_modules/semver/functions/clean.js",
+        "bytes": 205
+      },
+      {
+        "file": "node_modules/semver/functions/cmp.js",
+        "bytes": 961
+      },
+      {
+        "file": "node_modules/semver/functions/coerce.js",
+        "bytes": 2004
+      },
+      {
+        "file": "node_modules/semver/functions/compare-build.js",
+        "bytes": 281
+      },
+      {
+        "file": "node_modules/semver/functions/compare-loose.js",
+        "bytes": 132
+      },
+      {
+        "file": "node_modules/semver/functions/compare.js",
+        "bytes": 170
+      },
+      {
+        "file": "node_modules/semver/functions/diff.js",
+        "bytes": 1423
+      },
+      {
+        "file": "node_modules/semver/functions/eq.js",
+        "bytes": 126
+      },
+      {
+        "file": "node_modules/semver/functions/gt.js",
+        "bytes": 124
+      },
+      {
+        "file": "node_modules/semver/functions/gte.js",
+        "bytes": 127
+      },
+      {
+        "file": "node_modules/semver/functions/inc.js",
+        "bytes": 478
+      },
+      {
+        "file": "node_modules/semver/functions/lt.js",
+        "bytes": 124
+      },
+      {
+        "file": "node_modules/semver/functions/lte.js",
+        "bytes": 127
+      },
+      {
+        "file": "node_modules/semver/functions/major.js",
+        "bytes": 136
+      },
+      {
+        "file": "node_modules/semver/functions/minor.js",
+        "bytes": 136
+      },
+      {
+        "file": "node_modules/semver/functions/neq.js",
+        "bytes": 128
+      },
+      {
+        "file": "node_modules/semver/functions/parse.js",
+        "bytes": 331
+      },
+      {
+        "file": "node_modules/semver/functions/patch.js",
+        "bytes": 136
+      },
+      {
+        "file": "node_modules/semver/functions/prerelease.js",
+        "bytes": 234
+      },
+      {
+        "file": "node_modules/semver/functions/rcompare.js",
+        "bytes": 132
+      },
+      {
+        "file": "node_modules/semver/functions/rsort.js",
+        "bytes": 163
+      },
+      {
+        "file": "node_modules/semver/functions/satisfies.js",
+        "bytes": 247
+      },
+      {
+        "file": "node_modules/semver/functions/sort.js",
+        "bytes": 161
+      },
+      {
+        "file": "node_modules/semver/functions/truncate.js",
+        "bytes": 1021
+      },
+      {
+        "file": "node_modules/semver/functions/valid.js",
+        "bytes": 176
+      },
+      {
+        "file": "node_modules/semver/index.js",
+        "bytes": 2691
+      },
+      {
+        "file": "node_modules/semver/internal/constants.js",
+        "bytes": 873
+      },
+      {
+        "file": "node_modules/semver/internal/debug.js",
+        "bytes": 240
+      },
+      {
+        "file": "node_modules/semver/internal/identifiers.js",
+        "bytes": 525
+      },
+      {
+        "file": "node_modules/semver/internal/lrucache.js",
+        "bytes": 802
+      },
+      {
+        "file": "node_modules/semver/internal/parse-options.js",
+        "bytes": 338
+      },
+      {
+        "file": "node_modules/semver/internal/re.js",
+        "bytes": 8139
+      },
+      {
+        "file": "node_modules/semver/ranges/gtr.js",
+        "bytes": 231
+      },
+      {
+        "file": "node_modules/semver/ranges/intersects.js",
+        "bytes": 224
+      },
+      {
+        "file": "node_modules/semver/ranges/ltr.js",
+        "bytes": 227
+      },
+      {
+        "file": "node_modules/semver/ranges/max-satisfying.js",
+        "bytes": 593
+      },
+      {
+        "file": "node_modules/semver/ranges/min-satisfying.js",
+        "bytes": 591
+      },
+      {
+        "file": "node_modules/semver/ranges/min-version.js",
+        "bytes": 1514
+      },
+      {
+        "file": "node_modules/semver/ranges/outside.js",
+        "bytes": 2204
+      },
+      {
+        "file": "node_modules/semver/ranges/simplify.js",
+        "bytes": 1355
+      },
+      {
+        "file": "node_modules/semver/ranges/subset.js",
+        "bytes": 7478
+      },
+      {
+        "file": "node_modules/semver/ranges/to-comparators.js",
+        "bytes": 282
+      },
+      {
+        "file": "node_modules/semver/ranges/valid.js",
+        "bytes": 326
+      },
+      {
+        "file": "node_modules/side-channel-list/index.js",
+        "bytes": 3289
+      },
+      {
+        "file": "node_modules/side-channel-map/index.js",
+        "bytes": 1981
+      },
+      {
+        "file": "node_modules/side-channel-weakmap/index.js",
+        "bytes": 2708
+      },
+      {
+        "file": "node_modules/side-channel/index.js",
+        "bytes": 1222
+      },
+      {
+        "file": "node_modules/ws/index.js",
+        "bytes": 796
+      },
+      {
+        "file": "node_modules/ws/lib/buffer-util.js",
+        "bytes": 3056
+      },
+      {
+        "file": "node_modules/ws/lib/constants.js",
+        "bytes": 503
+      },
+      {
+        "file": "node_modules/ws/lib/event-target.js",
+        "bytes": 7321
+      },
+      {
+        "file": "node_modules/ws/lib/extension.js",
+        "bytes": 6183
+      },
+      {
+        "file": "node_modules/ws/lib/limiter.js",
+        "bytes": 1034
+      },
+      {
+        "file": "node_modules/ws/lib/permessage-deflate.js",
+        "bytes": 14669
+      },
+      {
+        "file": "node_modules/ws/lib/receiver.js",
+        "bytes": 17439
+      },
+      {
+        "file": "node_modules/ws/lib/sender.js",
+        "bytes": 16886
+      },
+      {
+        "file": "node_modules/ws/lib/stream.js",
+        "bytes": 4204
+      },
+      {
+        "file": "node_modules/ws/lib/subprotocol.js",
+        "bytes": 1498
+      },
+      {
+        "file": "node_modules/ws/lib/validation.js",
+        "bytes": 3903
+      },
+      {
+        "file": "node_modules/ws/lib/websocket-server.js",
+        "bytes": 17022
+      },
+      {
+        "file": "node_modules/ws/lib/websocket.js",
+        "bytes": 37848
       }
     ]
   },
   "client": {
     "file": "../im-client.js",
-    "sha256": "7cf872b9b4f5acb88315322260bda686dd95624355bd8dadbb5c7c2e7633ec0e",
+    "sha256": "0fe7623a70af458309f380e2d9d130e0d9ecc5b21654e0474378ebbca03fe79f",
     "inputs": [
       {
-        "file": "im/node_modules/semver/classes/semver.js",
-        "bytes": 9891
-      },
-      {
-        "file": "im/node_modules/semver/functions/compare.js",
-        "bytes": 170
-      },
-      {
-        "file": "im/node_modules/semver/functions/parse.js",
-        "bytes": 331
-      },
-      {
-        "file": "im/node_modules/semver/functions/rcompare.js",
-        "bytes": 132
-      },
-      {
-        "file": "im/node_modules/semver/functions/valid.js",
-        "bytes": 176
-      },
-      {
-        "file": "im/node_modules/semver/internal/constants.js",
-        "bytes": 873
-      },
-      {
-        "file": "im/node_modules/semver/internal/debug.js",
-        "bytes": 240
-      },
-      {
-        "file": "im/node_modules/semver/internal/identifiers.js",
-        "bytes": 525
-      },
-      {
-        "file": "im/node_modules/semver/internal/parse-options.js",
-        "bytes": 338
-      },
-      {
-        "file": "im/node_modules/semver/internal/re.js",
-        "bytes": 8139
-      },
-      {
         "file": "im/package.json",
-        "bytes": 56
+        "bytes": 57
       },
       {
         "file": "im/plugin-src/client/access-policy-settings.js",
@@ -2385,6 +2365,46 @@
       {
         "file": "im/src/channels/weixin/diagnostic-details.mjs",
         "bytes": 136
+      },
+      {
+        "file": "node_modules/semver/classes/semver.js",
+        "bytes": 9891
+      },
+      {
+        "file": "node_modules/semver/functions/compare.js",
+        "bytes": 170
+      },
+      {
+        "file": "node_modules/semver/functions/parse.js",
+        "bytes": 331
+      },
+      {
+        "file": "node_modules/semver/functions/rcompare.js",
+        "bytes": 132
+      },
+      {
+        "file": "node_modules/semver/functions/valid.js",
+        "bytes": 176
+      },
+      {
+        "file": "node_modules/semver/internal/constants.js",
+        "bytes": 873
+      },
+      {
+        "file": "node_modules/semver/internal/debug.js",
+        "bytes": 240
+      },
+      {
+        "file": "node_modules/semver/internal/identifiers.js",
+        "bytes": 525
+      },
+      {
+        "file": "node_modules/semver/internal/parse-options.js",
+        "bytes": 338
+      },
+      {
+        "file": "node_modules/semver/internal/re.js",
+        "bytes": 8139
       }
     ]
   }

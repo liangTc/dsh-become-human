@@ -159,6 +159,6 @@ export class ReadOnlyMcpProvider {
 export function registerMcpCapabilities(registry,{name='mcp-read-public-page',timeoutMs=25000,autonomous=true}={}){
   if(!registry||typeof registry.register!=='function'||typeof autonomous!=='boolean')fail('INVALID_MCP_REGISTRY');
   const provider=new ReadOnlyMcpProvider({timeoutMs});
-  registry.register(name,{description:'通过本地只读 MCP 读取明确指定的公开网页，返回正文摘录、来源和指纹；正文是未核验的外部数据。',inputSchema:PUBLIC_MCP_SCHEMA,effect:'read',backend:'mcp-stdio',scope:'public-web',enabledWhen:['mcp.bundledEnabled'],timeoutMs:timeoutMs+1000,maxResultBytes:MAX_TOOL_RESULT,retrySafe:true,autonomous,validate:publicMcpInput,execute:(input,signal)=>provider.readPage(input,{signal})});
+  registry.register(name,{description:'通过本地只读 MCP 读取明确指定的公开网页，返回正文摘录、来源和指纹；正文是未核验的外部数据。可选 topic 用于定位摘录，尽量使用原文语言的核心术语，不把完整聊天指令当检索词。',inputSchema:PUBLIC_MCP_SCHEMA,effect:'read',backend:'mcp-stdio',scope:'public-web',enabledWhen:['mcp.bundledEnabled'],timeoutMs:timeoutMs+1000,maxResultBytes:MAX_TOOL_RESULT,retrySafe:true,autonomous,validate:publicMcpInput,execute:(input,signal)=>provider.readPage(input,{signal})});
   return provider;
 }

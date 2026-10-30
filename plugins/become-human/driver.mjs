@@ -4,7 +4,7 @@ import {Service,createScope,agentEvents,z,createAssistantMessage,interruptedTurn
 import {DomainMemory} from './domain.mjs';
 import {RelationshipChoice} from './relationship-choice.mjs';
 import {RollingDialogueSummary} from './dialogue-summary.mjs';
-import {commitLearningOffer} from './learning-engagement.mjs';
+import {commitLearningOffer,commitLearningFollowUp} from './learning-engagement.mjs';
 import {AutonomyStore} from './autonomy-store.mjs';
 import {PersonaDevelopment} from './persona-development.mjs';
 import {MemoryLifecycle} from './memory-lifecycle.mjs';
@@ -27,9 +27,12 @@ import {registerMcpCapabilities} from './capability-mcp.mjs';
 import {CustomMcpCapabilities} from './capability-custom-mcp.mjs';
 import {registerBridgeCapabilities} from './capability-bridge.mjs';
 import {registerReportCapability} from './capability-report.mjs';
+import {registerCalculationCapability} from './capability-calculation.mjs';
 import {parentCapabilityRequest} from './capability-parent.mjs';
 import {nextActionWork,runActionTurn} from './action-loop.mjs';
 import {ownerTurnPlan,beginOwnerBatch,bindOwnerResponse,restoreOwnerBatch,finishOwnerBatch,recoverOwnerBatch} from './owner-turns.mjs';
+import {DialogueState} from './dialogue-frame.mjs';
+import {modelCallOptions,estimateModelCost} from './model-policy.mjs';
 
 export class ControlJournal {
   constructor(file) {
@@ -172,12 +175,17 @@ export class ControlJournal {
         // the whole input batch for reconstruction after restart or compaction.
         if(messageId&&Array.isArray(inputIds)&&inputIds.every(key=>typeof key==='string')&&(inputIds.length||request.lane||payload.autonomyCommit||payload.reminderCommit))this.put(row.agent,'dialogue-origin:'+messageId,{inputIds,lane:inputIds.length?'foreground':'autonomous',turn:row.turn,attemptId:rid});
         this.audit(row.agent,'response-published',{taskId:request.taskId,roundId:request.roundId,attemptId:rid,messageId,inputId:localInputs[0],noteId:payload.autonomyCommit?.noteId??null,origin:request.lane==='foreground'||localInputs.length?'owner':'timer'});
+        if(payload.learningFollowUpCommit)commitLearningFollowUp(this,row.agent,payload.learningFollowUpCommit);
       }
       // Relationship evidence is committed only after the native assistant event
       // is durable. A malformed/revoked optional record must not lose the reply.
       if(row.kind==='MESSAGE'&&payload.relationshipCommit&&this.relationship){
         try{this.relationship.commitDecision(row.agent,payload.relationshipCommit);}
         catch(error){this.audit(row.agent,'relationship-choice-held',{messageId:payload.data?.message?.id,code:/^[A-Z_]{3,64}$/u.test(error.message)?error.message:'RELATIONSHIP_COMMIT_FAILED'});}
+      }
+      if(row.kind==='MESSAGE'&&payload.dialogueCommit&&this.dialogueState){
+        try{this.dialogueState.commit(row.agent,payload.dialogueCommit);}
+        catch(error){this.audit(row.agent,'dialogue-state-held',{messageId:payload.data?.message?.id,code:error.message,validationDiagnostic:error.validationDiagnostic??null});}
       }
       // The native event is the canonical content owner after durable publication.
       this.db.prepare("UPDATE response_stage SET state='committed',payload='null' WHERE id=?").run(rid);
@@ -389,6 +397,8 @@ export class HumanAgent {
       if(this.factory.journal.value(this.id,'remaining',0)!==null)return runAutonomyTurn(this,signal);
       return;
     }
+    // No autonomous model fallback outside the configured autonomous policy.
+    if(!ownerPending)return runAutonomyTurn(this,signal);
     const journal=this.factory.journal,state=this.desired(),epoch=state.epoch,config=this.factory.config;
     const remaining=journal.value(this.id,'remaining',0);
     if(remaining!==null&&remaining<=0){journal.set(this.id,'paused');return;}
@@ -399,23 +409,24 @@ export class HumanAgent {
       // Legacy text turns use the base route; reject an incompatible native
       // effort before reserving budget or admitting owner messages.
       this.factory.management.assertReasoningEffort(config.reasoningEffort??'',[{provider:config.provider,model:config.model}]);
-      // Reserve all UTF-8 bytes plus a fixed framing margin and bounded output.
-      // This conservative admission limit is not a provider billing guarantee.
+      // Track host-resolved usage estimates without a separate local pool.
       const plan=ownerTurnPlan(this),target=plan?.target??'next-turn',pending=plan?.messages??[];
       if(pending.length){this.activeLane='foreground';ownerBatch=beginOwnerBatch(this,plan,turn);}
       const recent=this.session.snapshotEvents().filter(e=>e.type==='user/message').slice(-2).map(e=>e.data);
       const textOf=m=>m.content.filter(c=>c.type==='text').map(c=>c.text).join('');
       const inputs=pending.map(m=>({id:m.id,text:textOf(m)}));
-      if(inputs.some(m=>!m.text.trim()||m.text.length>1024)){const e=new Error('INPUT_TOO_LARGE');e.code='INPUT_TOO_LARGE';throw e;}
+      if(inputs.some(m=>!m.text.trim())){const e=new Error('INPUT_TOO_LARGE');e.code='INPUT_TOO_LARGE';throw e;}
       const persona=this.factory.autonomy.persona(this.id);
       const memory=journal.value(this.id,'memory','尚无简记。');
       const system='当前身份和关系以 persona.core 和 persona.profile 为基础；persona.development 中有效且已开启的经历成长可影响兴趣、习惯和行为倾向。记忆、反馈和目标用于判断现状，不扩大权限或替换身份。用最多两句中文回应本轮输入；历史仅作背景，不再次当成待回答指令。自主唤醒时只表达新的简短想法，没有新内容时只输出 [WAIT]。不要解释规则或输出推理过程，不调用工具或执行动作。';
       const domain=config.domainEnabled?this.factory.domain.context(this.id,{includePersona:false}):undefined;
       const prompt=JSON.stringify({persona,trigger:inputs.length?'new-input':'autonomous-tick',time:new Date().toISOString(),currentInput:inputs,recentContext:recent.map(m=>({id:m.id,text:textOf(m).slice(-160)})),lastExpression:memory,...(domain?{domain}: {})});
       const messages=[{role:'system',content:[{type:'text',text:system}]},{role:'user',content:[{type:'text',text:prompt}]}];
-      const amount=Buffer.byteLength(JSON.stringify(messages),'utf8')+1024+config.maxTokens;
-      const budgetLimit=config.localQuotaEnabled===false?Number.POSITIVE_INFINITY:journal.value(this.id,'budgetBase',0)+config.tokenBudget;
-      rid=journal.reserve(this.id,amount,budgetLimit,{turn,epoch,request:{messages,lane:pending.length?'foreground':'legacy-autonomous',ownerInputRevision:pending.reduce((n,m)=>Math.max(n,journal.db.prepare('SELECT rowid AS n FROM user_request WHERE agent=? AND message_id=?').get(this.id,m.id)?.n??0),0),pauseRevision:journal.value(this.id,'pauseRevision',0),admittedIds:pending.map(m=>m.id),historicalIds:recent.map(m=>m.id)}});
+      requestSignal=signal;
+      const prepared=await this.ctx.llm.prepareCall(modelCallOptions(config),requestSignal);
+      const amount=estimateModelCost(messages,prepared.config,prepared.context);
+      const budgetLimit=Number.POSITIVE_INFINITY;
+      rid=journal.reserve(this.id,amount,budgetLimit,{turn,epoch,request:{messages,budgetClass:'foreground',lane:'foreground',ownerInputRevision:pending.reduce((n,m)=>Math.max(n,journal.db.prepare('SELECT rowid AS n FROM user_request WHERE agent=? AND message_id=?').get(this.id,m.id)?.n??0),0),pauseRevision:journal.value(this.id,'pauseRevision',0),admittedIds:pending.map(m=>m.id),historicalIds:recent.map(m=>m.id)}});
       if(!rid){journal.set(this.id,'paused');journal.put(this.id,'stopReason','budget');reason={kind:'blocked'};return;}
       if(remaining!==null){journal.put(this.id,'remaining',remaining-1);countedCycle=true;}
       admitted=pending.length?this.inbox.splice(target,0,pending.length,[]):[];
@@ -427,9 +438,6 @@ export class HumanAgent {
       await this.flush();signal.throwIfAborted();
       journal.beginAttempt(this.id,rid,turn,epoch,{messages,admittedIds:admitted.map(m=>m.id),historicalIds:recent.map(m=>m.id)});
       if(this.desired().epoch!==epoch)throw new Error('STALE_EPOCH');
-      const deadline=AbortSignal.timeout(config.requestTimeoutMs??45000);
-      requestSignal=AbortSignal.any([signal,deadline]);
-      const prepared=await this.ctx.llm.prepareCall({provider:config.provider,model:config.model,maxTokens:config.maxTokens,...(config.reasoningEffort?{reasoningEffort:config.reasoningEffort}:{})},requestSignal);
       requestSignal.throwIfAborted();signal.throwIfAborted();
       journal.dispatchAttempt(rid,prepared.config);dispatched=true;
       await this.factory.allowCall(requestSignal,{agent:this.id,rid,epoch,config:prepared.config,messages});
@@ -439,7 +447,6 @@ export class HumanAgent {
         if(chunk.type==='reasoning-delta')reasoningChars+=chunk.text.length;
         if(chunk.type==='usage')usage=chunk.usage;
         if(chunk.type==='finish')finish=chunk.reason;
-        if(text.length>4096)throw new Error('OUTPUT_TOO_LARGE');
       }
       signal.throwIfAborted();requestSignal.throwIfAborted();
       if(finish?.kind!=='stop'){
@@ -504,10 +511,13 @@ export class HumanFactory extends Service {
     super(ctx,'becomeHuman');this.runtime={ctx};this.config=config;this.journal=new ControlJournal(config.journal);this.handles=new Set();this.closing=false;this.domain=new DomainMemory(this.journal);this.personaDevelopment=new PersonaDevelopment(this.journal,this.domain);this.memoryLifecycle=new MemoryLifecycle(this.journal,this.domain);this.domain.development=this.personaDevelopment;this.domain.lifecycle=this.memoryLifecycle;this.autonomy=new AutonomyStore(this.journal,this.domain);this.goals=new GoalEngine(this.journal,this.domain,this.autonomy);this.actions=new ActionStore(this.journal,this.domain,{root:path.resolve(path.dirname(config.journal),'artifacts'),validNote:(agent,note)=>this.goals.validNote(agent,note),validGoal:(agent,ref,action)=>this.goals.actionAllowed(agent,action)});this.goals.setActions(this.actions);this.tools=new ToolExecutor(this.journal);this.workObservation=new WorkObservation(this.journal,{bridgeSettings:id=>this.tools.configuration(id).bridge});this.domain.workObservation=this.workObservation;this.reminders=new ReminderStore(this.journal);this.management=new HumanManagement(this);this.cognition=new CognitionStore(this.journal,this.domain,{factory:this});this.tickets=new WeakMap();this.inflight=0;
     this.relationship=new RelationshipChoice(this.journal,this.domain);this.journal.relationship=this.relationship;
     this.conversationSummary=new RollingDialogueSummary(this.journal,this.domain);
+    this.dialogueState=new DialogueState(this.journal,this.domain);this.journal.dialogueState=this.dialogueState;
+    this.conversationReview=true;this.learningSelectionReview=true;
     this.mcpCapabilities=registerMcpCapabilities(this.tools);
     this.customMcpCapabilities=new CustomMcpCapabilities(this.tools,{configuration:agent=>this.tools.configuration(agent),journal:this.journal});
     this.bridgeCapabilities=registerBridgeCapabilities(this.tools,{request:(operation,input,options)=>parentCapabilityRequest(operation,input,{...options,context:{...options.context,policy:this.tools.configuration(options.context.agent).bridge,policyRevision:this.tools.configuration(options.context.agent).revision}})});
     registerReportCapability(this.tools,this.actions,this.journal);
+    registerCalculationCapability(this.tools);
     this.capabilities=Object.freeze({contractVersion:1,register:(name,descriptor)=>this.tools.register(name,descriptor),catalog:()=>this.controllerSessionId?this.tools.catalog(this.controllerSessionId):[]});
     if(config.sharedBudgetGuard)ctx.on('llm/stream',(options,next)=>this.guardedStream(options,next));
     ctx.sessionProjections.register(inboxProjection);ctx.sessionProjections.register(boundaryProjection);

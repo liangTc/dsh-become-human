@@ -1,15 +1,15 @@
 {
-  "auditDate": "2026-10-26",
+  "auditDate": "2026-10-30",
   "scope": "Actual Apache release IM host/client build inputs; external runtime dependencies are not bundled.",
   "inputsManifest": "../BUILD-MANIFEST.json",
   "metafiles": [
     {
       "name": "im-host",
-      "sha256": "dd27ad706804845efecfd1083c235073e9fcd201f299a0149e85d715c21ea8d4"
+      "sha256": "cb8d28b45c79628399d337377268fa8a899f48585bf284f040f384d73367f804"
     },
     {
       "name": "im-client",
-      "sha256": "6ecbbd48bfd63513ee74d61ca61166f14d9671b3e59b05de19a406b928dfd3c1"
+      "sha256": "f9e745d5c9d278f27c02773fee2110361b1df6b52e2f3e8b85f605c4ccabc676"
     }
   ],
   "packages": [
@@ -180,6 +180,19 @@
           "file": "License",
           "sha256": "47eb8ca82c798246774946d1be0f9aa08f025fa8325ced0947aeeb4c05fe5547",
           "bytes": 1085
+        }
+      ]
+    },
+    {
+      "name": "debug",
+      "version": "2.6.9",
+      "license": "MIT",
+      "licenseSource": "installed package license files",
+      "licenseFiles": [
+        {
+          "file": "LICENSE",
+          "sha256": "98c970de440dcfc77471610aec2377c9d9b0db2b3be6d1add524a586e1d7f422",
+          "bytes": 1107
         }
       ]
     },
@@ -498,6 +511,19 @@
     },
     {
       "name": "ms",
+      "version": "2.0.0",
+      "license": "MIT",
+      "licenseSource": "installed package license files",
+      "licenseFiles": [
+        {
+          "file": "license.md",
+          "sha256": "6652830c2607c722b66f1b57de15877ab8fc5dca406cc5b335afeb365d0f32c1",
+          "bytes": 1077
+        }
+      ]
+    },
+    {
+      "name": "ms",
       "version": "2.1.3",
       "license": "MIT",
       "licenseSource": "installed package license files",
@@ -537,7 +563,7 @@
     },
     {
       "name": "qs",
-      "version": "6.16.0",
+      "version": "6.16.1",
       "license": "BSD-3-Clause",
       "licenseSource": "installed package license files",
       "licenseFiles": [

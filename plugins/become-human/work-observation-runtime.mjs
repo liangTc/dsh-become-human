@@ -1,6 +1,5 @@
 import {randomUUID} from 'node:crypto';
 import {modelRequest,requestCost} from './autonomy.mjs';
-import {contextSettings} from './context.mjs';
 import {quotaAllows,roundDuration} from './quota.mjs';
 import {parentCapabilityRequest} from './capability-parent.mjs';
 import {structured} from './learning.mjs';
@@ -49,12 +48,11 @@ export async function runWorkObservation(agent,parentSignal,{request=modelReques
       batch=store.stage(id,page);if(batch.status!=='pending'){batch=null;continue;}
       if(!batch.model?.units?.length){store.commit(id,batch.id,{items:[]});batch=null;continue;}
       roundId??='work-observation:'+randomUUID();
-      const messages=[{role:'system',content:[{type:'text',text:policy}]},{role:'user',content:[{type:'text',text:JSON.stringify(batch.model)}]}],budget=contextSettings(j,id).executorInputBudget,inputBytes=Buffer.byteLength(JSON.stringify(messages),'utf8')+256;
-      if(inputBytes>budget)fail('CONTEXT_BUDGET_TOO_SMALL');
+      const messages=[{role:'system',content:[{type:'text',text:policy}]},{role:'user',content:[{type:'text',text:JSON.stringify(batch.model)}]}],inputBytes=Buffer.byteLength(JSON.stringify(messages),'utf8')+256;
       const cost=requestCost(messages,f.management.options(id,'executor'));
       if(!quotaAllows(f.autonomy.budget(id),{tokens:cost,requests:1,roundId})){store.noteStatus(id,{phase:'waiting-budget',lastError:'AUTONOMOUS_BUDGET_EXHAUSTED',nextCheckAt:Date.now()+settings.intervalMs});return entered;}
       const maxMs=f.autonomy.settings(id).roundTimeoutMs-roundDuration(j.safety,id,roundId);if(maxMs<=0)fail('AUTONOMOUS_ROUND_TIMEOUT');
-      Object.defineProperty(messages,'contextReport',{value:{version:2,lane:'executor',kind:'work-observation',budget,required:inputBytes,estimatedInput:inputBytes,estimate:'utf8-bytes-plus-framing',counts:{workUnits:batch.model.units.length},workBatchId:batch.id},enumerable:false});
+      Object.defineProperty(messages,'contextReport',{value:{version:2,lane:'executor',kind:'work-observation',budget:null,localInputLimit:false,required:inputBytes,estimatedInput:inputBytes,estimate:'utf8-bytes-plus-framing',counts:{workUnits:batch.model.units.length},workBatchId:batch.id},enumerable:false});
       agent.activeRoundId=roundId;agent.activeLane='autonomous';
       if(!entered){agent.session.append('turn/start',{turn});agent.session.append('step/start',{turn,step:1});entered=true;}
       segment={id:randomUUID(),agent:id,roundId,started:Date.now(),maxMs};started=performance.now();j.safety.appendSync('segment-start:'+segment.id,'autonomy-segment-start',segment);await j.safety.anchor();

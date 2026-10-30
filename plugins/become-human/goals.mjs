@@ -84,7 +84,20 @@ export class GoalEngine {
     if(action==='cancel')row.status='cancelled';
     else if(action==='pause'){if(!['active','blocked'].includes(row.status))fail('INVALID_GOAL_TRANSITION');row.status='paused';}
     else {if(!this.sourceValid(row))fail('GOAL_SOURCE_INVALID');if(row.status==='blocked'||row.steps.some(s=>s.status==='failed'))fail('GOAL_RETRY_REQUIRED');if(!['proposed','paused'].includes(row.status))fail('INVALID_GOAL_TRANSITION');row.status='active';row.reason=null;}
-    this.journal.transaction(()=>this.save(row,'goal-'+action));return this.get(agent,id);
+    this.journal.transaction(()=>{
+      if(action==='cancel'){
+        const closed=new Set(['completed','failed','cancelled','expired']);
+        for(const step of row.steps){
+          if(closed.has(step.status))continue;
+          if(step.taskId){const task=this.autonomy.getTask(step.taskId);if(task?.agent===agent&&!closed.has(task.status))this.autonomy.update(task.id,'cancelled',{...task.checkpoint,reason:'GOAL_CANCELLED'});}
+          if(step.actionId&&this.actions){const report=this.reportAction(agent,step.actionId);if(report&&['proposed','approved','executing'].includes(report.status))this.actions.cancel(agent,report.id,{expectedVersion:report.version});}
+          for(const attempt of step.attempts)if(!closed.has(attempt.status)){attempt.status='cancelled';attempt.reason='GOAL_CANCELLED';attempt.ended=this.now(agent);}
+          step.status='cancelled';step.error='GOAL_CANCELLED';
+        }
+        row.reason='goal-cancelled';row.retry_at=null;row.evaluation=null;
+      }
+      this.save(row,'goal-'+action);
+    });return this.get(agent,id);
   }
   eligible(agent,step,settings){
     if(!settings.enabled)return false;if(step.kind==='write-report')return !!this.actions;
@@ -196,12 +209,16 @@ export class GoalEngine {
     let row;try{row=this.raw(agent,id);}catch{return false;}const step=row.steps.find(s=>s.taskId===task.id);return row.status==='active'&&row.expires>this.now(agent)&&this.sourceValid(row)&&!!step&&step.status==='running'&&step.kind===task.kind&&this.eligible(agent,step,this.autonomy.settings(agent));
   }
   failed(agent,taskId){const row=this.linked(agent,taskId);return row?this.reconcile(agent,row.goal):null;}
-  retry(agent,id,{expectedVersion}={}){
+  retry(agent,id,{expectedVersion,overrideBackoff=false}={}){
+    if(typeof overrideBackoff!=='boolean')fail('INVALID_GOAL_RETRY');
     this.journal.assertAdmitted(agent);this.reconcile(agent,id);const row=this.raw(agent,id);this.version(row,expectedVersion);
     if(!['blocked','paused'].includes(row.status)||!this.sourceValid(row))fail('GOAL_NOT_RETRYABLE');
-    if(row.retry_at&&row.retry_at>this.now(agent))fail('GOAL_BACKOFF');
+    const priorRetryAt=row.retry_at,backoffOverridden=!!(priorRetryAt&&priorRetryAt>this.now(agent));
+    // An authenticated owner may explicitly authorize one early retry. Normal
+    // retry/IM callers keep the backoff; this does not resume the driver.
+    if(backoffOverridden&&!overrideBackoff)fail('GOAL_BACKOFF');
     const step=row.steps.find(s=>s.status==='failed');if(!step)fail('GOAL_NOT_RETRYABLE');if(step.attempts.length>=16)fail('GOAL_ATTEMPT_LIMIT');
-    step.status='pending';step.taskId=null;step.noteId=null;if(step.kind==='write-report'){step.actionId=null;delete step.resolvedNoteIds;delete step.receipt;}delete step.error;row.status='active';row.reason=null;row.retry_at=null;row.evaluation=null;this.journal.transaction(()=>this.save(row,'goal-retry-authorized',{stepId:step.id,priorTaskId:step.attempts.at(-1)?.taskId,priorActionId:step.attempts.at(-1)?.actionId}));return this.get(agent,id);
+    step.status='pending';step.taskId=null;step.noteId=null;if(step.kind==='write-report'){step.actionId=null;delete step.resolvedNoteIds;delete step.receipt;}delete step.error;row.status='active';row.reason=null;row.retry_at=null;row.evaluation=null;this.journal.transaction(()=>this.save(row,'goal-retry-authorized',{stepId:step.id,priorTaskId:step.attempts.at(-1)?.taskId,priorActionId:step.attempts.at(-1)?.actionId,backoffOverridden,priorRetryAt}));return this.get(agent,id);
   }
   revise(agent,id,{expectedVersion,priority,expectedValue,acceptance,appendMilestones=[]}={}){
     this.journal.assertAdmitted(agent);this.reconcile(agent,id);const row=this.raw(agent,id);this.version(row,expectedVersion);

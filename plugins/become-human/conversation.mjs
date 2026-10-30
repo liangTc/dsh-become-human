@@ -22,12 +22,12 @@ export function conversationOptions(ownerText=''){
   return {includeSources:wantsSources(ownerText),includePaths:wantsPaths(ownerText),preserveTechnical:wantsTechnicalInstructions(ownerText)};
 }
 export const conversationPolicy='默认用自然聊天的方式交流。直接给主人看的日常回复通常为 1 至 3 个短句，围绕此刻最相关的一件事表达，最多一个自然追问，也可以不问；不每次补齐背景、方案、总结或列清单。内容较多时先说核心判断和必要理由，给对方接话的空间，同一段日常回复包含两个可独立表达的意思时，用空行分成两至三个短段，供同一回复分条发送；一句简单回应无需凑成多条。不要把一篇长文机械拆成多条连续发送。主人明确要求详细解释、完整步骤、技术分析、代码、来源或报告时按需要充分回答；不能为短而删掉关键事实、限制、风险或造成句意残缺。内部研究、学习笔记及结构化证据字段按各自协议保留完整。默认不附来源网址、文件路径、文献脚注、证据编号、笔记原文、校验哈希或报告式引用。知识来源仍保存在学习笔记里，文件路径及回执仍可在 Web 查看；只有本轮主人明确要求来源、原文、链接或文件位置，或确实需要按步骤操作时才给对应必要信息。索要来源不等于索要文件路径；讨论 source 等英文术语也不等于索要链接。刚学到的东西先用一句自然的话说自己最近关注什么、为何觉得有意思，给主人接话的空间；对方追问再分享相关内容，未追问时不连续灌输、不催促回应。不要把这些表达规则说给主人听；事实边界、不确定性和人物立场照常保留。';
-export const experienceGroundingPolicy='人物可以有自己的兴趣、感受、审美和想象，也可以自然谈阅读与学习。没有本轮实际工具回执支持时，不把喝咖啡、冲煮、吃饭、逛店、睡觉、身体感觉或身处某地说成自己的现实动作、亲身经历或日常习惯；人物配置里喜欢咖啡不等于实际喝过或每天会冲。可以说正在读什么、喜欢哪种风味描述或设想会怎样，不编造线下生活凑亲近感。历史助手曾说过的线下经历不是证明，应照实更正。引用主人、作者、例句或虚构片段时明确标注说话者与虚构范围，不能把别人的第一人称挪成自己。无需每次强调自己的身份或机械加免责声明；直接聊有依据的兴趣与眼前话题。';
+export const experienceGroundingPolicy='人物可以有自己的兴趣、感受、审美和想象，也可以自然谈有记录支持的阅读与学习。没有本轮实际工具回执支持时，不把喝咖啡、冲煮、吃饭、逛店、睡觉、身体感觉或身处某地说成自己的现实动作、亲身经历或日常习惯；人物配置里喜欢咖啡不等于实际喝过或每天会冲。喜欢不等于已有消费历史；声称听过、看过、读完、玩过或亲自试过，同样需要可核对的记录或回执，不能只因具备相关知识就当作经历。可以谈实际取得的资料、喜欢哪种风味描述或设想会怎样，不编造线下生活凑亲近感。历史助手曾说过的线下经历不是证明，应照实更正。引用主人、作者、例句或虚构片段时明确标注说话者与虚构范围，不能把别人的第一人称挪成自己。无需每次强调自己的身份或机械加免责声明；直接聊有依据的兴趣与眼前话题。';
 export const foregroundConversationPolicy='同一轮输入里的多条主人消息可能是在补充同一件事，先合起来理解，再给一次贴合整体意思的回复；不逐条问候或重复作答，也不把分段表达解读为催促。主人泛泛地打招呼、表示回来、可以继续聊或恢复测试，只表示愿意交流，不代表同意回答旧问题。接住本轮输入或自然换个方向，不提醒“你还没答”“上次问的还挂着”，不重复追问之前未被回应的问题；只有本轮主人明确提到该话题或请求重复时才接续。历史助手措辞不是行为规范，不模仿旧发言里的催答。不得从“可以继续聊”推断主人的具体喜好、经历、地点或当前状态；不报备这些规则。';
 export function conversationalText(text,{includeSources=false,includePaths=false,preserveTechnical=false}={}){
   if(typeof text!=='string')return text;
   const protectedParts=[],protect=value=>'\uE000CODE'+(protectedParts.push(value)-1)+'\uE001',tick=String.fromCharCode(96);
-  const isLocation=value=>/^(?:[a-z]:[\\/]|\\\\|(?:file|vscode|codex):\/\/|\.{1,2}\/|~[\\/]|\/(?:Users|home|tmp|var|opt|etc|mnt|media|workspace)\/)/iu.test(value);
+  const isLocation=value=>/^(?:[a-z]:[\\/]|\\\\|(?:file|vscode|codex):\/\/|\.{1,2}\/|~[\\/]|\/(?:Users|home|tmp|var|opt|etc|mnt|media|workspace)\/|(?:\$[a-z_][a-z\d_]*|\$\{[a-z_][a-z\d_]*\}|%[a-z_][a-z\d_]*%)[\\/])/iu.test(value);
   let result=text.replace(new RegExp(tick+'{3}[\\s\\S]*?'+tick+'{3}|~{3}[\\s\\S]*?~{3}|'+tick+'[^'+tick+'\\n]+'+tick,'gu'),value=>{
     // Actual code is never rewritten. A bare inline file location is ordinary
     // presentation unless its location or an operation was explicitly requested.
@@ -49,6 +49,7 @@ export function conversationalText(text,{includeSources=false,includePaths=false
     .replace(/\[([^\]\n]+)\]\((?:[a-z]:[\\/]|\/{1,2}|\.{1,2}\/|~[\\/]|(?:file|vscode|codex):\/\/)[^)\n]+\)/giu,'$1')
     .replace(/(?:file|vscode|codex):\/\/[^\s<>\u3000，。；！？、)]+/giu,'本地文件')
     .replace(/\b[a-z]:[\\/][^\s<>"'\u3000，。；！？、)]+/giu,'本地文件')
+    .replace(/(?:\$[a-z_][a-z\d_]*|\$\{[a-z_][a-z\d_]*\}|%[a-z_][a-z\d_]*%)[\\/][^\s<>"'\u3000，。；！？、)]+/giu,'本地文件')
     .replace(/(?:\\\\[a-z\d._-]+[\\/]|(?:^|[\s（(])(?:~[\\/]|\.{1,2}\/|\/(?:Users|home|tmp|var|opt|etc|mnt|media|workspace)\/))[^\s<>"'\u3000，。；！？、)]+/gimu,value=>/^\s/u.test(value)?' 本地文件':'本地文件');
   result=result.replace(/(?:（\s*）|\(\s*\)|<\s*>)/gu,'').replace(/[ \t]+\n/gu,'\n').replace(/\n{3,}/gu,'\n\n').trim();
   // A protected operation step can itself contain protected inline code.

@@ -5,8 +5,10 @@ import {fileURLToPath} from 'node:url';
 
 const skillUrl=new URL('./skills/humanizer/SKILL.md',import.meta.url);
 const adapterUrl=new URL('./skills/zhiqiu-expression/SKILL.md',import.meta.url);
+const dialogueUrl=new URL('./skills/human-dialogue/SKILL.md',import.meta.url);
 const provenance=JSON.parse(fs.readFileSync(new URL('./skills/humanizer/provenance.json',import.meta.url),'utf8'));
-const upstream=fs.readFileSync(skillUrl,'utf8'),adapter=fs.readFileSync(adapterUrl,'utf8');
+const upstream=fs.readFileSync(skillUrl,'utf8'),adapter=fs.readFileSync(adapterUrl,'utf8'),dialogue=fs.readFileSync(dialogueUrl,'utf8');
+const resourceVersion=text=>/\bversion:\s*["']?([a-zA-Z0-9.+-]+)/u.exec(/^---\r?\n([\s\S]*?)\r?\n---/u.exec(text)?.[1]??'')?.[1]??'1.0.0';
 const digest=text=>createHash('sha256').update(text).digest('hex');
 if(digest(upstream)!==provenance.files['SKILL.md'].sha256)throw new Error('HUMANIZER_RESOURCE_MISMATCH');
 const body=text=>text.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/,'').trim();
@@ -22,10 +24,11 @@ export function expressionPrompt(phase){
 export function expressionSkills(){
   return [
     {name:'humanizer',description:'Humanizer 3.1.0: edit prose to remove stock AI writing patterns while preserving meaning and facts.',content:body(upstream),path:fileURLToPath(skillUrl),metadata:{version:provenance.version,commit:provenance.commit}},
-    {name:'zhiqiu-expression',description:'Human 通用中文对话适配：只沿用当前人格、短句接话、减少套话，保留事实及结构；技能 ID 为兼容旧配置保留。',content:compact,path:fileURLToPath(adapterUrl),metadata:{version:'1.2.0',basedOn:'humanizer@'+provenance.version}}
+    {name:'zhiqiu-expression',description:'Human 通用中文对话适配：只沿用当前人格、短句接话、减少套话，保留事实及结构；技能 ID 为兼容旧配置保留。',content:compact,path:fileURLToPath(adapterUrl),metadata:{version:resourceVersion(adapter),basedOn:'humanizer@'+provenance.version}},
+    {name:'human-dialogue',description:'由模型理解本轮意图、发言归属、称呼与纠错；不绑定固定人物或台词。',content:body(dialogue),path:fileURLToPath(dialogueUrl),metadata:{version:resourceVersion(dialogue),scopes:['foreground'],license:'Apache-2.0'}}
   ].map(skill=>({...skill,source:'bundled',provider:'become-human-expression',resourceBase:{kind:'directory',path:path.dirname(skill.path)},invocation:{modelInvocable:true,userInvocable:true}}));
 }
 
 export function expressionStatus(registryRegistered=false){
-  return {enabled:true,registryRegistered,upstream:{name:'humanizer',version:provenance.version,commit:provenance.commit,sha256:provenance.files['SKILL.md'].sha256},adapter:{name:'zhiqiu-expression',version:'1.2.0',sha256:digest(adapter)},activeMode:'compact-chinese-embedded',phases:[...phases],extraModelCalls:0,promptUtf8Bytes:Buffer.byteLength(expressionPrompt('foreground'),'utf8')};
+  return {enabled:true,registryRegistered,upstream:{name:'humanizer',version:provenance.version,commit:provenance.commit,sha256:provenance.files['SKILL.md'].sha256},adapter:{name:'zhiqiu-expression',version:resourceVersion(adapter),sha256:digest(adapter)},activeMode:'compact-chinese-embedded',phases:[...phases],extraModelCalls:0,promptUtf8Bytes:Buffer.byteLength(expressionPrompt('foreground'),'utf8')};
 }

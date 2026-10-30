@@ -49,7 +49,7 @@ export class ToolExecutor {
   }
   enabled(adapter,agent){const settings=this.configuration(agent);return adapter.definition.enabledWhen.every(path=>at(settings,path)===true)&&adapter.available?.()!==false;}
   catalog(agent,{origin='owner'}={}){return [...this.registry.values()].filter(a=>origin!=='autonomous'||a.definition.autonomous).map(a=>{const available=agent?this.enabled(a,agent):true;return {...a.definition,available,unavailableReason:available?null:'CAPABILITY_DISABLED'};});}
-  contextCatalog(agent,origin='owner'){return this.catalog(agent,{origin}).filter(a=>a.available).map(({id,description,inputSchema,effect,scope,externalModel})=>({id,description,inputSchema,effect,scope,externalModel}));}
+  contextCatalog(agent,origin='owner'){return this.catalog(agent,{origin}).filter(a=>a.available).map(({id,title,description,inputSchema,effect,backend,scope,externalModel})=>({id,title,description,inputSchema,effect,backend,scope,externalModel}));}
   metadata(id){return this.db.prepare('SELECT * FROM human_capability_job WHERE id=?').get(id);}
   checkPreview(row){const meta=this.metadata(row.id);if(meta&&meta.digest!==hash({tool:row.tool,input:row.input,snapshot:row.capabilitySnapshot,prepared:row.prepared,policyRevision:meta.policy_revision}))fail('CAPABILITY_PREVIEW_MISMATCH');}
   get(agent,id){
@@ -126,7 +126,9 @@ export class ToolExecutor {
       this.journal.transaction(()=>{guarded();if(adapter.backend==='public-read'&&result?.digest)this.db.prepare('INSERT INTO human_page_snapshot VALUES(?,?,?,?,?) ON CONFLICT(agent,url) DO UPDATE SET digest=excluded.digest,fetched=excluded.fetched,job=excluded.job').run(agent,row.input.url,result.digest,result.fetchedAt,row.id);this.update(row,'completed',{result:result??{completed:true}});});
     }catch(error){
       const code=codeOf(error),writing=(adapter?.effect??row.capabilitySnapshot?.effect)==='write';
-      if(writing&&dispatched)this.update(row,'unknown',{error:code==='CAPABILITY_OUTCOME_UNKNOWN'?code:'CAPABILITY_OUTCOME_UNKNOWN:'+code});
+      const rejectedBeforeCancel=adapter?.backend==='dsh-session'&&row.tool==='dsh-session-cancel'&&['DSH_SESSION_TASK_CHANGED','DSH_SESSION_CANCEL_UNAVAILABLE'].includes(code);
+      if(rejectedBeforeCancel)this.journal.audit(agent,'tool-execution-not-started',{jobId:row.id,tool:row.tool,code,sideEffectDispatched:false});
+      if(writing&&dispatched&&!rejectedBeforeCancel)this.update(row,'unknown',{error:code==='CAPABILITY_OUTCOME_UNKNOWN'?code:'CAPABILITY_OUTCOME_UNKNOWN:'+code});
       else if((signal.aborted||code==='STALE_RESULT'||code==='CAPABILITY_CANCELLED')&&adapter?.definition.retrySafe)this.update(row,'suspended',{error:'OWNER_PREEMPTED'});
       else this.update(row,'failed',{error:code});
     }finally{this.inflight.delete(id);this.executions.delete(id);}return this.get(agent,id);

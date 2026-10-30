@@ -11,11 +11,11 @@
 > [!WARNING]
 > **Test release · Development is incomplete.** The current public test release is `0.7.0-beta.5` (GitHub Prerelease). Windows, Node.js 24+, and DSH `0.2.0-rc.2` are required. Complete acceptance and long-running reliability remain unverified, including the fresh-DSH native DeepSeek flow; see [testing status](docs/TESTING_STATUS.md).
 
-`main` now contains **`0.7.0-beta.6` development source**, with no public Release package for that version. The beta.5 downloads below do not include beta.6 additions.
+`main` contains **`0.7.0-beta.11` development source**, with no public Release package for that version. The beta.5 downloads below do not include later development changes.
 
 | Version | Availability and status |
 | --- | --- |
-| `0.7.0-beta.6` | Development source with local builds, upgrades, and limited real-model checks; build from source, not publicly released |
+| `0.7.0-beta.11` | Public development source with local builds, upgrades, and limited real-model checks; build from source, no published installation package |
 | `0.7.0-beta.5` | Current public test release, with a prebuilt bundle and SHA-256 file; see installation below |
 | `0.7.0-beta.4` | Historical test release; its package does not include beta.5 additions |
 
@@ -44,19 +44,23 @@ DSH Web is the management surface. A paired phone is another channel into the sa
 | Usage statistics · beta.5 | Rolling 24-hour and current-budget-window tokens, model requests, work categories, hourly trends, and model breakdowns |
 | Personality and memory maintenance · beta.5 | Optional evidence-linked personality drift and retraction; periodic memory consolidation, hot/cold tiers, source links, and batch restoration |
 | Model setup · beta.5 | DSH's native DeepSeek API Key adapter and third-party routes using host credential references |
-| Conversation continuity · beta.6 development | Complete dialogue turns, evidence-linked rolling summaries, pending original turns, and relevant long-term memory; inspect coverage and compression usage |
-| Images and personal choices · beta.6 development | Image input for confirmed vision models; agree, negotiate, decline, or reconsider ordinary requests without turning relationship scores into permissions |
-| Learning and work support · beta.6 development | Explicit learning motivation, conversational teasers, details on follow-up, response-based route weighting, and configurable observation of authorized DSH sessions |
+| Conversation continuity · development | Complete dialogue turns, evidence-linked rolling summaries, pending original turns, and relevant long-term memory; inspect coverage and compression usage |
+| Images and personal choices · development | Image input for confirmed vision models; agree, negotiate, decline, or reconsider ordinary requests without turning relationship scores into permissions |
+| Learning and work support · development | Learning motivation, teasers and follow-up, valid note retrieval, authorized DSH session observation, and pre-save checks of exact quotes against task scope |
 
-Browser tab control and DSH session writes have integration code, are disabled by default, and require scoped configuration and per-operation approval. Their real workflows still need separate validation. Text Skills provide guidance; they do not grant arbitrary code execution or operating-system access.
+DSH session writes are disabled by default and require scoped configuration and per-operation approval. Cancellation targets the specific turn returned by a session read and rejects stale requests after the task changes. Human does not provide browser tab or window control. Text Skills provide guidance; they do not grant arbitrary code execution or operating-system access.
 
 [Shared matters and reviews in the task board](docs/CHARACTER_BOARD.md) use the existing main session, IM binding, and execution lane. Manual focus does not start the driver; recording a goal or commitment does not dispatch it. Accepting a review does not grant permissions or retry failed work. The view shows concise intentions and evidence, not raw chain of thought or proof of consciousness. Additions marked beta.5 are included in this test package and still require separate acceptance checks.
 
-### beta.6 development progress
+### beta.11 development progress
 
-Recent changes focus on conversation continuity, useful learning, and considerate sharing. Recent history uses complete turns. Older turns are summarized on demand with source links, while failed compression allows the conversation to continue. Compression uses the chat model, incurs additional provider usage, and has a separate statistics category outside the autonomous budget. Original messages remain available; summaries do not guarantee unlimited recall or factual accuracy.
+Recent development focuses on three areas:
 
-A limited real Web check used one summary across three conversations, covered ten older turns, and reused the summary after a restart. Isolated checks are recorded separately. These results do not establish long-term quality, fresh-install success, real native DeepSeek requests, or WeChat image acceptance. See the [changelog](CHANGELOG.md), [learning and conversation guide](docs/LEARNING_AND_CONVERSATION.md), and [test record](docs/TESTING_STATUS.md).
+- **Conversation and sharing:** complete turns and rolling summaries preserve continuity; natural follow-up can retrieve valid notes. A serial reply check targets unsupported personal experiences and unsolicited pressure to answer, with at most one revision. Chat, compression, and reply review have separate accounting outside the autonomous budget.
+- **Learning quality:** sentence-based evidence IDs and exact source quotes, followed by a review of the saved quotes against the current question and goal constraints. Rejected candidates create neither notes nor knowledge memories. Review consumes autonomous requests and tokens; acceptance does not independently verify the source or its claims.
+- **Tasks and recovery:** goal cancellation, concurrent export cleanup, crash recovery checks, and goal revalidation after supporting evidence is withdrawn. Failed records remain available; unknown outcomes are not retried automatically.
+
+The latest beta.11 round includes 144 isolated checks plus limited real-model and Web checks. A scope review falsely accepted an earlier candidate; its test note was withdrawn. Excerpt ending completeness, cross-topic quality, public search, and connection timeouts remain open. Real preemption and quota-wait recovery in the new review phase, clean-machine installation, phone images, and long-running behavior still need acceptance. See the [changelog](CHANGELOG.md), [learning and conversation guide](docs/LEARNING_AND_CONVERSATION.md), and [test record](docs/TESTING_STATUS.md).
 
 ## Architecture
 
@@ -88,7 +92,7 @@ The npm package is not published. The Git repository and GitHub source ZIP omit 
 
 Start DSH, open Human, and follow **existing model → persona and budget → create and start**. The plugin prepares its data directory, private profile, and available loopback port automatically. No separate runtime installation or YAML editing is required for a fresh setup. `beta.5` supports `llm-pi-ai` routes and DSH's native DeepSeek API Key adapter. Both resolve `apiKeyEnv` credential references without returning secrets to the browser. DeepSeek account authentication, inline keys, and arbitrary headers are not supported. See [model configuration](docs/CONFIGURATION.md#进程与模型配置).
 
-**Native adapter validation:** beta.5 has passed local build, installed-file verification, service recovery, and read-only model catalog discovery. The complete fresh-DSH flow—configure a native key, reuse its credential, start the background runtime, and make a real request—is [pending and deferred for this update](docs/TESTING_STATUS.md#优先待测试项). Fresh-install success and native network calls have not been verified.
+**Native adapter validation:** the public beta.5 release retains its original acceptance scope. On October 28, a beta.6 development candidate passed real official model discovery, host-process credential reuse, background startup, and Flash requests in a separate empty directory on the same machine. This used shared dependency caches; it does not establish clean-machine success or retroactively validate beta.5. Uncached installation of the final release artifact, credential-priority combinations, and additional reasoning settings are tracked under [merged tests D1/D2](docs/TESTING_STATUS.md#merged-testing).
 
 Choose a persona, low/medium/high budget, optional owner name, and timezone. Enabling autonomous behavior during setup is off by default; phone binding is optional afterward. Existing installations retain their session, configuration, and binding. Later cold starts remain paused until explicitly resumed. The runtime continues to follow the DSH service lifecycle; this change does not add a resident service. See [configuration](docs/CONFIGURATION.md) and [usage](docs/USAGE.md).
 

@@ -33,7 +33,7 @@ function RollingSummaryState({state,preview,ui,onRetry,retrying}:any){
 function ContextRecord({report:r,label,ui}:any){
   const {Band}=ui,review=r?.kind==='development-review';
   return <section className="hn-group"><h3>{label}</h3>{!r||typeof r!=='object'?<p className="hn-note">新版尚未记录该阶段的模型上下文。</p>:<>
-    <p>{time(r.time)} · 装入 {quantity(r.estimatedInput)} / {quantity(r.budget)} 预算单位</p>
+    <p>{time(r.time)} · 装入约 {quantity(r.estimatedInput)} 字节{r.localInputLimit===false||r.budget===null?' · 无本地输入预算':typeof r.budget==='number'?' · 历史输入预算 '+quantity(r.budget):' · 未记录本地输入策略'}</p>
     <p className="hn-note">固定必需内容 {quantity(r.required)} 单位 · 装配前候选内容 {quantity(r.inputBytes)} 单位</p>
     {typeof r.historyTurnCount==='number'&&<p className="hn-note">近期完整对话：装入 {quantity(r.recentHistoryTurnCount??r.historyTurnCount)} 轮，候选 {quantity(r.candidateRecentHistoryTurnCount??r.candidateHistoryTurnCount)} 轮。下方聊天历史的“条”按实际消息计数。</p>}
     {typeof r.pendingBridgeCandidateTurns==='number'&&<p className="hn-note">待压缩过渡原文：候选 {quantity(r.pendingBridgeCandidateTurns)} 轮，装入 {quantity(r.pendingBridgeIncludedTurns)} 轮，省略 {quantity(r.pendingBridgeOmittedTurns)} 轮。最多额外带入3轮完整原文，补足近期窗口与下一批摘要之间的间隔，不将其计为已压缩。</p>}
@@ -43,8 +43,8 @@ function ContextRecord({report:r,label,ui}:any){
       <p className="hn-note">记忆整理材料：{quantity(r.counts?.memory)} 条</p>
       <p className="hn-note">人格回顾依据：{quantity(r.counts?.personaEvidence)} 条</p>
       <p className="hn-note">这类记录不包含普通聊天的逐类省略统计；缺失字段显示“未记录”，不按零计算。</p>
-    </>:Object.entries(fields).map(([key,name])=><p className="hn-note" key={key}>{name as string}：装入 {quantity(r.counts?.[key])} 条，因输入预算省略 {quantity(r.omitted?.[key])} 条</p>)}
-    {typeof r.importantFactsOmitted==='number'&&r.importantFactsOmitted>0&&<Band>有 {quantity(r.importantFactsOmitted)} 条重要事实候选未装入。可在“模型与执行”提高该阶段输入预算。</Band>}
+    </>:Object.entries(fields).map(([key,name])=><p className="hn-note" key={key}>{name as string}：装入 {quantity(r.counts?.[key])} 条，未装入 {quantity(r.omitted?.[key])} 条</p>)}
+    {typeof r.importantFactsOmitted==='number'&&r.importantFactsOmitted>0&&<Band>有 {quantity(r.importantFactsOmitted)} 条重要事实候选未装入。请结合本条记录时间核对当时的检索和上下文状态。</Band>}
     {Array.isArray(r.memoryRefs)?<details><summary>本轮记忆编号与版本</summary><pre className="hn-json">{JSON.stringify(r.memoryRefs,null,2)}</pre></details>:<p className="hn-note">这条记录未保存记忆编号与版本。</p>}
   </>}</section>;
 }
@@ -54,7 +54,7 @@ export default function ContextStatus({api,ui}:any){
   const [nonce,setNonce]=useState(0),[retrying,setRetrying]=useState(false),[retryError,setRetryError]=useState(''),result=useRead(api,{kind:'context-status'},nonce);
   const retry=async()=>{if(retrying)return;setRetrying(true);setRetryError('');try{await api.control({op:'conversation-summary-retry'});setNonce(value=>value+1);}catch(error:any){const code=error?.message??String(error);setRetryError(code==='PAUSE_REQUIRED'?'请先暂停 Human 并等待当前执行结束，再允许重新整理。':ui.errorText?.(code)??code);}finally{setRetrying(false);}};
   return <><div className="hn-row hn-between"><h3>每轮实际带入的上下文</h3><Button onClick={()=>setNonce(n=>n+1)}>刷新状态</Button></div>
-    <Band>聊天带入近期完整问答、较早会话的滚动摘要，再按相关性补充长期记忆与目标。摘要每轮核对来源，较新的更正优先；预算不足时先缩减完整摘要条目，并明确记录未装入内容。人格只装入一份，原始对话与记忆继续保留。</Band>
+    <Band>聊天带入近期完整问答、较早会话的滚动摘要，再按相关性补充长期记忆与目标。摘要每轮核对来源，较新的更正优先；不再因 Human 本地输入预算裁剪记录或拦截调用。人格只装入一份，原始对话与记忆继续保留。</Band>
     <ReadState result={result}>{(data:any)=><>
       {retryError&&<Band>{retryError}</Band>}
       {data?.rolling&&typeof data.rolling==='object'&&<RollingSummaryState state={data.rolling} preview={data.rollingPreview} {...{ui,retrying}} onRetry={retry}/>}
@@ -66,7 +66,7 @@ export default function ContextStatus({api,ui}:any){
         <details><summary>状态字段与任务编号</summary><pre className="hn-json">{JSON.stringify(data.current,null,2)}</pre></details>
       </section>:<Empty>运行模块连接后可读取当前状态摘要。</Empty>}
       {Object.entries(stages).map(([lane,label])=><ContextRecord key={lane} label={label} report={data?.last?.[lane]} ui={ui}/>)}
-      <Band>输入预算按实际序列化内容的 UTF-8 字节数加 256 单位封装预留计算，不是模型分词结果；供应商实际 token 见事件日志。固定指令、核心人格、当前输入、当前任务和执行所需来源不会被截断，必需内容超限时会停止该次调用并记录错误。历史摘录只作背景。该页为只读，不调用模型；“最近一轮”保留当时的编号与版本。</Band>
+      <Band>大小按序列化内容的 UTF-8 字节数加封装预留估算，只作观察，不是本地准入上限或模型分词结果；供应商实际 token 见统计。模型窗口和供应商约束沿用 DSH 配置。近期历史与记忆仍按检索范围和有效来源选择，摘要及历史摘录保持各自边界。该页为只读，不调用模型；“最近一轮”保留当时的编号与版本。</Band>
     </>}</ReadState>
   </>;
 }

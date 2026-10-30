@@ -1,6 +1,7 @@
 // Human owns admission and session access; DSH owns image decoding, normalized
 // immutable objects and provider wire transforms. No caller path/URL is used.
 import {randomUUID} from 'node:crypto';
+import {currentDialogueOwnerIndex} from './dialogue-frame.mjs';
 
 export const mediaPolicy=Object.freeze({version:1,mimes:['image/png','image/jpeg','image/webp'],maxBytes:5*1024*1024,maxPerMessage:4,maxMessageBytes:12*1024*1024,maxStoredBytes:128*1024*1024,maxPending:20,pendingTtlMs:24*3600000});
 export const runtimeAttachmentLimits=Object.freeze({maxImageBytes:mediaPolicy.maxBytes,maxImagesPerMessage:mediaPolicy.maxPerMessage,maxMessageImageBytes:mediaPolicy.maxMessageBytes,maxImagePixels:16000000,maxImageDimension:8192,normalizedImageMaxPixels:2000000,normalizedImageMaxBytes:3*1024*1024});
@@ -25,8 +26,8 @@ export function attachCurrentImages(messages,agent,{admittedIds=[],inputModaliti
   const images=agent.factory.media?.current(agent.id,admittedIds)??[];
   if(!images.length){if(imageContentCount(messages))fail('MEDIA_REQUEST_CONTEXT_INVALID');return messages;}
   if(requireCapability)assertImageModel(inputModalities,images.length);
-  const target=messages.findLastIndex(message=>message.role==='user');
-  if(target<0)fail('MEDIA_REQUEST_CONTEXT_INVALID');
+  const target=currentDialogueOwnerIndex(messages)??messages.findLastIndex(message=>message.role==='user');
+  if(target<0||messages[target]?.role!=='user')fail('MEDIA_REQUEST_CONTEXT_INVALID');
   const output=messages.map((message,index)=>{const content=message.content.filter(part=>part.type!=='image');return {...message,content:index===target?[...content,...images.map(row=>({type:'image',attachment:clone(row.ref)}))]:content};});
   for(const key of Object.getOwnPropertyNames(messages))if(!/^\d+$/u.test(key)&&key!=='length'&&key!=='mediaReport')Object.defineProperty(output,key,Object.getOwnPropertyDescriptor(messages,key));
   Object.defineProperty(output,'mediaReport',{value:{version:1,count:images.length,ids:images.map(row=>row.id),estimatedTokens:estimateImageRequestCost(output),scope:'current-admitted-owner-input-only'},enumerable:false});
@@ -114,7 +115,7 @@ export class HumanMedia {
   }
   async route(agent){
     const route=agent.factory.management.options(agent.id,'foreground'),catalog=agent.factory.management.modelCapabilities().find(row=>row.provider===route.provider&&row.model===route.model);let modalities=validModalities(catalog?.inputModalities),authoritative=false,error;
-    try{const prepared=await agent.ctx.llm.prepareCall({provider:route.provider,model:route.model,maxTokens:route.maxTokens,...(route.reasoningEffort?{reasoningEffort:route.reasoningEffort}:{})},AbortSignal.timeout(5000));modalities=validModalities(prepared.inputModalities);authoritative=true;}catch(e){error=/^[A-Z_]{3,80}$/u.test(e.code??e.message??'')?e.code??e.message:'MEDIA_MODEL_LOOKUP_FAILED';}
+    try{const prepared=await agent.ctx.llm.prepareCall({provider:route.provider,model:route.model,...(route.reasoningEffort?{reasoningEffort:route.reasoningEffort}:{})},AbortSignal.timeout(5000));modalities=validModalities(prepared.inputModalities);authoritative=true;}catch(e){error=/^[A-Z_]{3,80}$/u.test(e.code??e.message??'')?e.code??e.message:'MEDIA_MODEL_LOOKUP_FAILED';}
     return {provider:route.provider,model:route.model,inputModalities:modalities,imageInput:!modalities?.length?'unknown':modalities.includes('image')?'supported':'unsupported',authoritative,...(error?{error}:{})};
   }
   async assertRoute(agent){const route=await this.route(agent);assertImageModel(route.authoritative?route.inputModalities:null,1);return route;}

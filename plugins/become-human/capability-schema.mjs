@@ -13,6 +13,14 @@ const keywords={
   boolean:new Set(common),
 };
 
+function annotation(value,depth=0){
+  if(depth>8)badSchema();
+  if(value===null||typeof value==='string'||typeof value==='boolean'||typeof value==='number'&&Number.isFinite(value))return;
+  if(Array.isArray(value)){if(value.length>256)badSchema();for(const item of value)annotation(item,depth+1);return;}
+  if(plain(value)){if(Object.keys(value).length>40||Object.keys(value).some(unsafeKey))badSchema();for(const item of Object.values(value))annotation(item,depth+1);return;}
+  badSchema();
+}
+
 // This is an intentionally bounded JSON Schema subset. Unsupported keywords
 // (including pattern, oneOf, $ref and additionalProperties:true) fail at adapter
 // registration instead of silently promising constraints we do not enforce.
@@ -96,6 +104,9 @@ export function assertCapabilitySchema(schema,depth=0){
     const normalized=[];
     for(const value of schema.enum){let item;try{item=JSON.stringify(normalize(schema,value,depth,true));}catch{badSchema();}if(normalized.includes(item))badSchema();normalized.push(item);}
   }
-  if(own(schema,'default')){try{normalize(schema,schema.default,depth);}catch{badSchema();}}
+  // JSON Schema default is annotation, not an input constraint or autofill.
+  // Some real servers advertise null for an optional string. Keep it as JSON
+  // metadata without accepting null as an actual string argument.
+  if(own(schema,'default'))annotation(schema.default,depth);
   try{if(Buffer.byteLength(JSON.stringify(schema))>16384)badSchema();}catch{badSchema();}
 }

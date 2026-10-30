@@ -3,7 +3,7 @@ import {recentDialogue} from './dialogue-history.mjs';
 import {developmentInput,retrievalTerms} from './knowledge-signals.mjs';
 
 const categories=['topics','decisions','openQuestions','corrections'];
-const policy=Object.freeze({version:1,maxChunks:12,maxTurnsPerJob:24,maxInputBytes:24000,maxItemsPerSection:3,maxItemChars:240,maxTextChars:700,preferredTextChars:350,firstThreshold:2,nextThreshold:4,maxRawTurns:256});
+const policy=Object.freeze({version:1,maxChunks:12,maxTurnsPerJob:24,maxInputBytes:24000,maxItemsPerSection:3,maxItemChars:240,maxSourceIdsPerItem:8,maxSerializedOutputBytes:8192,maxTextChars:700,preferredTextChars:350,firstThreshold:2,nextThreshold:4,maxRawTurns:256});
 const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const plain=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
 const parse=value=>{try{return JSON.parse(value);}catch{return null;}};
@@ -12,6 +12,7 @@ const textOf=message=>(message?.content??[]).filter(part=>part.type==='text').ma
 const ident=value=>typeof value==='string'&&/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,159}$/u.test(value);
 const secret=value=>/(?:sk-[A-Za-z0-9]{16,}|(?:api.?key|password|密码|密钥|令牌|token)\s*[:=]\s*\S{8,})/iu.test(value);
 const fail=code=>{throw new Error(code);};
+const outputFail=(field,reason,details={})=>{throw Object.assign(new Error('INVALID_DIALOGUE_SUMMARY_OUTPUT'),{validationDiagnostic:{version:1,field,reason,...details}});};
 const clip=(value,count)=>Array.from(value).slice(0,count).join('');
 const slot=scope=>scope==='normal'?'normal':'development';
 const key=scope=>'rolling-dialogue-summary:'+slot(scope);
@@ -95,16 +96,27 @@ export class RollingDialogueSummary {
     if(!turns.length)return null;
     const expectedVersion=state.record?.revision??0,basis=this.basis(agent,state),fingerprint=hash({scope:state.scope,expectedVersion,basis,turns:turns.map(turn=>turn.id),sources}),interrupted=this.journal.value(agent.id,interruptKey(state.scope),null);
     if(interrupted?.scope===state.scope&&interrupted.fingerprint===fingerprint)return null;
-    return {id:'dialogue-summary:'+fingerprint.slice(0,32),scope:state.scope,expectedVersion,fingerprint,basis,admittedIds:[...admittedIds],recentTurnLimit:state.recentTurnLimit,input:{previous:null,turns},sources,sourceIds:sources.map(row=>row.id),coveredTurnIds:turns.map(turn=>turn.id),backlogTurns:state.uncovered.length-turns.length,maxOutputChars:policy.maxTextChars,outputContract:{topics:[{text:'简短主题',sourceIds:['本批真实来源ID']}],decisions:[],openQuestions:[],corrections:[],onlySourceIds:sources.map(row=>row.id),preferredTotalTextChars:policy.preferredTextChars,maxTotalTextChars:policy.maxTextChars,maxPerSection:policy.maxItemsPerSection,assistantIsOwnerFact:false,semanticVerified:false}};
+    return {id:'dialogue-summary:'+fingerprint.slice(0,32),scope:state.scope,expectedVersion,fingerprint,basis,admittedIds:[...admittedIds],recentTurnLimit:state.recentTurnLimit,input:{previous:null,turns},sources,sourceIds:sources.map(row=>row.id),coveredTurnIds:turns.map(turn=>turn.id),backlogTurns:state.uncovered.length-turns.length,maxOutputChars:policy.maxTextChars,outputContract:{topics:[{text:'简短主题',sourceIds:['本批真实来源ID']}],decisions:[],openQuestions:[],corrections:[],onlySourceIds:sources.map(row=>row.id),preferredTotalTextChars:policy.preferredTextChars,maxTotalTextChars:policy.maxTextChars,maxPerSection:policy.maxItemsPerSection,maxItemTextChars:policy.maxItemChars,maxSourceIdsPerItem:policy.maxSourceIdsPerItem,maxSerializedOutputBytes:policy.maxSerializedOutputBytes,outputKeys:categories,onlyOutputKeys:true,assistantIsOwnerFact:false,semanticVerified:false}};
   }
   validateOutput(job,output){
-    if(!plain(output)||Object.keys(output).some(k=>!categories.includes(k))||categories.some(k=>!Array.isArray(output[k])||output[k].length>policy.maxItemsPerSection))fail('INVALID_DIALOGUE_SUMMARY_OUTPUT');
+    if(!plain(output))outputFail('output','object-required');
+    if(Object.keys(output).some(k=>!categories.includes(k)))outputFail('output','unexpected-fields',{unexpectedFieldCount:Object.keys(output).filter(k=>!categories.includes(k)).length});
+    for(const category of categories){if(!Array.isArray(output[category]))outputFail(category,'array-required');if(output[category].length>policy.maxItemsPerSection)outputFail(category,'too-many-items',{actual:output[category].length,maximum:policy.maxItemsPerSection});}
     const allowed=new Set(job.sourceIds),result={};let total=0,count=0;
-    for(const category of categories)result[category]=output[category].map(item=>{
-      if(!plain(item)||Object.keys(item).some(k=>!['text','sourceIds'].includes(k))||typeof item.text!=='string'||!item.text.trim()||Array.from(item.text).length>policy.maxItemChars||secret(item.text)||/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/u.test(item.text)||!distinct(item.sourceIds)||!item.sourceIds.length||item.sourceIds.length>8||item.sourceIds.some(id=>!allowed.has(id)))fail('INVALID_DIALOGUE_SUMMARY_OUTPUT');
+    for(const category of categories)result[category]=output[category].map((item,index)=>{
+      const field=category+'['+index+']';
+      if(!plain(item))outputFail(field,'object-required');
+      if(Object.keys(item).some(k=>!['text','sourceIds'].includes(k)))outputFail(field,'unexpected-fields');
+      if(typeof item.text!=='string'||!item.text.trim())outputFail(field+'.text','nonempty-text-required');
+      if(Array.from(item.text).length>policy.maxItemChars)outputFail(field+'.text','text-too-long',{actual:Array.from(item.text).length,maximum:policy.maxItemChars});
+      if(secret(item.text)||/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/u.test(item.text))outputFail(field+'.text','unsafe-text');
+      if(!distinct(item.sourceIds)||!item.sourceIds.length||item.sourceIds.length>policy.maxSourceIdsPerItem)outputFail(field+'.sourceIds','invalid-source-count-or-duplicates',{actual:Array.isArray(item.sourceIds)?item.sourceIds.length:0,maximum:policy.maxSourceIdsPerItem});
+      if(item.sourceIds.some(id=>!allowed.has(id)))outputFail(field+'.sourceIds','source-outside-batch',{allowedCount:allowed.size});
       const text=item.text.trim();total+=Array.from(text).length;count++;return {text,sourceIds:[...item.sourceIds]};
     });
-    if(!count||total>policy.maxTextChars||byteLength(result)>8192)fail('INVALID_DIALOGUE_SUMMARY_OUTPUT');return result;
+    if(!count)outputFail('output','empty-summary');
+    if(total>policy.maxTextChars)outputFail('output.text','total-text-too-long',{actual:total,maximum:policy.maxTextChars});
+    if(byteLength(result)>policy.maxSerializedOutputBytes)outputFail('output','serialized-output-too-large',{actual:byteLength(result),maximum:policy.maxSerializedOutputBytes});return result;
   }
   commit(agent,job,output){
     this.admitted(agent);

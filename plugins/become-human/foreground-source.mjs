@@ -20,7 +20,7 @@ const fail=(reason,field='output')=>{throw Object.assign(new Error('INVALID_FORE
 const exactKeys=(value,keys)=>plain(value)&&Object.keys(value).length===keys.length&&keys.every(key=>Object.hasOwn(value,key));
 const scope='Observed excerpts only; not independent verification of truth, completeness or relevance.';
 const questionPhrases=[
-  '最有意思','最有趣','有什么','什么地方','哪些地方','哪一个','哪一点','哪方面','哪一项','哪两种','主要内容','主要讲','主要说','主要写','讲了什么','说了什么','写了什么','怎么解释','如何解释','怎么理解','如何理解','怎么来的','是什么意思','意味着什么',
+  '最有意思','最有趣','有什么','什么地方','哪些地方','哪一个','哪一点','哪方面','哪一项','哪两种','主要内容','主要讲','主要说','主要写','讲了什么','说了什么','写了什么','怎么解释','如何解释','怎么理解','如何理解','怎么来的','是什么意思','意味着什么','的作用怎么说',
   '明确说了','明确写了','明确提到','明确提及','明确记载','明确列出','明确指出','明确说明','提到了','列出了','说的是','写的是','讲的是','写明','写着','记载','提及','提到','列出','说了','写了','讲了','请问','请你','帮我','麻烦','看看','看一看','看一下','看下','读一下','读一读','阅读','读取','说说','讲讲','核对','你觉得','你认为','让我','让你','好奇','有意思','有趣','感兴趣','关注','值得','回到','刚才','之前','这份','那份','这个','那个','这页','那页','页面','网页','这篇','那篇','这幅','那幅','里面','里边','其中','那些','这些','馆方','原文','文中','资料','材料','介绍','说法','具体','主要','解释','说明','了解','什么','怎么','如何','为何','为什么','哪些','哪种','哪里','哪儿','多少','多大','多小','多长','多久','几天','几种','何时','何处','一下','一句话','一点','一些','能否','有没有','有给出','给出','有无','是否','可以','确切','到底','任何','还有','请','吗','呢','的','了','是','有','与','和',
 ].sort((a,b)=>b.length-a.length);
 const escaped=value=>value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
@@ -36,6 +36,10 @@ export function foregroundQuestionText(question){
   let text=question.normalize('NFKC'),removedConstraintCount=0;
   const changed=pattern=>{text=text.replace(pattern,()=>{removedConstraintCount++;return ' ';});};
   changed(/^\s*(?:【(?:开发|测试|验收)[^】\n]{0,100}】\s*)+/u);
+  // A standalone URL-reading instruction chooses the transport, not a claim
+  // which the page must mention. Remove only the complete leading clause;
+  // conditions or questions before/after the URL remain substantive.
+  changed(/^\s*(?:请)?(?:(?:用|通过|调用)\s*(?:只读\s*)?(?:[A-Za-z][A-Za-z0-9_-]{0,63}\s*)?)?(?:阅读|读取|查看|看看|看一下)\s*https?:\/\/[^\s<>"'，。！？；（）【】「」『』]+\s*[。；;\n]\s*/iu);
   changed(/^\s*(?:请)?(?:只|仅)?(?:核对|查阅|阅读|解读|读一下|看一下|依据|基于|使用)[^：:\n]{0,200}(?:学习笔记|学习记录|已保存笔记|这份笔记|那份笔记|笔记)\s*[：:]/u);
   const clause=/[^，,。；;！？!?、\n]+/gu;
   text=text.replace(clause,segment=>{
@@ -47,7 +51,7 @@ export function foregroundQuestionText(question){
     if(shortReply||noFetch||noLocation||developmentDisclaimer){removedConstraintCount++;return ' ';}
     return segment;
   });
-  return {version:1,method:'bounded-request-framing',text:text.trim(),removedConstraintCount};
+  return {version:2,method:'bounded-request-framing',text:text.trim(),removedConstraintCount};
 }
 
 function questionCoverage(question,selected,catalog){

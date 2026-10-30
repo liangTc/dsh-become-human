@@ -1,6 +1,5 @@
 import {createHash,randomUUID} from 'node:crypto';
 import {modelRequest,requestCost} from './autonomy.mjs';
-import {contextSettings} from './context.mjs';
 import {quotaAllows,roundDuration} from './quota.mjs';
 import {structured} from './learning.mjs';
 
@@ -107,24 +106,13 @@ export async function runDevelopmentReview(agent,parentSignal){
   try{
     parentSignal.throwIfAborted();prepared=inputFor(agent,job);
     const messages=[{role:'system',content:[{type:'text',text:policy}]},{role:'user',content:[{type:'text',text:JSON.stringify(prepared.input)}]}];
-    const budget=contextSettings(j,id).executorInputBudget;
-    const repack=()=>{messages[1].content[0].text=JSON.stringify(prepared.input);return Buffer.byteLength(JSON.stringify(messages),'utf8')+256;};
-    let inputBytes=repack();
-    // Preserve one visible literal excerpt per original source. Optional
-    // personality evidence and excerpt lengths shrink before rejecting input.
-    for(const chars of [240,160,96,32]){
-      if(inputBytes<=budget)break;
-      for(const evidence of prepared.input.personaEvidence)evidence.excerpt=evidence.excerpt.slice(0,chars);
-      if(prepared.batch)prepared.input.memoryBatch=memoryInput(f.memoryLifecycle,id,prepared.batch,{maxChars:Math.max(32,Math.min(240,chars*2))});
-      inputBytes=repack();
-    }
-    if(inputBytes>budget)fail('CONTEXT_BUDGET_TOO_SMALL');
+    const inputBytes=Buffer.byteLength(JSON.stringify(messages),'utf8')+256;
     const cost=requestCost(messages,f.management.options(id,'executor'));
     if(!quotaAllows(f.autonomy.budget(id),{tokens:cost,requests:1,roundId:job.id})){
       save('waiting-budget',{neededTokens:cost});j.put(id,'autonomyWait','autonomous-budget');return false;
     }
     const maxMs=settings.roundTimeoutMs-roundDuration(j.safety,id,job.id);if(maxMs<=0)fail('AUTONOMOUS_ROUND_TIMEOUT');
-    Object.defineProperty(messages,'contextReport',{value:{version:2,lane:'executor',kind:'development-review',time:now,budget,estimatedInput:inputBytes,required:inputBytes,estimate:'utf8-bytes-plus-framing',memoryRefs:prepared.batch?.data.items.map(item=>({id:item.id,version:item.version}))??[],basis:job.basis,counts:{memory:prepared.batch?.data.items.length??0,personaEvidence:prepared.growth.length}},enumerable:false});
+    Object.defineProperty(messages,'contextReport',{value:{version:2,lane:'executor',kind:'development-review',time:now,budget:null,localInputLimit:false,estimatedInput:inputBytes,required:inputBytes,estimate:'utf8-bytes-plus-framing',memoryRefs:prepared.batch?.data.items.map(item=>({id:item.id,version:item.version}))??[],basis:job.basis,counts:{memory:prepared.batch?.data.items.length??0,personaEvidence:prepared.growth.length}},enumerable:false});
     agent.activeRoundId=job.id;agent.activeLane='autonomous';
     agent.session.append('turn/start',{turn});agent.session.append('step/start',{turn,step:1});entered=true;
     save('running');j.put(id,'developmentReviewLastAttemptAt',Date.now());j.put(id,'autonomyPhase','reviewing-experiences');

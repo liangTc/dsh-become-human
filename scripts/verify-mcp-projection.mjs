@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import {boundedCustomMcpResult as project} from '../plugins/become-human/capability-custom-mcp.mjs';
+const cases=[],test=(name,fn)=>{try{fn();cases.push({name,passed:true});}catch(e){cases.push({name,passed:false,error:e.message});}},run=x=>project(x,'synthetic','probe');
+test('Long text projection declares partial input and exact retained length',()=>{const r=run({content:[{type:'text',text:'A'.repeat(20000)}]});assert.equal(r.truncated,true);assert.equal(r.content[0].text.length,8192);assert.equal(r.projection.receivedTextChars,20000);assert.equal(r.projection.retainedTextChars,8192);});
+test('An exact-limit text remains complete',()=>{const r=run({content:[{type:'text',text:'A'.repeat(8192)}]});assert.notEqual(r.truncated,true);assert.equal(r.projection.receivedTextChars,r.projection.retainedTextChars);});
+test('Omitted extra items are visible even if small',()=>{const r=run({content:Array.from({length:17},()=>({type:'text',text:'x'}))});assert.equal(r.truncated,true);assert.equal(r.projection.receivedItems,17);assert.equal(r.projection.retainedItems,16);});
+test('Omitted unsupported media declares partial observation',()=>{const r=run({content:[{type:'image',data:'synthetic',mimeType:'image/png'}]});assert.equal(r.truncated,true);assert.equal(r.projection.omittedNonText,true);assert.equal(r.content[0].omitted,true);});
+test('Text prefixes do not split a surrogate pair',()=>{const r=run({content:[{type:'text',text:'a'.repeat(8191)+'😀tail'}]});assert.equal(r.content[0].text.length,8191);assert.equal(r.truncated,true);});
+test('Combined text and structured content remain within wire projection bound',()=>{const r=run({content:[{type:'text',text:'x'.repeat(8192)}],structuredContent:{large:'中'.repeat(10000)}});assert.equal(r.truncated,true);assert(Buffer.byteLength(JSON.stringify(r))<=16384);});
+test('Tool errors and invalid content are never interpreted as success',()=>{assert.throws(()=>run({isError:true,content:[]}),/CUSTOM_MCP_TOOL_ERROR/u);assert.throws(()=>run({content:'bad'}),/MCP_INVALID_TOOL_RESULT/u);});
+const result={at:new Date().toISOString(),passed:cases.filter(x=>x.passed).length,failed:cases.filter(x=>!x.passed).length,cases,scope:'Pure result projection; no model or external service'};if(process.env.BH_TEST_RESULT)await fs.writeFile(process.env.BH_TEST_RESULT,JSON.stringify(result,null,2));console.log(JSON.stringify(result));if(result.failed)process.exitCode=1;

@@ -10,6 +10,19 @@ const extract=(kind:string,value:any)=>kind==='persona'?extractPersonaConfig(val
 const num=(value:number)=>value.toLocaleString('zh-CN');
 const period:Record<string,string>={'local-day':'本地自然日','utc-day':'UTC 自然日','rolling-day':'滚动24小时'};
 
+export function QuickPresetPicker({kind,value,onApply,dirty=false,ui,onCustom}:any){
+ const {Button,Select,Detail}=ui,isPersona=kind==='persona',entries=catalogs[kind],keys=isPersona?PERSONA_PRESET_KEYS:AUTONOMY_BUDGET_PRESET_KEYS;
+ const current=Object.fromEntries(keys.map((key:string)=>[key,value[key]])),matched=entries.find((entry:any)=>equal(entry.config,current));
+ const [pending,setPending]=useState<any>(null),[custom,setCustom]=useState(false);
+ const apply=(entry:any)=>{setCustom(false);onApply(entry.config);setPending(null);};
+ const choose=(id:string)=>{if(!id){setCustom(true);onCustom?.();return;}const entry=entries.find((item:any)=>item.id===id);if(!entry)return;if(dirty)setPending(entry);else apply(entry);};
+ return <section className="hn-quick-preset" aria-label={isPersona?'人物预设':'自主额度预设'}>
+  {isPersona?<label className="hn-field"><span>人物预设</span><Select aria-label="人物预设" value={custom?'':matched?.id??''} options={[["","自行配置"],...entries.map((entry:any)=>[entry.id,entry.name])]} onChange={choose}/></label>:<><div className="hn-budget-options" role="radiogroup" aria-label="自主额度档位">{[...entries,{id:'',name:'自定义'}].map((entry:any)=><label key={entry.id}><input type="radio" name="human-budget-preset" checked={entry.id?(matched?.id===entry.id&&!custom):(!matched||custom)} onChange={()=>choose(entry.id)}/><span>{entry.name}</span></label>)}</div><p className="hn-help">{period[value.budgetWindow]??'当前周期'} · {value.tokenQuotaEnabled?num(value.tokenLimit)+' token':'token 不限'} / {value.requestQuotaEnabled?num(value.requestLimit)+' 次请求':'请求不限'} / {value.roundQuotaEnabled?num(value.roundLimit)+' 轮':'轮次不限'}</p></>}
+  <details className="hn-preset-import"><summary>导入或导出配置</summary><PresetPicker {...{kind,value,onApply,dirty,ui}}/></details>
+  {pending&&<Detail title="替换当前预设草稿？" onClose={()=>setPending(null)}><p>当前尚有修改。载入“{pending.name}”会替换对应的{isPersona?'人物':'额度'}字段，其他设置保留；保存后才生效。</p><div className="hn-row"><Button onClick={()=>setPending(null)}>继续编辑</Button><Button primary onClick={()=>apply(pending)}>替换草稿</Button></div></Detail>}
+ </section>;
+}
+
 export default function PresetPicker({kind,value,onApply,dirty=false,ui}:any){
  const {Button,Select,Detail}=ui,entries=catalogs[kind],fileInput=useRef<HTMLInputElement>(null);
  const [selected,setSelected]=useState(''),[notice,setNotice]=useState(''),[error,setError]=useState(''),[loading,setLoading]=useState(false),[pending,setPending]=useState<any>(null);

@@ -49,7 +49,7 @@ npx @deepseek-ai/dsh@0.2.0-rc.2 web
 
 当前未接入 DeepSeek 账号登录通道，不导入内联 `apiKey` 或任意自定义 `headers`。原生通道使用官方 Messages 协议，默认地址为 `https://api.deepseek.com/anthropic`；不要为它填写 OpenAI Chat Completions 地址。地址遵循官方适配器规则，可通过原生配置的 `baseURL` 或宿主启动环境的 `DEEPSEEK_BASE_URL` 指定，宿主已加载的 `.env` 也可提供该变量。后台沿用 Human 的准入、超时与取消控制，并将适配器自动重试次数设为 `0`，避免隐藏重试增加实际调用。模型配置字段见 [DSH 模型配置指南](https://deepseek-harness.github.io/deepseek-harness/guide/providers)。
 
-**原生通道验收尚未完成。** beta.5 已有语法检查、本地构建、已有环境安装一致性核对、服务恢复和只读模型目录发现记录；此前 179 个文件属于历史部署快照，重新打包后的清单以实际 Release 包为准。已检查的源 DSH 尚未配置原生凭据。全新安装后“配置 Key → 发现可用原生模型 → 凭据复用 → 后台启动 → 真实模型请求”整链流程已列入[优先待测试项](TESTING_STATUS.md#优先待测试项)，本轮暂缓。目录中存在模型不等于凭据可用，后台能启动也不等于真实网络请求成功。
+**按发行包分别验收。** 10月28日的 beta.6 开发候选已在同机独立空目录完成真实官方模型发现、宿主进程凭据复用、后台启动和 Flash 请求；使用共享依赖缓存。这不能替代本页公开 beta.5 包或最终发行包的无缓存新装。剩余安装和凭据组合统一见[合并清单 D1/D2](TESTING_STATUS.md#merged-testing)，文件清单以对应 Release 包为准。目录中存在模型不等于凭据可用，后台能启动也不等于真实网络请求成功。
 
 完成后关闭该次 DSH 进程，再安装组合包。默认 `$DSH_HOME` 是用户主目录下的 `.dsh`；如使用了自定义值，后续命令必须保持一致。
 

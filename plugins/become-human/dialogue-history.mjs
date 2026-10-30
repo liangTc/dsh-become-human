@@ -46,7 +46,7 @@ function publishedOrigins(journal,agent){
 }
 
 /** Bounded, complete conversation turns. Does not extract facts or mutate memory. */
-export function recentDialogue(agent,{lane='executor',admittedIds=[],assistantAllowed=()=>true,turnLimit}={}){
+export function recentDialogue(agent,{lane='executor',admittedIds=[],assistantAllowed=()=>true,turnLimit,scopePolicy='current'}={}){
   const {journal,domain}=agent.factory,id=agent.id,events=agent.session.snapshotEvents();
   const barrier=journal.value(id,'memoryContextBarrierAt',0),owners=new Map(),assistants=[],runs=new Map();
   let run='initial',serial=0;
@@ -69,10 +69,12 @@ export function recentDialogue(agent,{lane='executor',admittedIds=[],assistantAl
   // A normal owner turn closes it; neither its input nor its replies leak back.
   const boundary=developmentOnly?Math.max(-1,...[...owners.values()].filter(row=>row.index<currentIndex&&!row.developmentOnly).map(row=>row.index)):-1;
   const usable=row=>!!row&&row.event.time>barrier&&domain.sourceUsable(id,row.id);
-  const allowed=(sourceRows,dev)=>sourceRows.every(usable)&&(developmentOnly?dev&&sourceRows.every(row=>row.index>boundary):!dev);
+  const adjacent=foreground&&scopePolicy==='adjacent';
+  const allowed=(sourceRows,dev)=>sourceRows.every(usable)&&(adjacent|| (developmentOnly?dev&&sourceRows.every(row=>row.index>boundary):!dev));
   const origins=publishedOrigins(journal,id),associated=new Set(),groups=[];
   const ownerRow=(row,group,dev)=>({role:'user',id:row.id,...excerpt(row.text),time:row.event.time,dialogueTurnId:group,developmentOnly:dev});
-  const scannedAssistants=assistants.slice(-256),scanBoundary=assistants.length>256?scannedAssistants[0].index:-1;
+  const lastPrior=adjacent?assistants.filter(row=>row.index<currentIndex).at(-1):null;
+  const scannedAssistants=adjacent?(lastPrior?[lastPrior]:[]):assistants.slice(-256),scanBoundary=assistants.length>256&&!adjacent?scannedAssistants[0].index:-1;
   for(const assistant of scannedAssistants){
     let origin=journal.value(id,'dialogue-origin:'+assistant.id,null);
     if(!origin||!ids(origin.inputIds)||!['foreground','autonomous'].includes(origin.lane))origin=null;
@@ -90,16 +92,22 @@ export function recentDialogue(agent,{lane='executor',admittedIds=[],assistantAl
     for(const key of origin.inputIds)associated.add(key);
     const dev=sourceRows.some(row=>row?.developmentOnly===true);
     if(assistant.event.time<=barrier||!dialogueAssistantAllowed(agent,assistant.event)||!assistantAllowed(assistant.event))continue;
+    if(adjacent){
+      const published=journal.db.prepare("SELECT text FROM outbox WHERE agent=? AND kind='assistant' AND event_key=?").get(id,'assistant:'+assistant.id);
+      if(!published||published.text!==assistant.text)continue;
+    }
     if(origin.lane==='foreground'){
       if(!sourceRows.length||sourceRows.some(row=>!row||row.index>=assistant.index)||!allowed(sourceRows,dev)||sourceRows.some(row=>admitted.has(row.id)))continue;
-    }else if(origin.inputIds.length||developmentOnly||developmentInput(assistant.text))continue;
+    }else if(origin.inputIds.length||!adjacent&&developmentOnly||developmentInput(assistant.text))continue;
     const group='reply:'+assistant.id;
-    groups.push({index:assistant.index,rows:[...sourceRows.map(row=>ownerRow(row,group,dev)),{role:'assistant',id:assistant.id,...excerpt(assistant.text),time:assistant.event.time,dialogueTurnId:group,developmentOnly:dev,...(!sourceRows.length?{autonomous:true}:{})}]});
+    const modelSource=assistant.event.data.message.source;
+    const source=modelSource&&typeof modelSource.provider==='string'&&typeof modelSource.model==='string'?{kind:'model',provider:modelSource.provider,model:modelSource.model}:undefined;
+    groups.push({index:assistant.index,rows:[...sourceRows.map(row=>ownerRow(row,group,dev)),{role:'assistant',id:assistant.id,...excerpt(assistant.text),...(source?{source}:{}),time:assistant.event.time,dialogueTurnId:group,developmentOnly:dev,...(!sourceRows.length?{autonomous:true}:{})}]});
   }
   // Valid unanswered owner turns can still supply dialogue context, but never
   // turn a revoked/unknown response's surviving bubbles into a different turn.
   const pending=new Map();
-  for(const row of owners.values())if(row.index>scanBoundary&&!associated.has(row.id)&&!admitted.has(row.id)){
+  for(const row of owners.values())if(!adjacent&&row.index>scanBoundary&&!associated.has(row.id)&&!admitted.has(row.id)){
     const rows=pending.get(row.run)??[];rows.push(row);pending.set(row.run,rows);
   }
   for(const sourceRows of pending.values()){
@@ -111,4 +119,11 @@ export function recentDialogue(agent,{lane='executor',admittedIds=[],assistantAl
   const rows=groups.sort((a,b)=>a.index-b.index).slice(-limit).flatMap(group=>group.rows);
   Object.defineProperty(rows,'coverage',{value:{scanTurnLimit:256,olderNativeRepliesOutsideScan:Math.max(0,assistants.length-256),eligibleTurnCount:groups.length,selectedTurnCount:Math.min(limit,groups.length)},enumerable:false});
   return rows;
+}
+
+// A factual record of what was just said, not a new memory or a scope switch.
+// Never substitute an older turn if the actual latest reply is unavailable,
+// withdrawn, unpublished or no longer allowed by its original provenance.
+export function adjacentDialogue(agent,{admittedIds=[]}={}){
+  try{return recentDialogue(agent,{lane:'foreground',admittedIds,turnLimit:1,scopePolicy:'adjacent'}).map(row=>({...row,adjacentReferenceOnly:true}));}catch{return [];}
 }

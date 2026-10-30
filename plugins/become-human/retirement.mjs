@@ -59,12 +59,26 @@ export class SessionRetirement {
   async export(id){
     this.storage.guard(id);const handle=await this.storage.open(id,'read');let read;try{read=await handle.read();}finally{await handle.close();}this.storage.guard(id);
     const dir=path.join(this.dataRoot,'exports');await fs.mkdir(dir,{recursive:true});const file=path.join(dir,crypto.randomUUID()+'.json');await this.checked(file,{missing:true});
-    this.journal.db.prepare('INSERT INTO owned_artifact VALUES(?,?,?)').run(id,file,'export');
+    // Directory and path checks await I/O. Retirement may finish during either
+    // await, so fence again before registering any late artifact.
+    this.storage.guard(id);
     const personaDevelopment=this.domain.development?.export(id)??null;
     const body=JSON.stringify({multimodal:this.journal.media?.export(id)??null,header:handle.header,events:read.events,memories:this.domain.list(id,{limit:100}),relationship:this.journal.relationship?.snapshot(id)??null,memoryLifecycle:this.domain.lifecycle?.export(id)??null,workObservation:this.domain.workObservation?.export(id)??null,personaDevelopment,developmentRestoreSemantics:'Read-only history; evidence status and versions are retained. This export does not apply or reactivate memories, summaries, relationship changes or persona changes.'});
     if(Buffer.byteLength(body)>2*1024*1024)throw new Error('EXPORT_TOO_LARGE');
-    const fh=await fs.open(file,'wx');try{await fh.writeFile(body);await fh.sync();}finally{await fh.close();}
-    try{this.storage.guard(id);}catch(e){await fs.unlink(file).catch(()=>{});throw e;}return {file,id,hash:hash(Buffer.from(body))};
+    this.journal.db.prepare('INSERT INTO owned_artifact VALUES(?,?,?)').run(id,file,'export');
+    let fh,created=false;
+    try{
+      fh=await fs.open(file,'wx');created=true;this.storage.guard(id);
+      await fh.writeFile(body);await fh.sync();await fh.close();fh=null;
+      this.storage.guard(id);return {file,id,hash:hash(Buffer.from(body))};
+    }catch(error){
+      await fh?.close().catch(()=>{});
+      // Never unlink a pre-existing file when exclusive creation failed. If
+      // cleanup itself fails, retain ownership so retirement can retry it.
+      if(created)try{await fs.unlink(file);}catch(cleanup){if(cleanup.code!=='ENOENT')throw new Error('EXPORT_CLEANUP_PENDING',{cause:error});}
+      this.journal.db.prepare("DELETE FROM owned_artifact WHERE agent=? AND path=? AND kind='export'").run(id,file);
+      throw error;
+    }
   }
   async close(){await Promise.all([...this.jobs.values()].map(j=>j.promise).filter(Boolean));}
 }

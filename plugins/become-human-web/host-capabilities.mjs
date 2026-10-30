@@ -1,5 +1,4 @@
 import {createHash} from 'node:crypto';
-import {createBrowserCapabilities,normalizeBrowserSettings} from './browser-capabilities.mjs';
 
 const error=code=>Object.assign(new Error(code),{code});
 const fail=code=>{throw error(code);};
@@ -52,18 +51,26 @@ const hostRead=async operation=>{
   }
 };
 
+export function activeSessionTurn(events){
+  if(!Array.isArray(events))return null;
+  const start=events.findLast(event=>event.type==='turn/start');
+  if(!start||!Number.isSafeInteger(start.seq)||start.seq<0||!Number.isSafeInteger(start.data?.turn)||start.data.turn<1)return null;
+  if(events.some(event=>event.seq>start.seq&&event.type==='turn/end'&&event.data?.turn===start.data.turn))return null;
+  return {turn:start.data.turn,turnStartSeq:start.seq};
+}
+
 export function normalizeHostCapabilitySettings(input={}){
   only(input,['sessionReadEnabled','sessionReadScope','sessionWriteEnabled','sessionWriteScope','allowedSessionIds','browser']);
   for(const key of ['sessionReadEnabled','sessionWriteEnabled'])if(input[key]!==undefined&&typeof input[key]!=='boolean')fail('INVALID_CAPABILITY_SETTINGS');
   const ids=input.allowedSessionIds??[];if(!Array.isArray(ids)||ids.length>64)fail('INVALID_CAPABILITY_SETTINGS');
-  return {sessionReadEnabled:input.sessionReadEnabled===true,sessionReadScope:sessionScope(input.sessionReadScope),sessionWriteEnabled:input.sessionWriteEnabled===true,sessionWriteScope:sessionScope(input.sessionWriteScope),allowedSessionIds:[...new Set(ids.map(identifier))].sort(),browser:normalizeBrowserSettings(input.browser??{})};
+  return {sessionReadEnabled:input.sessionReadEnabled===true,sessionReadScope:sessionScope(input.sessionReadScope),sessionWriteEnabled:input.sessionWriteEnabled===true,sessionWriteScope:sessionScope(input.sessionWriteScope),allowedSessionIds:[...new Set(ids.map(identifier))].sort()};
 }
 
 // Direct Host APIs only. Reads do not resolve/create an Agent, and no operation
 // addresses the Human's own durable Session. External sessions remain external.
 export function createHostCapabilities(ctx,{getHumanSessionId,home}={}){
   if(typeof getHumanSessionId!=='function')fail('INVALID_CAPABILITY_BRIDGE');
-  const browser=createBrowserCapabilities();let settings=normalizeHostCapabilitySettings(),fingerprint=JSON.stringify(settings),revision=null,closed=false;
+  let settings=normalizeHostCapabilitySettings(),fingerprint=JSON.stringify(settings),revision=null,closed=false;
   const active=new Set();
   const controller=()=>{let value;try{value=ctx?.sessionController??ctx?.get?.('sessionController');}catch{}if(!value)fail('DSH_SESSION_CONTROLLER_UNAVAILABLE');return value;};
   const ordinaryHostSession=value=>{
@@ -137,7 +144,7 @@ export function createHostCapabilities(ctx,{getHumanSessionId,home}={}){
     // same explicit throughSeq, so later appends do not move this history cut.
     const firstSeq=budgetCut??page?.records?.[0]?.event?.seq??Math.min(input.beforeSeq??throughSeq+1,throughSeq+1);
     const hasMore=(inspection?.events??[]).some(event=>event.seq<firstSeq&&event.seq<=throughSeq&&visibleChatEvent(event));
-    return {sessionId,throughSeq,messages,hasMore,nextBeforeSeq:hasMore&&Number.isSafeInteger(firstSeq)?firstSeq:null,truncated,activatedAgent:false,source:'external-dsh-session',untrustedContent:true};
+    return {sessionId,throughSeq,activeTurn:activeSessionTurn(inspection.events),messages,hasMore,nextBeforeSeq:hasMore&&Number.isSafeInteger(firstSeq)?firstSeq:null,truncated,activatedAgent:false,source:'external-dsh-session',untrustedContent:true};
   }
   async function sessionObserve(input,signal,expected){
     only(input,['sessionId','afterSeq','prefixDigest','limit']);const sessionId=identifier(input.sessionId),afterSeq=number(input.afterSeq,-1,Number.MAX_SAFE_INTEGER),limit=input.limit===undefined?10:number(input.limit,1,30);
@@ -162,26 +169,38 @@ export function createHostCapabilities(ctx,{getHumanSessionId,home}={}){
     return {sessionId,messages,afterSeq,throughSeq,nextAfterSeq,hasMore,prefixDigest:observationDigest(sessionId,records,nextAfterSeq),resetRequired:false,historyTruncated,truncated:messages.some(row=>row.truncated===true)||messages.length<window.length,activatedAgent:false,source:'external-dsh-session',untrustedContent:true};
   }
   async function sessionWrite(operation,input,context,signal,expected){
-    only(input,operation==='dsh-session-prompt'?['sessionId','text']:['sessionId']);const sessionId=identifier(input.sessionId);
+    only(input,operation==='dsh-session-prompt'?['sessionId','text']:['sessionId','expectedTurn','expectedTurnStartSeq']);const sessionId=identifier(input.sessionId);
     if(operation==='dsh-session-prompt'&&(typeof input.text!=='string'||!input.text.trim()||input.text.length>12000))fail('INVALID_CAPABILITY_INPUT');
+    if(operation==='dsh-session-cancel'){number(input.expectedTurn,1,Number.MAX_SAFE_INTEGER);number(input.expectedTurnStartSeq,0,Number.MAX_SAFE_INTEGER);}
     if(typeof context?.agent!=='string'||typeof context?.jobId!=='string'||!context.agent||!context.jobId)fail('INVALID_CAPABILITY_CONTEXT');
     await inspectAllowed(sessionId,true,signal,expected);assertCurrent(signal,expected);
     const requestId='bh-'+createHash('sha256').update(context.agent+'\n'+context.jobId+'\n'+(context.requestId??'')).digest('hex').slice(0,48);
     const service=controller(),receipt={operation,sessionId,requestId,at:Date.now()};let dispatched=false;
     try{
-      assertCurrent(signal,expected);dispatched=true;
+      assertCurrent(signal,expected);
       if(operation==='dsh-session-prompt'){
+        dispatched=true;
         const result=await service.prompt({sessionId,requestId,mode:'queue',content:[{type:'text',text:input.text}]},signal);
         assertCurrent(signal,expected);if(result?.accepted!==true)throw unknown(undefined,receipt);
         return {accepted:true,status:'accepted-not-completed',receipt,metadata:{externalModel:true,accounting:'owned-by-external-session',createsSession:false},meaning:'目标会话已接收；不代表任务执行完成，模型工作由目标会话独立管理。'};
       }
-      const result=await service.cancel({sessionId});assertCurrent(signal,expected);if(result?.accepted!==true)throw unknown(undefined,receipt);
-      // A cancel acknowledgement is not a stopped/completed receipt. Observe the
-      // current state before declaring a verified cancellation operation.
+      let agents;try{agents=ctx?.agents??ctx?.get?.('agents');}catch{}
+      const targetAgent=agents?.get?.(sessionId);
+      if(!targetAgent||typeof targetAgent.cancel!=='function'||targetAgent.session?.id!==sessionId||typeof targetAgent.session.snapshotEvents!=='function')fail('DSH_SESSION_CANCEL_UNAVAILABLE');
+      const turn=activeSessionTurn(targetAgent.session.snapshotEvents());
+      if(targetAgent.status!=='running'||!turn||turn.turn!==input.expectedTurn||turn.turnStartSeq!==input.expectedTurnStartSeq)fail('DSH_SESSION_TASK_CHANGED');
+      if(!ordinaryHostSession(targetAgent.session.header??{id:sessionId})||agents.get(sessionId)!==targetAgent)fail('DSH_SESSION_NOT_VISIBLE');
+      receipt.targetTurn=turn;
+      // No await from the live identity check to Agent.cancel: the host cannot
+      // switch turns between them. This is the same public Agent API used by
+      // SessionController.cancel, with its keepInbox behavior retained.
+      assertCurrent(signal,expected);dispatched=true;targetAgent.cancel({kind:'user'},{keepInbox:true});
+      // Observe this exact turn's end, even if another task has since started.
       const until=Date.now()+4000;
       while(true){
-        const rows=await service.list({},signal);assertCurrent(signal,expected);const target=rows?.items?.find(row=>row.sessionId===sessionId);
-        if(target&&target.running===false)return {accepted:true,status:'cancellation-requested-and-observed-idle',receipt,observedAt:Date.now(),pendingInboxRetained:true,taskCompleted:false,metadata:{externalModel:true},meaning:'已请求取消，并观察到目标会话当前空闲；不表示原任务成功或后续队列已停止。'};
+        const inspection=await service.inspect(sessionId,signal);assertCurrent(signal,expected);
+        const end=inspection?.events?.find(event=>event.type==='turn/end'&&event.seq>turn.turnStartSeq&&event.data?.turn===turn.turn);
+        if(end)return {accepted:true,status:'cancellation-requested-and-observed-turn-end',receipt,observedAt:Date.now(),observedTurnEndSeq:end.seq,endReason:end.data.reason?.kind??'unknown',pendingInboxRetained:true,taskCompleted:false,metadata:{externalModel:true},meaning:'已请求取消并观察到指定轮次结束；不表示原任务成功，也不表示后续队列已停止。'};
         if(Date.now()>=until)throw unknown(undefined,receipt);
         await new Promise((resolve,reject)=>{const done=()=>{clearTimeout(timer);signal.removeEventListener('abort',abort);resolve();},abort=()=>{clearTimeout(timer);signal.removeEventListener('abort',abort);reject(signal.reason??error('CAPABILITY_CANCELLED'));},timer=setTimeout(done,200);signal.addEventListener('abort',abort,{once:true});if(signal.aborted)abort();});
       }
@@ -190,10 +209,10 @@ export function createHostCapabilities(ctx,{getHumanSessionId,home}={}){
   return {
     configure(input,{revision:nextRevision}={}){
       if(closed)fail('CAPABILITY_BRIDGE_CLOSED');const next=normalizeHostCapabilitySettings(input),nextFingerprint=JSON.stringify(next);
-      if(nextFingerprint!==fingerprint||(nextRevision!==undefined&&nextRevision!==revision)){for(const aborter of active)aborter.abort(error('CAPABILITY_POLICY_CHANGED'));settings=next;fingerprint=nextFingerprint;revision=nextRevision??revision;browser.configure(settings.browser,{revision});}
+      if(nextFingerprint!==fingerprint||(nextRevision!==undefined&&nextRevision!==revision)){for(const aborter of active)aborter.abort(error('CAPABILITY_POLICY_CHANGED'));settings=next;fingerprint=nextFingerprint;revision=nextRevision??revision;}
       return this.status();
     },
-    status(){let available=false;try{available=!!controller();}catch{}return {backend:'host-bridge',closed,session:{available,readEnabled:settings.sessionReadEnabled,readScope:settings.sessionReadScope,writeEnabled:settings.sessionWriteEnabled,writeScope:settings.sessionWriteScope,allowedSessionIds:[...settings.allowedSessionIds],coldReads:true,externalModelOnPrompt:true,dynamicHostVisibility:true,excludesHumanSession:true,excludesSubagents:true},browser:browser.status()};},
+    status(){let available=false;try{available=!!controller();}catch{}return {backend:'host-bridge',closed,session:{available,readEnabled:settings.sessionReadEnabled,readScope:settings.sessionReadScope,writeEnabled:settings.sessionWriteEnabled,writeScope:settings.sessionWriteScope,allowedSessionIds:[...settings.allowedSessionIds],coldReads:true,externalModelOnPrompt:true,dynamicHostVisibility:true,excludesHumanSession:true,excludesSubagents:true,cancelIdentity:'turn-and-start-seq'}};},
     async handle({operation,input,context}={},signal=new AbortController().signal){
       if(closed)fail('CAPABILITY_BRIDGE_CLOSED');const scoped=scopeSignal(signal),expected=fingerprint;
       try{assertCurrent(scoped.signal,expected);
@@ -201,10 +220,9 @@ export function createHostCapabilities(ctx,{getHumanSessionId,home}={}){
         if(operation==='dsh-session-read')return await sessionRead(input,scoped.signal,expected);
         if(operation==='dsh-session-observe')return await sessionObserve(input,scoped.signal,expected);
         if(['dsh-session-prompt','dsh-session-cancel'].includes(operation))return await sessionWrite(operation,input,context,scoped.signal,expected);
-        if(typeof operation==='string'&&operation.startsWith('browser-tab-'))return await browser.handle({operation,input,context},scoped.signal);
         fail('CAPABILITY_NOT_FOUND');
       }finally{scoped.release();}
     },
-    async close(){if(closed)return;closed=true;for(const aborter of active)aborter.abort(error('CAPABILITY_BRIDGE_CLOSED'));active.clear();await browser.close();},
+    async close(){if(closed)return;closed=true;for(const aborter of active)aborter.abort(error('CAPABILITY_BRIDGE_CLOSED'));active.clear();},
   };
 }

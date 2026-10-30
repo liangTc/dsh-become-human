@@ -13,6 +13,16 @@ export function relevantSearchResults(query,rows,{question=''}={}){
   // are discovery signals only; neither ranking nor a publisher label is proof.
   return rows.map((row,index)=>({...scoreResearchResult(query,row,{question}),_index:index})).filter(row=>row._relevant).sort((a,b)=>b.relevance.identifierHits-a.relevance.identifierHits||b.relevance.score-a.relevance.score||a._index-b._index).map(({_index,_relevant,...row})=>row);
 }
+export function discoverySearchResults(originalQuery,retrievalQuery,rows,{question=''}={}){
+  const anchors=[...questionSignals(originalQuery).httpStatusCodes,...(originalQuery.match(/[A-Za-z][A-Za-z0-9_.+-]{1,}/g)??[]).filter(word=>/[a-z][A-Z]|[A-Za-z]\d/u.test(word)).map(word=>word.toLowerCase())];
+  const keepsTarget=row=>{const observed=(row.title+' '+row.snippet+' '+row.url).toLowerCase();return !anchors.length||anchors.some(term=>new RegExp('(?:^|[^a-z0-9_])'+term.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'(?:$|[^a-z0-9_])','u').test(observed));};
+  const candidates=new Map();
+  // A same-task alternate may use another language. Rank its actual visible
+  // query terms too, while keeping exact code/API targets from the original.
+  const questionContext=[question,originalQuery].filter(Boolean).join(' ');
+  for(const [query,basis]of [[originalQuery,'original'],...(retrievalQuery!==originalQuery?[[retrievalQuery,'alternate']]:[])])for(const row of relevantSearchResults(query,rows,{question:questionContext})){if(!keepsTarget(row))continue;const prior=candidates.get(row.url);if(!prior||row.relevance.score>prior.relevance.score)candidates.set(row.url,{...row,relevance:{...row.relevance,queryBasis:basis}});}
+  return [...candidates.values()].sort((a,b)=>b.relevance.identifierHits-a.relevance.identifierHits||b.relevance.score-a.relevance.score);
+}
 function normalized(rows){
   const seen=new Set(),results=[];
   for(const row of rows){try{const url=researchUrl(row.url);if(seen.has(url))continue;seen.add(url);results.push({url,title:(plain(row.title)||new URL(url).hostname).slice(0,100),snippet:plain(row.snippet).slice(0,360),publishedAt:typeof row.publishedAt==='string'?row.publishedAt.slice(0,100):null});}catch{continue;}if(results.length===20)break;}
@@ -52,7 +62,18 @@ export function searxngResults(body){
   if(!Array.isArray(data.results))throw new Error('INVALID_SEARCH_RESPONSE');
   return normalized(data.results.slice(0,40).filter(r=>r&&typeof r==='object').map(r=>({url:r.url,title:r.title,snippet:r.content,publishedAt:r.publishedDate})));
 }
-async function searchOnce(query,settings,signal,{regional=false}={}){
+export function bingRssResults(body){
+  if(/<!DOCTYPE|<!ENTITY/iu.test(body)||!/<rss\b/iu.test(body)||!/<channel\b/iu.test(body))throw new Error('INVALID_SEARCH_RESPONSE');
+  const rows=[];
+  for(const match of body.matchAll(/<item\b[^>]*>([\s\S]*?)<\/item>/giu)){
+    const field=name=>new RegExp('<'+name+'\\b[^>]*>([\\s\\S]*?)<\\/'+name+'>','iu').exec(match[1])?.[1]?.replace(/^\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*$/u,'$1')??'';
+    const published=Date.parse(field('pubDate'));
+    rows.push({url:plain(field('link')),title:field('title'),snippet:field('description'),publishedAt:Number.isFinite(published)?new Date(published).toISOString():null});
+    if(rows.length>=40)break;
+  }
+  return normalized(rows);
+}
+async function searchOnce(query,settings,signal,{regional=false,rss=false}={}){
   query=searchQuery(query);let url;
   if(settings.searchProvider==='searxng'){
     const endpoint=new URL(researchUrl(settings.searchEndpoint));
@@ -61,14 +82,16 @@ async function searchOnce(query,settings,signal,{regional=false}={}){
   }else if(settings.searchProvider==='duckduckgo'){
     const endpoint=new URL('https://html.duckduckgo.com/html/');endpoint.searchParams.set('q',query);url=endpoint.href;
   }else if(settings.searchProvider==='bing'){
-    const endpoint=new URL(regional?'https://cn.bing.com/search':'https://www.bing.com/search');endpoint.searchParams.set('q',query);if(regional)endpoint.searchParams.set('ensearch','1');url=endpoint.href;
+    const endpoint=new URL(regional&&!rss?'https://cn.bing.com/search':'https://www.bing.com/search');endpoint.searchParams.set('q',query);if(rss)endpoint.searchParams.set('format','rss');else if(regional)endpoint.searchParams.set('ensearch','1');url=endpoint.href;
   }else throw new Error('SEARCH_PROVIDER_NOT_CONFIGURED');
   const response=await fetchPublicDocument(url,signal);
   // An HTML login/challenge response is never treated as a JSON search result.
-  const parsed=settings.searchProvider==='searxng'?searxngResults(response.body):settings.searchProvider==='bing'?bingResults(response.body):duckDuckGoResults(response.body);
-  return {query,provider:settings.searchProvider,searchedAt:response.fetchedAt,searchUrl:response.url,parsed};
+  const feed=settings.searchProvider==='bing'&&rss;
+  const parsed=settings.searchProvider==='searxng'?searxngResults(response.body):feed?bingRssResults(response.body):settings.searchProvider==='bing'?bingResults(response.body):duckDuckGoResults(response.body);
+  return {query,provider:settings.searchProvider,responseFormat:feed?'rss':'html-or-json',searchedAt:response.fetchedAt,searchUrl:response.url,parsed};
 }
-export function researchQueryPlan(query){
+export function researchQueryPlan(query,{alternateQuery}={}){
+  if(alternateQuery!==undefined){const original=searchQuery(query),alternate=searchQuery(alternateQuery);if(alternate.toLowerCase()!==original.toLowerCase())return [{query:original,reason:'original-query'},{query:alternate,reason:'model-alternate-query'}];}
   const original=searchQuery(query),profile=questionSignals(original),words=original.match(/[A-Za-z][A-Za-z0-9_.+-]{1,}/g)??[];
   const specific=words.filter(word=>profile.identifiers.includes(word.toLowerCase()));
   let refined,reason;
@@ -81,7 +104,11 @@ export function researchQueryPlan(query){
     refined=['HTTP',...codes,...context,'specification'].join(' ');reason='http-status-primary-source';
     if(refined.length>240)refined=['HTTP',...codes,'specification'].join(' ');
   }else if(precise){
-    refined=[...specific.filter(word=>word!==precise).slice(0,3),'"'+precise+'"','specification'].join(' ');reason='identifier-primary-source';
+    // Quote the exact token without dropping the rest of a named product or
+    // the user's topic. An alternate consisting only of the first CamelCase
+    // word can otherwise turn a precise lookup into a generic brand search.
+    const quoted=original.includes('"'+precise+'"')?original:original.replace(precise,'"'+precise+'"');
+    refined=quoted.length+14<=240?quoted+' specification':quoted.length<=240?quoted:null;reason='identifier-primary-source';
   }else if(specific.length){refined=original+' primary source';reason='topic-primary-source';
   }else if(/[\u4e00-\u9fff]/u.test(original)&&words.length){refined=words.slice(0,5).join(' ');reason='compact-public-keywords';}
   else{refined=original+(/[\u4e00-\u9fff]/u.test(original)?' 原始资料':' primary source');reason='primary-source-keywords';}
@@ -109,24 +136,24 @@ export function regionalSearchQuery(query){
   if(!profile.httpStatusCodes.length&&!/[\u4e00-\u9fff]/u.test(query)&&substantive.length>=2&&substantive.length<words.length)return substantive.join(' ');
   return query;
 }
-export async function searchPublicWeb(query,settings,signal,{question=''}={}){
-  const originalQuery=searchQuery(query),plan=researchQueryPlan(originalQuery),trace=[],candidates=new Map();let metadata,discarded=0;
+export async function searchPublicWeb(query,settings,signal,{question='',alternateQuery}={}){
+  const originalQuery=searchQuery(query),plan=researchQueryPlan(originalQuery,{alternateQuery}),trace=[],candidates=new Map();let metadata,discarded=0;
   const deadline=AbortSignal.any([signal,AbortSignal.timeout(45000)]);
   for(const [index,step] of plan.entries()){
     deadline.throwIfAborted();let found;
     // Same provider, bounded second retrieval. Some Bing regions return
     // unrelated results while echoing the right query. Do not retry a CAPTCHA,
     // rate limit or failed transport; only an inadequate successful result.
-    const regional=settings.searchProvider==='bing'&&index===1;
-    const query=regional?regionalSearchQuery(step.query):step.query;
-    const reason=regional?'bing-regional-fallback':step.reason;
-    try{found=await searchOnce(query,settings,deadline,{regional});}catch(error){
+    const regional=settings.searchProvider==='bing'&&index===1,rss=regional;
+    const query=regional&&step.reason!=='model-alternate-query'?regionalSearchQuery(step.query):step.query;
+    const reason=rss?(step.reason==='model-alternate-query'?'model-alternate-rss-query':'bing-rss-fallback'):step.reason;
+    try{found=await searchOnce(query,settings,deadline,{regional,rss});}catch(error){
       const code=/^[A-Z_]{3,64}$/u.test(error.message)?error.message:'SEARCH_UNAVAILABLE';trace.push({step:index+1,query,reason,state:'failed',code});
       // Do not hammer a challenged, rate-limited or broken provider. The trace
       // survives the error so a failed first step is observable as well.
       throw Object.assign(error,{searchTrace:trace});
     }
-    const ranked=relevantSearchResults(originalQuery,found.parsed,{question});discarded+=found.parsed.length-ranked.length;
+    const ranked=discoverySearchResults(originalQuery,query,found.parsed,{question});discarded+=found.parsed.length-ranked.length;
     trace.push({step:index+1,query,reason,state:ranked.length?'results':'no-relevant-results',code:ranked.length?null:found.parsed.length?'SEARCH_RESULTS_OFF_TOPIC':'SEARCH_NO_RESULTS',parsedCount:found.parsed.length,relevantCount:ranked.length,searchedAt:found.searchedAt});
     const {parsed,...current}=found;metadata=current;
     for(const row of ranked){const candidate={...row,searchContext:{query,provider:found.provider,searchedAt:found.searchedAt,step:index+1}};const prior=candidates.get(row.url);if(!prior||candidate.relevance.score>prior.relevance.score)candidates.set(row.url,candidate);}
@@ -134,5 +161,5 @@ export async function searchPublicWeb(query,settings,signal,{question=''}={}){
   }
   const results=[...candidates.values()].sort((a,b)=>b.relevance.identifierHits-a.relevance.identifierHits||b.relevance.score-a.relevance.score).slice(0,6);
   if(!results.length)throw Object.assign(new Error(trace.some(s=>s.parsedCount)?'SEARCH_RESULTS_OFF_TOPIC':'SEARCH_NO_RESULTS'),{searchTrace:trace});
-  return {...metadata,query:originalQuery,...(trace.length>1?{originalQuery,refinement:trace[1].reason}:{}),queryPlanVersion:2,maxQueries:2,querySteps:trace,discardedOffTopic:discarded,results};
+  return {...metadata,query:originalQuery,...(trace.length>1?{originalQuery,refinement:trace[1].reason}:{}),queryPlanVersion:3,maxQueries:2,querySteps:trace,discardedOffTopic:discarded,results};
 }

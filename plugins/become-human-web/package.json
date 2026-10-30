@@ -1,6 +1,6 @@
 {
   "name": "dsh-become-human-web",
-  "version": "0.7.0-beta.6",
+  "version": "0.7.0-beta.11",
   "type": "module",
   "description": "DSH Web manager with an isolated, single-session autonomous runtime",
   "icon": "./docs/assets/icon-pixel.svg",
@@ -42,6 +42,7 @@
     "native-context.tsx",
     "native-social.tsx",
     "native-goals.tsx",
+    "goal-submission.mjs",
     "native-task-board.tsx",
     "native-task-detail.tsx",
     "native-disclosure.tsx",
@@ -65,7 +66,6 @@
     "native-work-observation.tsx",
     "native-mcp-settings.tsx",
     "host-capabilities.mjs",
-    "browser-capabilities.mjs",
     "LICENSE",
     "NOTICE",
     "THIRD_PARTY_NOTICES.md",
@@ -87,7 +87,8 @@
     "native-usage.css",
     "native-chat.tsx",
     "native-relationship.tsx",
-    "native-relationship-media.css"
+    "native-relationship-media.css",
+    "native-novice.css"
   ],
   "dsh": {
     "bundle": {

@@ -1,6 +1,6 @@
 {
   "name": "dsh-become-human",
-  "version": "0.7.0-beta.6",
+  "version": "0.7.0-beta.11",
   "type": "module",
   "description": "Bounded autonomous Agent Web integration for DSH 0.2.0-rc.2",
   "main": "index.mjs",
@@ -79,6 +79,7 @@
     "bundled-public-mcp.mjs",
     "capability-bridge.mjs",
     "capability-report.mjs",
+    "capability-calculation.mjs",
     "report-materials.mjs",
     "capability-dialogue.mjs",
     "README.md",
@@ -101,8 +102,12 @@
     "work-observation.mjs",
     "work-observation-runtime.mjs",
     "choice-dialogue.mjs",
+    "conversation-review.mjs",
+    "learning-selection-review.mjs",
     "relationship-choice.mjs",
-    "multimodal.mjs"
+    "multimodal.mjs",
+    "dialogue-frame.mjs",
+    "model-policy.mjs"
   ],
   "dsh": {
     "client": {

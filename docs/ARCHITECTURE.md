@@ -2,7 +2,7 @@
 
 [返回首页](../README.md) · [配置](CONFIGURATION.md) · [插件集发布](PLUGIN_SUBMISSION.md)
 
-> **测试版本 · 尚未开发完成。** 公开安装包为 [`0.7.0-beta.5` Prerelease](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.5)；本页另行标明 beta.6 开发架构。图示和架构说明不代表真实闭环或完整稳定性验收，原生 DeepSeek 全新安装整链仍待测试。
+> **测试版本 · 尚未开发完成。** 公开安装包为 [`0.7.0-beta.5` Prerelease](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.5)；本页另行标明 beta.6 开发架构。图示和架构说明不代表真实闭环或完整稳定性验收；安装与原生通道按版本分别判定，剩余项目见[合并待测清单](TESTING_STATUS.md#merged-testing)。
 
 ## 结构
 
@@ -74,7 +74,7 @@ Human 保持一个持久主 Session。定时唤醒、聊天、学习、提醒与
 - 超时、取消或断开后，无法确定外部结果的写入变为 `unknown`，不自动重放。
 - 同一执行门控制前台、后台与桥接操作，取消不会提前放行尚未真正结束的外部动作。
 
-内置 MCP 是真实 stdio JSON-RPC 连接，提供公开网页读取服务。`beta.5` 可自行配置外部 stdio / Streamable HTTP MCP，发现工具后逐项授权；MCP 服务器本体和依赖仍需自行安装，不提供任意服务器的一键安装器。DSH 桥接直接使用宿主服务读取会话，可授权全部可见普通会话并收回；写操作仍逐笔审批。浏览器桥接使用受限 CDP 操作，不提供任意 JavaScript 执行；DOM 点击也不等同系统可信鼠标事件。
+内置 MCP 是真实 stdio JSON-RPC 连接，提供公开网页读取服务。`beta.5` 可自行配置外部 stdio / Streamable HTTP MCP，发现工具后逐项授权；MCP 服务器本体和依赖仍需自行安装，不提供任意服务器的一键安装器。DSH 桥接直接使用宿主服务读取会话，可授权全部可见普通会话并收回；写操作仍逐笔审批。取消绑定具体轮次与开始事件序号，在宿主同步校验后调用公开 Agent 取消接口并保留队列。开发候选已移除浏览器控制桥接。
 
 代码已预留可信提供方注册接口，但第三方插件与代码 Skill 不能当作安全沙箱中的扩展。当前也没有完成自主选题器对任意注册能力的通用规划。
 
@@ -95,7 +95,6 @@ plugins/
     worker.mjs          # 使用管理器传入的凭据环境启动运行模块
     native-*.tsx        # Human 工作区组件
     host-capabilities.mjs
-    browser-capabilities.mjs
     im/                 # 来自 dsh-im 并按唯一会话改造的渠道代码
     runtime/            # build 生成的运行源码副本
     runtime-bundle/     # build 生成的内部 DSH bundle
@@ -135,7 +134,7 @@ IM 构建读取本包开发依赖；日历规则来自精确版本的 `@deepseek
 - 兼容性固定 DSH `0.2.0-rc.2`；不能推定兼容未来 rc 或 Desktop。
 - 一个 Human 绑定一个 IM，更换会替换旧绑定；12 种聊天适配与 Office 连接器存在不等于每个平台已完成真实验收。
 - 开源发行排除 WhatsApp 及其 GPL 依赖链与 QQ 的未授权扫码连接器；QQ 使用手动 AppID / AppSecret。
-- 浏览器需要用户自行配置本机 CDP 与范围，不会自动启用或接管浏览器。
+- Human 不注册浏览器页面或标签页控制工具；旧配置字段被忽略，历史审计记录保留。
 - 公开搜索会受站点限制和证据质量影响；没有充分资料时应保留失败或等待状态。
 - 行为时间线是可追溯摘要，角色状态是规则与记录推导，不代表真实意识或情绪。
 - 长期运行、跨日、故障恢复与长期人格反馈需真实时间验证，不以隔离场景或经过时间替代。

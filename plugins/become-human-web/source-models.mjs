@@ -8,7 +8,7 @@ import {readSourceCredentialReferences} from './source-credentials.mjs';
 // composition never boots a profile or imports any source-profile plugin.
 const DSH_ABI='0.2.0-rc.2';
 const nativeProvider='deepseek-official';
-const providerFields=['apiKeyEnv','displayName','api','baseURL','models','modelOverrides','compat','defaultContextWindow','defaultMaxTokens','reasoning','thinkingBudgets'];
+const providerFields=['apiKeyEnv','displayName','api','baseURL','models','modelOverrides','compat','defaultContextWindow','defaultMaxTokens','reasoning','thinkingBudgets','timeoutMs','streamIdleTimeoutMs'];
 const nativeFields=['apiKeyEnv','baseURL','thinking','reasoningEffort','maxTokens','defaultContextWindow','models','streamIdleTimeoutMs','maxRequestFilesBytes','maxInlineRequestImageBytes','maxImagesPerRequest','imageOffloadByteQuantum','inlineImageOffloadByteQuantum','imageOffloadCountQuantum','filesApiTimeoutMs','fileExpiresAfterSeconds','fileRefreshMarginSeconds','fileQuotaCleanupBatch','retryPolicy'];
 const credentialName=value=>typeof value==='string'&&/^\w+$/.test(value);
 const record=value=>!!value&&typeof value==='object'&&!Array.isArray(value);
