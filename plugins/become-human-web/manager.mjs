@@ -3,6 +3,7 @@ import path from 'node:path';
 import z from '@deepseek-ai/schemastery';
 import {getDshRuntimeVersion} from '@deepseek-ai/dsh-app-boot';
 import {RuntimeSupervisor} from './supervisor.mjs';
+import {RuntimeExtensions} from './extensions.mjs';
 import {HumanOnboarding} from './onboarding.mjs';
 import {RemoteGateway} from './remote.mjs';
 import {SingleImIngress} from './im-ingress.mjs';
@@ -18,7 +19,7 @@ export async function apply(ctx,config){
   if(typeof managerHome!=='string'||!path.isAbsolute(managerHome))throw new Error('INVALID_MANAGER_HOME');
   assertOfflineStoreUnlocked(managerHome);
   const bootstrapHome=process.env.BH_SERVICE_MANAGER_LOCK_HOME,bootstrapNonce=process.env.BH_SERVICE_MANAGER_LOCK_NONCE;delete process.env.BH_SERVICE_MANAGER_LOCK_HOME;delete process.env.BH_SERVICE_MANAGER_LOCK_NONCE;
-  const managerLease=bootstrapHome===path.resolve(managerHome)&&bootstrapNonce?adoptRunningLock(managerHome,bootstrapNonce):acquireRunningLock(managerHome);let startupRuntime,startupRemote,startupIm,startupHost;
+  const managerLease=bootstrapHome===path.resolve(managerHome)&&bootstrapNonce?adoptRunningLock(managerHome,bootstrapNonce):acquireRunningLock(managerHome);let startupRuntime,startupRemote,startupIm,startupHost,startupExtensions;
   try{
   const root=path.join(managerHome,'become-human-manager');await fs.mkdir(root,{recursive:true});
   // Keep launch-time provenance private: flattened process.env may include
@@ -32,10 +33,11 @@ export async function apply(ctx,config){
   const remote=new RemoteGateway(path.join(root,'remote.sqlite'),runtime);const im=new SingleImIngress(remote,runtime);
   onboarding.attach(runtime,input=>remote.controlRuntime(input));
   startupRemote=remote;startupIm=im;
+  const extensions=await new RuntimeExtensions({root,runtime,remote}).init();startupExtensions=extensions;
   ctx.provide('becomeHumanImIngress',im);
   ctx.plugin(FullImPlugin,{});
   ctx.provide('becomeHumanRemote',Object.freeze({contractVersion:1,registerAdapter:(kind,adapter)=>remote.register(kind,adapter),receive:(channelId,envelope)=>remote.receive(channelId,envelope)}));
-  let bootError;if(!onboarding.required&&onboarding.supported)try{await runtime.start();}catch(error){bootError=safeOperationCode(error,'WORKER_START_FAILED');}
+  let bootError;if(extensions.blocked)bootError='EXTENSION_RECOVERY_REQUIRED';else if(!onboarding.required&&onboarding.supported)try{await runtime.start();}catch(error){bootError=safeOperationCode(error,'WORKER_START_FAILED');}
   else if(!onboarding.supported)bootError=onboarding.describe().error??onboarding.issues[0]?.code??'SETUP_ENVIRONMENT_UNSUPPORTED';
   let closing=false,tick,lastRemoteError=null;
   const latestRemoteError=(other)=>[lastRemoteError,remote.lastError,other].filter(Boolean).sort((a,b)=>b.at-a.at)[0]??null;
@@ -43,12 +45,15 @@ export async function apply(ctx,config){
   const remoteStatus=()=>{try{return remote.status();}catch(error){remoteFailure(error,'remote-status');return {sessionMode:'single',unavailable:true,lastError:latestRemoteError(),channels:[],deliveries:[],deliveryParts:[]};}};
   const schedule=()=>{if(closing)return;tick=setTimeout(async()=>{try{if(!onboarding.required&&runtime.cookie)await remote.tick();}catch(error){remoteFailure(error,'remote-tick');}finally{schedule();}},1500);};schedule();
   async function state(){
-    try{const s=await runtime.state(),remoteState=remoteStatus();let imState;try{imState=await im.describe();}catch(error){remoteFailure(error,'im-describe');imState={error:safeOperationCode(error,'IM_STATUS_FAILED'),channels:[],paired:[]};}const health=runtime.health(s);if(health.status==='healthy'&&(remoteState.unavailable||imState.error))health.status='degraded';return {...s,setup:onboarding.describe(),manager:{version:'0.7.0-beta.11',independentProcess:true,sessionMode:'single',modelSelection:runtime.selection,health,lastRemoteError:latestRemoteError(remoteState.lastError)},remote:remoteState,im:imState};}
-    catch{return {version:'0.7.0-beta.11',setup:onboarding.describe(),sessionId:null,desired:'paused',status:'unavailable',agentBusy:false,canThink:false,interactiveOnly:true,provider:'尚未配置',model:'',used:0,budget:config.tokenBudget,remaining:0,successes:0,intervalMs:config.intervalMs,inbox:0,persona:'',memory:'',messages:[],memories:[],attempts:[],audit:[],receipt:0,manager:{version:'0.7.0-beta.11',independentProcess:true,sessionMode:'single',error:bootError??runtime.lastError??(onboarding.required?'SETUP_REQUIRED':'WORKER_UNAVAILABLE'),health:runtime.health(),lastRemoteError:latestRemoteError()},remote:remoteStatus()};}
+    try{const s=await runtime.state(),remoteState=remoteStatus();let imState;try{imState=await im.describe();}catch(error){remoteFailure(error,'im-describe');imState={error:safeOperationCode(error,'IM_STATUS_FAILED'),channels:[],paired:[]};}const health=runtime.health(s);if(health.status==='healthy'&&(remoteState.unavailable||imState.error))health.status='degraded';return {...s,setup:onboarding.describe(),manager:{version:'0.7.0-beta.28',independentProcess:true,sessionMode:'single',modelSelection:runtime.selection,health,lastRemoteError:latestRemoteError(remoteState.lastError)},remote:remoteState,im:imState};}
+    catch{return {version:'0.7.0-beta.28',setup:onboarding.describe(),sessionId:null,desired:'paused',status:'unavailable',agentBusy:false,canThink:false,interactiveOnly:true,provider:'尚未配置',model:'',used:0,budget:config.tokenBudget,remaining:0,successes:0,intervalMs:config.intervalMs,inbox:0,persona:'',memory:'',messages:[],memories:[],attempts:[],audit:[],receipt:0,manager:{version:'0.7.0-beta.28',independentProcess:true,sessionMode:'single',error:bootError??runtime.lastError??(onboarding.required?'SETUP_REQUIRED':'WORKER_UNAVAILABLE'),health:runtime.health(),lastRemoteError:latestRemoteError()},remote:remoteStatus()};}
   }
   let operations=Promise.resolve();
   const mutate=input=>operations=operations.catch(()=>{}).then(async()=>{
     if(!input||typeof input!=='object')throw new Error('INVALID_REQUEST');
+    if(input.op==='extension-apply'){if(onboarding.required)throw new Error('SETUP_REQUIRED');const job=await extensions.submit(input);return {extensionJob:job};}
+    if(extensions.active)throw new Error('EXTENSION_OPERATION_BUSY');
+    if(extensions.blocked&&!['runtime-stop','remote-reply','delivery-confirm'].includes(input.op))throw new Error('EXTENSION_RECOVERY_REQUIRED');
     if(input.op==='setup-refresh'){await onboarding.refresh();return state();}
     if(input.op==='setup-reset'){await onboarding.reset(input);bootError=null;return state();}
     if(input.op==='setup-complete'){await onboarding.complete(input);bootError=null;return state();}
@@ -61,8 +66,9 @@ export async function apply(ctx,config){
     else if(input.op==='remote-reply'){if(typeof input.enabled!=='boolean')throw new Error('INVALID_REQUEST');remote.preference('reply-enabled',input.enabled);}
     else if(input.op==='runtime-restart'){if(!onboarding.supported)throw new Error('SETUP_ENVIRONMENT_UNSUPPORTED');await remote.restartRuntime();bootError=null;}
     else if(input.op==='runtime-stop')await remote.stopRuntime();
+    else if(input.op==='experience-reflection-withdraw')await runtime.control(input);
     else if(input.op==='delivery-confirm'){const delivery=await remote.confirmDelivery(input);return {state:await state(),delivery};}
-    else if(['conversation-summary-retry','relationship-configure','work-observation-configure','work-observation-check','work-observation-retry','work-observation-forget','work-observation-annotate','board-item-create','board-item-update','board-item-transition','board-focus-set','board-focus-clear','board-reflection-apply','board-reflection-dismiss','tool-submit','tool-cancel','tool-approve','capability-configure','capability-mcp-discover','goal-revise','goal-review','goal-propose-gap','usage-prices-save','persona-development-configure','persona-development-revert','memory-lifecycle-configure','memory-lifecycle-restore','memory-lifecycle-pin','memory-lifecycle-archive','memory-lifecycle-recover','development-review-retry','action-propose-report','action-approve','action-cancel','pause','start','once','message','retry','persona','receipt','reminder-create','reminder-cancel','schedule-create','schedule-update','schedule-toggle','schedule-cancel','goal-propose','goal-transition','goal-retry','memory-save','memory-revise','memory-forget','note-revise','profile-save','profile-rollback','execution-save','data-save','skill-save','skill-toggle','skill-rollback','autonomy-configure','autonomy-pause','autonomy-resume','autonomy-retry-task','autonomy-grant','autonomy-grant-revoke','learning-feedback','learning-note-delete','session-delete-preview','session-delete-confirm','session-delete-recover','delete-fixture-preview','delete-fixture-confirm','delete-fixture-recover'].includes(input.op)){
+    else if(['public-source-check','conversation-summary-retry','relationship-configure','work-observation-configure','work-observation-check','work-observation-retry','work-observation-forget','work-observation-annotate','board-item-create','board-item-update','board-item-transition','board-focus-set','board-focus-clear','board-reflection-apply','board-reflection-dismiss','tool-submit','tool-cancel','tool-approve','capability-configure','capability-mcp-discover','goal-revise','goal-review','goal-propose-gap','usage-prices-save','persona-development-configure','persona-development-revert','memory-lifecycle-configure','memory-lifecycle-restore','memory-lifecycle-pin','memory-lifecycle-archive','memory-lifecycle-recover','development-review-retry','action-propose-report','action-approve','action-cancel','pause','start','once','message','retry','persona','receipt','reminder-create','reminder-cancel','schedule-create','schedule-update','schedule-toggle','schedule-cancel','goal-propose','goal-transition','goal-retry','memory-save','memory-revise','memory-forget','note-revise','profile-save','profile-rollback','execution-save','data-save','skill-save','skill-toggle','skill-rollback','autonomy-configure','autonomy-pause','autonomy-resume','autonomy-retry-task','autonomy-grant','autonomy-grant-revoke','learning-feedback','learning-note-delete','session-delete-preview','session-delete-confirm','session-delete-recover','delete-fixture-preview','delete-fixture-confirm','delete-fixture-recover'].includes(input.op)){
       if(input.op==='session-delete-confirm')remote.preference('reply-enabled',false);
       const control={...input,...(input.op==='message'?{origin:'web'}:{})},result=await (['pause','start','once'].includes(input.op)?remote.controlRuntime(control):runtime.control(control));if(input.op.startsWith('action-')&&result?.action)return {state:await state(),action:result.action};if(input.op==='capability-mcp-discover'&&result?.mcpDiscovery)return {state:await state(),mcpDiscovery:result.mcpDiscovery};
     }else throw new Error('UNKNOWN_OPERATION');
@@ -71,6 +77,7 @@ export async function apply(ctx,config){
   async function read(input){
     if(input.kind==='state')return state();
     if(input.kind==='setup')return onboarding.refresh();
+    if(input.kind==='extensions')return extensions.list();
     const current=await runtime.state();if(input.sessionId&&input.sessionId!==current.sessionId)throw new Error('STALE_SESSION');
     if(input.kind==='delivery-review')return remote.deliveryReview(input);
     if(input.kind==='activity'){
@@ -103,9 +110,9 @@ export async function apply(ctx,config){
   serve('/become-human','./runtime/panel.html','text/html',async html=>html.replace('</main>',(await fs.readFile(new URL('./remote-panel.html',import.meta.url),'utf8'))+'</main>').replace('</body>','<script src="/become-human-remote.js" defer></script></body>'));
   serve('/become-human-client.js','./runtime/client.js','text/javascript');serve('/become-human-remote.js','./remote-client.js','text/javascript');
   await fs.writeFile(path.join(root,'launch.json'),JSON.stringify({url:ctx.connection.authenticatedUrl('http://127.0.0.1:'+ctx.webServer.port+'/')}));
-  ctx.effect(()=>async()=>{closing=true;clearTimeout(tick);runtime.recordLifecycle('manager-shutdown-requested');await im.close();await operations.catch(error=>runtime.recordLifecycle('manager-control-failed-on-close',{code:safeOperationCode(error,'MANAGER_CONTROL_FAILED')}));await hostCapabilities.close();await remote.close();await runtime.close();releaseRunningLock(managerLease);});
+  ctx.effect(()=>async()=>{closing=true;clearTimeout(tick);runtime.recordLifecycle('manager-shutdown-requested');await im.close();await operations.catch(error=>runtime.recordLifecycle('manager-control-failed-on-close',{code:safeOperationCode(error,'MANAGER_CONTROL_FAILED')}));await extensions.close();await hostCapabilities.close();await remote.close();await runtime.close();releaseRunningLock(managerLease);});
   }catch(error){
-    let stopped=true;for(const component of [startupHost,startupIm,startupRemote,startupRuntime])if(component)try{await component.close();}catch(closeError){stopped=false;startupRuntime?.recordLifecycle('manager-start-cleanup-failed',{code:safeOperationCode(closeError,'MANAGER_CLEANUP_FAILED')});}
+    let stopped=true;for(const component of [startupExtensions,startupHost,startupIm,startupRemote,startupRuntime])if(component)try{await component.close();}catch(closeError){stopped=false;startupRuntime?.recordLifecycle('manager-start-cleanup-failed',{code:safeOperationCode(closeError,'MANAGER_CLEANUP_FAILED')});}
     if(stopped)releaseRunningLock(managerLease);throw error;
   }
 }

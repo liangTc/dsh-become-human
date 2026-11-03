@@ -1,0 +1,10 @@
+{
+  "name": "dsh-human-experience",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "Apache-2.0",
+  "description": "回顾真实经历，形成暂定认识和下次方法（测试版）",
+  "main": "index.mjs",
+  "files": ["index.mjs", "behavior.mjs", "cordis.patch.yml", "README.md", "LICENSE"],
+  "dsh": {"bundle": {"patch": "./cordis.patch.yml"}, "human": {"replacesBehaviors": ["reflect-experience"]}}
+}

@@ -151,7 +151,7 @@ export class DomainMemory {
       if(row.kind==='user'&&developmentInput(row.body))return true;
       if(row.kind==='configuration'){
         let data;try{data=JSON.parse(row.body);}catch{}
-        if(data&&typeof data==='object'&&!Array.isArray(data)&&(data.developmentOnly===true||data.fixture===true||typeof data.predicate==='string'&&/^(?:p\d+|dev|fixture|acceptance)[_-]test(?:[_-]|$)/iu.test(data.predicate)))return true;
+        if(data&&typeof data==='object'&&!Array.isArray(data)&&(data.developmentOnly===true||data.fixture===true||typeof data.goalDescription==='string'&&developmentInput(data.goalDescription)||typeof data.predicate==='string'&&/^(?:p\d+|dev|fixture|acceptance)[_-]test(?:[_-]|$)/iu.test(data.predicate)))return true;
       }
       if(!row.root||row.root===row.id)return false;id=row.root;
     }
@@ -164,6 +164,10 @@ export class DomainMemory {
     if(!Array.isArray(refs)||!refs.length||!payload||typeof payload!=='object'||Array.isArray(payload))return false;
     const sources=refs.map(ref=>this.db.prepare('SELECT id,kind,body,status,namespace,root FROM source_record WHERE agent=? AND id=?').get(agent,ref));
     if(sources.some(source=>!source||source.status!=='active'||source.namespace!=='real'||!this.sourceUsable(agent,source.id)||this.sourceIsDevelopmentTest(agent,source.id)))return false;
+    if(payload.evidenceKind==='digital-execution-receipt'){
+      const experience=this.experience?.get(agent,payload.experienceId);
+      if(!experience||!this.experience.valid(agent,experience))return false;
+    }
     // Older extractors treated questions such as "我喜欢怎样的回答？" as
     // preferences. A factual preference must satisfy today's source contract;
     // exact explicit configuration is still allowed and is not reinterpreted.

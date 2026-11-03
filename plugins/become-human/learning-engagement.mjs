@@ -275,6 +275,12 @@ export function commitLearningOffer(journal,id,offer){
   return {committed:true,key:route.key};
 }
 
+// Contact silence is an outreach signal, not a change to the Agent's own
+// curiosity. Explicit rejection can still reduce investment in that route.
+export function studyDisposition(journal,domain,id,text,now=Date.now()){
+  const route=routeDisposition(journal,domain,id,text,now);
+  return {...route,weight:route.reason==='declined'?Math.min(1,route.weight):1,scope:'private-study-allocation',outreachWeight:route.weight};
+}
 export function routeDisposition(journal,domain,id,text,now=Date.now()){
   const candidate=learningRoute(text),snapshot=learningEngagementSnapshot(journal,domain,id,now),matches=snapshot.routes.filter(row=>related(candidate,{...row,empty:false}));
   const exact=matches.find(row=>row.key===candidate.key),selected=exact??(matches.length===1?matches[0]:null);

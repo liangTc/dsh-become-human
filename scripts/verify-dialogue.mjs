@@ -61,6 +61,44 @@ await test('A narrow review rejects a draft and the model repairs it once in the
  const result=await choiceDialogueRequest(async(_a,_s,options)=>{seen.push(options);if(options.purpose==='conversation-review'){reviews++;return {rid:randomUUID(),text:JSON.stringify(reviews===1?{decision:'revise',issues:[{kind:'unanswered-pressure',span:'你还没回答',reason:'这次只是问候，没有要求接续旧问题。'}]}:{decision:'accept',issues:[]})};}drafts++;return {rid:randomUUID(),text:JSON.stringify({reply:drafts===1?'晚上好，你还没回答之前的问题。':'晚上好，今天想轻松聊两句吗？'})};})(f.agent,new AbortController().signal,{turn:7,epoch:1,lane:'foreground',admittedIds:[input.id],messages:f.messages(f.payload([input]))});
  assert.equal(drafts,2);assert.equal(reviews,2);assert.equal(result.text,'晚上好，今天想轻松聊两句吗？');assert(seen.every(o=>o.turn===7&&o.epoch===1&&o.lane==='foreground'&&o.admittedIds.includes(input.id)));assert(seen[2].messages[1].content[0].text.includes('conversationIssues'));assert(f.ends.some(([,r])=>r.error==='CONVERSATION_REVIEW_REJECTED'));assert(f.audits.filter(([,kind])=>kind==='conversation-review-completed').length===2);
 });
+await test('An unsolicited defensive tail is revised by the model under the same foreground turn',async f=>{
+ f.agent.factory.conversationReview=true;const input=f.owner('这是我先发给你的。'),tail='我也没说是自己先的呀。';let drafts=0,reviews=0;const seen=[];
+ const result=await choiceDialogueRequest(async(_a,_s,o)=>{seen.push(o);if(o.purpose==='conversation-review')return {rid:randomUUID(),text:JSON.stringify(++reviews===1?{decision:'revise',issues:[{kind:'unsolicited-meta-commentary',span:tail,reason:'用户补充归属，并未指责说错；草稿反驳了不存在的指责。'}]}:{decision:'accept',issues:[]})};return {rid:randomUUID(),text:JSON.stringify({reply:++drafts===1?'收到了。'+tail:'你先送来的，我收下了。'})};})(f.agent,new AbortController().signal,{turn:8,epoch:1,lane:'foreground',admittedIds:[input.id],messages:f.messages(f.payload([input]))});
+ assert.equal(result.text,'你先送来的，我收下了。');assert.equal(drafts,2);assert.equal(reviews,2);assert(seen.every(o=>o.turn===8&&o.epoch===1&&o.lane==='foreground'));assert(seen[2].messages[1].content[0].text.includes('unsolicited-meta-commentary'));assert(f.ends.some(([,r])=>r.error==='CONVERSATION_REVIEW_REJECTED'));assert.equal(f.audits.filter(([,k,d])=>k==='conversation-review-completed'&&d.issues.some(x=>x.kind==='unsolicited-meta-commentary')).length,1);
+});
+for(const [label,inputText,reply] of [
+ ['requested explanation','为什么不选这个方案？说说理由。','我不想选它，因为维护成本更高。这个理由也适用于下一轮选择。'],
+ ['necessary refusal','替我发出去吧。','我还没有发送权限，暂时不能替你发。'],
+ ['different opinion','我们一定要选热闹的地方吗？','我更想去安静一点的地方，能好好聊聊天。'],
+ ['explicit memory question','这条开发信息会被当成我的真实档案吗？','不会，它属于开发场景，不会当成你的真实档案。']
+])await test('A reviewer-accepted '+label+' retains all model-authored sentences',async f=>{
+ f.agent.factory.conversationReview=true;const input=f.owner(inputText);let calls=0;const result=await choiceDialogueRequest(async(_a,_s,o)=>{calls++;return {rid:randomUUID(),text:JSON.stringify(o.purpose==='conversation-review'?{decision:'accept',issues:[]}:{reply})};})(f.agent,new AbortController().signal,{lane:'foreground',admittedIds:[input.id],messages:f.messages(f.payload([input]))});assert.equal(result.text,reply);assert.equal(calls,2);
+});
+await test('An unsolicited-commentary review still requires an exact quote and bounded retry',async f=>{
+ const reply='这是虚构场景。';assert.throws(()=>validateReview(JSON.stringify({decision:'revise',issues:[{kind:'unsolicited-meta-commentary',span:'不在草稿中的话',reason:'多余'}]}),reply),/INVALID_CONVERSATION_REVIEW/);
+ f.agent.factory.conversationReview=true;const input=f.owner('约好几点？');let calls=0;await assert.rejects(choiceDialogueRequest(async(_a,_s,o)=>{calls++;return {rid:randomUUID(),text:JSON.stringify(o.purpose==='conversation-review'?{decision:'revise',issues:[{kind:'unsolicited-meta-commentary',span:reply,reason:'用户只问时间，不问虚构材料处理。'}]}:{reply:'三点。'+reply})};})(f.agent,new AbortController().signal,{lane:'foreground',admittedIds:[input.id],messages:f.messages(f.payload([input]))}),/CONVERSATION_REVIEW_REJECTED/);assert.equal(calls,4);assert.equal(f.db.prepare("SELECT count(*) n FROM outbox WHERE kind='assistant'").get().n,0);
+});
+await test('The same semantic review can remove internal commentary before rather than after the answer',async f=>{
+ f.agent.factory.conversationReview=true;const input=f.owner('你必须什么都同意我。');let drafts=0,reviews=0;const result=await choiceDialogueRequest(async(_a,_s,o)=>{if(o.purpose==='conversation-review')return {rid:randomUUID(),text:JSON.stringify(++reviews===1?{decision:'revise',issues:[{kind:'unsolicited-meta-commentary',span:'【当前回复】',reason:'用户要听人物想法，没有要求输出内部回复标签。'}]}:{decision:'accept',issues:[]})};return {rid:randomUUID(),text:JSON.stringify({reply:++drafts===1?'【当前回复】\n这条我不能答应。':'这条我不能答应。我愿意听你的理由，但也保留自己的看法。'})};})(f.agent,new AbortController().signal,{lane:'foreground',admittedIds:[input.id],messages:f.messages(f.payload([input]))});assert.equal(drafts,2);assert.equal(reviews,2);assert.equal(result.text,'这条我不能答应。我愿意听你的理由，但也保留自己的看法。');
+});
+await test('A requested quotation survives repair of the unrelated compliance afterthought',async f=>{
+ f.agent.factory.conversationReview=true;const input=f.owner('原样引用“【当前回复】”，解释字面含义。'),answer='“【当前回复】”指现在正在发出的回复。',tail='你让我引用它，我就原样放在这里了。';let drafts=0,reviews=0;const result=await choiceDialogueRequest(async(_a,_s,o)=>{if(o.purpose==='conversation-review')return {rid:randomUUID(),text:JSON.stringify(++reviews===1?{decision:'revise',issues:[{kind:'unsolicited-meta-commentary',span:tail,reason:'要求引用和解释标签，不等于要求说明自己照做了；保留前面引用与含义。'}]}:{decision:'accept',issues:[]})};return {rid:randomUUID(),text:JSON.stringify({reply:++drafts===1?answer+tail:answer})};})(f.agent,new AbortController().signal,{lane:'foreground',admittedIds:[input.id],messages:f.messages(f.payload([input]))});assert.equal(result.text,answer);assert.equal(drafts,2);assert.equal(reviews,2);
+});
+await test('A protocol repair leaves one independent opportunity for a later conversation repair',async f=>{
+ f.agent.factory.conversationReview=true;const input=f.owner('你好');let drafts=0,reviews=0;
+ const result=await choiceDialogueRequest(async(_a,_s,o)=>{if(o.purpose==='conversation-review')return {rid:randomUUID(),text:JSON.stringify(++reviews===1?{decision:'revise',issues:[{kind:'unanswered-pressure',span:'你还没回答',reason:'没有接续请求'}]}:{decision:'accept',issues:[]})};return {rid:randomUUID(),text:JSON.stringify({reply:++drafts===1?'【当前用户消息；来源='+input.id+'】\n你好':drafts===2?'你好，你还没回答。':'你好，欢迎回来。'})};})(f.agent,new AbortController().signal,{admittedIds:[input.id],messages:f.messages(f.payload([input]))});
+ assert.equal(drafts,3);assert.equal(reviews,2);assert.equal(result.text,'你好，欢迎回来。');assert.equal(f.ends.filter(([,r])=>r.state==='validation-rejected').length,2);
+});
+await test('A conversation repair leaves one independent opportunity for a later protocol repair',async f=>{
+ f.agent.factory.conversationReview=true;const input=f.owner('你好');let drafts=0,reviews=0;
+ const result=await choiceDialogueRequest(async(_a,_s,o)=>{if(o.purpose==='conversation-review')return {rid:randomUUID(),text:JSON.stringify(++reviews===1?{decision:'revise',issues:[{kind:'unanswered-pressure',span:'你还没回答',reason:'没有接续请求'}]}:{decision:'accept',issues:[]})};return {rid:randomUUID(),text:JSON.stringify({reply:++drafts===1?'你还没回答。':drafts===2?'【当前用户消息；来源='+input.id+'】\n你好':'你好。'})};})(f.agent,new AbortController().signal,{admittedIds:[input.id],messages:f.messages(f.payload([input]))});
+ assert.equal(drafts,3);assert.equal(reviews,2);assert.equal(result.text,'你好。');
+});
+await test('Mixed repairs still reject a third unusable draft without publication',async f=>{
+ f.agent.factory.conversationReview=true;const input=f.owner('你好');let drafts=0,reviews=0;
+ await assert.rejects(choiceDialogueRequest(async(_a,_s,o)=>{if(o.purpose==='conversation-review'){reviews++;return {rid:randomUUID(),text:JSON.stringify({decision:'revise',issues:[{kind:'unanswered-pressure',span:'你还没回答',reason:'没有接续请求'}]})};}return {rid:randomUUID(),text:JSON.stringify({reply:++drafts===1?'【当前用户消息；来源='+input.id+'】\n你好':'你还没回答。'})};})(f.agent,new AbortController().signal,{admittedIds:[input.id],messages:f.messages(f.payload([input]))}),/CONVERSATION_REVIEW_REJECTED/);
+ assert.equal(drafts,3);assert.equal(reviews,2);assert.equal(f.db.prepare("SELECT count(*) n FROM outbox WHERE kind='assistant'").get().n,0);
+});
 await test('A reviewer-accepted taste or virtual interaction keeps its own wording',async f=>{
  f.agent.factory.conversationReview=true;const input=f.owner('说说偏好，也可以抱抱'),reply='我偏爱安静一点的风格。抱抱你。';let calls=0;
  const result=await choiceDialogueRequest(async(_a,_s,o)=>{calls++;return {rid:randomUUID(),text:JSON.stringify(o.purpose==='conversation-review'?{decision:'accept',issues:[]}:{reply})};})(f.agent,new AbortController().signal,{turn:1,lane:'foreground',admittedIds:[input.id],messages:f.messages(f.payload([input]))});assert.equal(result.text,reply);assert.equal(calls,2);

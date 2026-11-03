@@ -7,7 +7,7 @@ const clean=(value,max=240)=>String(value??'').replace(/([?&](?:token|api[_-]?ke
 const number=value=>Number.isSafeInteger(value)&&value>=0?value:0;
 const ref=(source,id)=>id?{source,id:source+':'+id,recordId:String(id)}:null;
 const labels={ready:'待执行',pending:'待触发',queued:'待执行',suspended:'已保存进度',paused:'已暂停','waiting-budget':'等待额度',executing:'执行中',running:'执行中',staged:'正在提交',failed:'执行失败',unknown:'结果未知',blocked:'需要处理',proposed:'等待确认',approved:'已批准','awaiting-approval':'等待批准',active:'推进中','needs-evidence':'需要补充证据','awaiting-review':'等待验收',completed:'执行完成',committed:'已写入会话',cancelled:'已取消',expired:'已到期',archived:'记录已归档'};
-const kindLabels={research:'自主研究','learn-ai':'阅读学习',chat:'主动闲聊',care:'主动关心','share-insight':'主动分享','write-report':'文件报告'};
+const kindLabels={behavior:'扩展行为','behavior-choice':'选择下一步',research:'自主研究','learn-ai':'阅读学习',chat:'主动闲聊',care:'主动关心','share-insight':'主动分享','write-report':'文件报告'};
 function groupOf(source,status){
   if(['executing','running','staged'].includes(status))return 'running';
   if(['failed','unknown','blocked','needs-evidence','awaiting-review','awaiting-approval'].includes(status)||source==='action'&&['proposed','expired'].includes(status))return 'attention';
@@ -53,7 +53,7 @@ export function taskBoard(factory,sessionId,input={}){
     const cp=parse(row.checkpoint,{})??{},goalId=typeof cp.goal?.id==='string'?cp.goal.id:null,matterId=typeof cp.matterId==='string'?cp.matterId:null;
     const executionAttempts=attempts.get(row.id)??[];
     tasks.set(row.id,card('autonomy',{...row,title:cp.plan?.question||cp.candidate?.question||kindLabels[row.kind]},
-      {taskId:row.id,goalId,matterId,origin:'autonomous',summary:clean(cp.plan?.value||kindLabels[row.kind]||'按本轮已记录方向执行'),reason:row.status!=='completed'&&cp.reason?clean(cp.reason):null,attempts:executionAttempts,usage:usageOf(executionAttempts),links:[ref('goal',goalId),matterId?{source:'matter',id:'matter:'+matterId,recordId:matterId}:null].filter(Boolean),result:{noteId:typeof cp.noteId==='string'?cp.noteId:null,sourceReadCount:number(cp.researchReads),meaning:row.status==='completed'?'任务执行结束；不代表主人满意或手机已实收。':row.status==='cancelled'?'本次方向已结束，不代表产生了有效成果。':'结果以实际执行记录为准。'}}));
+      {taskId:row.id,goalId,matterId,origin:'autonomous',summary:clean(cp.plan?.value||kindLabels[row.kind]||'按本轮已记录方向执行'),reason:row.status!=='completed'&&cp.reason?clean(cp.reason):null,attempts:executionAttempts,usage:usageOf(executionAttempts),links:[ref('goal',goalId),ref('tool',cp.behaviorResult?.jobId),matterId?{source:'matter',id:'matter:'+matterId,recordId:matterId}:null].filter(Boolean),result:{noteId:typeof cp.noteId==='string'?cp.noteId:null,sourceReadCount:number(cp.researchReads),meaning:row.status==='completed'?'任务执行结束；不代表主人满意或手机已实收。':row.status==='cancelled'?'本次方向已结束，不代表产生了有效成果。':'结果以实际执行记录为准。'}}));
   }
   const goals=new Map();
   for(const row of goalRows){

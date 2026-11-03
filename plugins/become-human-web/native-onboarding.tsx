@@ -84,7 +84,7 @@ export default function Onboarding({api,s,busy,ui,error='',transportError=''}:an
     </fieldset>}
     {step===2&&<>
      <dl className="hn-onboarding-summary"><div><dt>模型</dt><dd>{route?(route.providerLabel||route.provider)+' / '+(route.modelLabel||route.model):choices.provider+' / '+choices.model}</dd></div>{route&&<div><dt>模型来源</dt><dd>{routeSource(route)}</dd></div>}<div><dt>人物</dt><dd>{persona.name}</dd></div><div><dt>你的称呼</dt><dd>{choices.ownerName.trim()||'稍后填写'}</dd></div><div><dt>时区</dt><dd>{choices.timeZone}</dd></div><div><dt>自主额度</dt><dd>{budget.name} · 每个本地自然日 {number(budget.config.tokenLimit)} 预留 token / {budget.config.requestLimit} 次请求 / {budget.config.roundLimit} 轮</dd></div></dl>
-     <Check label="同时开启自主学习和主动交流" value={choices.startAutonomy} onChange={(value:boolean)=>patch('startAutonomy',value)} disabled={disabled||locked}/><p className="hn-help">{choices.startAutonomy?'启动后按当前检查间隔判断是否有值得做的事，模型调用使用上面选择的自主额度。':'创建后先开启聊天，自主行为保持关闭；你可以稍后在“自主行为”中开启。'}</p>
+     <Check label="同时开启自主活动和主动交流（学习另行选装）" value={choices.startAutonomy} onChange={(value:boolean)=>patch('startAutonomy',value)} disabled={disabled||locked}/><p className="hn-help">{choices.startAutonomy?'启动后按当前检查间隔判断是否有值得做的事，模型调用使用上面选择的自主额度。':'创建后先开启聊天，自主行为保持关闭；你可以稍后在“自主行为”中开启。'}</p>
      <Band>点击后会创建唯一会话，自动准备并启动后台。网页和之后绑定的手机共享该会话；关闭浏览器页面后，只要 DSH 服务仍在运行，Human 就可以继续工作。</Band>
      {stale&&<div className="hn-notice hn-error" role="alert">环境或模型列表已更新，请核对最新信息后再启动。<Button disabled={disabled} onClick={()=>{setReviewRevision(setup.revision);setValidation('');}}>使用最新检查结果</Button></div>}
      {!supported&&<Band>当前运行环境未通过检查，请返回第一步处理。</Band>}

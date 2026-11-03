@@ -19,7 +19,7 @@ export function serializeMcpServer(row:any){
     try{args=row.argsText.trim().startsWith('[')?JSON.parse(row.argsText):row.argsText.split(/\r?\n/).map((line:string)=>line.trim()).filter(Boolean);}catch{throw new Error('启动参数需要每行一个，或填写有效的 JSON 字符串数组。');}
     if(!Array.isArray(args)||args.some(item=>typeof item!=='string'))throw new Error('启动参数只能是字符串数组。');
   }
-  return {id:server.id,name:server.name,enabled:server.enabled===true,transport:server.transport,timeoutMs:server.timeoutMs??25000,tools:(server.tools??[]).map(({name,description,inputSchema,schemaHash,effect,enabled}:any)=>({name,description,inputSchema,schemaHash,effect,enabled:enabled===true})),...(server.transport==='stdio'?{command:server.command??'',args,...(server.cwd?{cwd:server.cwd}:{}),env:references(row.envText,'进程环境引用')}:{url:server.url??'',headerEnv:references(row.headerText,'HTTP 请求头引用')})};
+  return {id:server.id,name:server.name,enabled:server.enabled===true,transport:server.transport,timeoutMs:server.timeoutMs??25000,tools:(server.tools??[]).map(({name,description,inputSchema,schemaHash,effect,enabled,autonomous}:any)=>({name,description,inputSchema,schemaHash,effect,enabled:enabled===true,autonomous:autonomous===true})),...(server.transport==='stdio'?{command:server.command??'',args,...(server.cwd?{cwd:server.cwd}:{}),env:references(row.envText,'进程环境引用')}:{url:server.url??'',headerEnv:references(row.headerText,'HTTP 请求头引用')})};
 }
 export const serializeMcpServers=(rows:any[])=>rows.map(serializeMcpServer);
 
@@ -36,7 +36,7 @@ export default function McpConnections({api,s,ui,busy,rows,onChange,expectedRevi
     const old=new Map((row.server.tools??[]).map((tool:any)=>[tool.name,tool]));
     const tools=found.tools.filter((tool:any)=>tool.supported).map(({name,description,inputSchema,schemaHash}:any)=>{
       const prior:any=old.get(name),same=prior?.schemaHash===schemaHash;
-      return {name,description,inputSchema,schemaHash,enabled:same&&prior.enabled===true,effect:same?prior.effect:'write'};
+      return {name,description,inputSchema,schemaHash,enabled:same&&prior.enabled===true,autonomous:same&&prior.autonomous===true,effect:same?prior.effect:'write'};
     });
     const currentIndex=rows.findIndex((item:any)=>item.server.id===row.server.id);
     if(currentIndex>=0){patch(currentIndex,{server:{...row.server,tools},discovered:found.tools});setOpen(row.server.id,true);}
@@ -44,7 +44,7 @@ export default function McpConnections({api,s,ui,busy,rows,onChange,expectedRevi
   const add=()=>{const id='mcp-'+crypto.randomUUID().slice(0,8);setOpen(id,true);onChange([...rows,...draftMcpServers([{id,name:'新 MCP 服务',enabled:false,transport:'stdio',command:'',args:[],env:{},timeoutMs:25000,tools:[]}])]);};
   return <>
     <div className="hn-row hn-between"><p className="hn-help">添加自己的 MCP 服务，发现工具后逐项开放。新增服务和工具默认关闭。</p><Button disabled={busy||rows.length>=8} onClick={add}>添加 MCP 服务</Button></div>
-    <p className="hn-help">本地服务以你的系统账户运行，请使用可信程序；只读标记不提供系统沙盒。当前自定义工具由用户对话或工具页面发起，不会自动进入无人值守自主任务。连接参数会进入配置导出，密钥请使用环境变量引用。</p>
+    <p className="hn-help">本地服务以你的系统账户运行，请使用可信程序；只读标记不提供系统沙盒。默认由用户对话或工具页面发起；逐项开启自主使用后，Human 可自行选择使用，外部操作仍需逐笔批准。连接参数会进入配置导出，密钥请使用环境变量引用。</p>
     {!rows.length&&<p className="hn-note">尚未添加自定义服务。支持本地 stdio 和远程 Streamable HTTP，最多 8 个服务。</p>}
     {rows.map((row:any,index:number)=>{
       const server=row.server,found=row.discovered??(server.tools??[]).map((tool:any)=>({...tool,supported:true})),grants=new Map((server.tools??[]).map((tool:any)=>[tool.name,tool]));
@@ -71,6 +71,7 @@ export default function McpConnections({api,s,ui,busy,rows,onChange,expectedRevi
             const grant:any=grants.get(tool.name),mode=grant?.enabled?grant.effect:'disabled';
             return <div className="hn-group" key={tool.name}><strong>{tool.name}</strong>{tool.description&&<p className="hn-help">{tool.description}</p>}
               <Field label={tool.name+' 的权限'}><Select disabled={busy||!tool.supported} value={mode} options={[["disabled","关闭"],["read","只读 · 由我确认此工具仅读取"],["write","外部操作 · 每次预览批准"]]} onChange={(value:string)=>serverPatch(index,{tools:(server.tools??[]).map((item:any)=>item.name===tool.name?{...item,enabled:value!=='disabled',effect:value==='disabled'?item.effect:value}:item)})}/></Field>
+              <Check label={tool.name+' · 允许 Human 自主选择使用'} disabled={busy||!tool.supported||mode==='disabled'} value={grant?.autonomous===true} onChange={(autonomous:boolean)=>serverPatch(index,{tools:(server.tools??[]).map((item:any)=>item.name===tool.name?{...item,autonomous}:item)})}/><p className="hn-help">只在当前已授权范围使用；写入仍先准备预览，等待你的批准。</p>
               {!tool.supported&&<p className="hn-help">当前不支持：{ui.errorText?.(tool.unsupportedReason)??tool.unsupportedReason}。此工具无法启用。</p>}<JsonDetails label="查看参数与服务器声明" value={{inputSchema:tool.inputSchema,annotations:tool.annotations??{},schemaHash:tool.schemaHash}}/>
             </div>;
           })}</>}

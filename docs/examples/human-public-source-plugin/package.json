@@ -1,0 +1,29 @@
+{
+  "name": "dsh-human-public-source-example",
+  "version": "0.3.0",
+  "type": "module",
+  "license": "Apache-2.0",
+  "description": "Opt-in public source observation adapter with declarative configuration for Human beta.22",
+  "main": "index.mjs",
+  "files": [
+    "index.mjs",
+    "review.mjs",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "human": {
+      "configEditors": [
+        {
+          "nodeId": "human-extension.public-source-example",
+          "kind": "public-sources",
+          "version": 1
+        }
+      ]
+    }
+  }
+}

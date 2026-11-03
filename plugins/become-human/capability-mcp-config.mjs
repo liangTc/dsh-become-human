@@ -43,10 +43,10 @@ export function describeCustomMcpTool(tool){
   return {name:tool.name,description,inputSchema:structuredClone(inputSchema),schemaHash:customMcpHash(snapshot),supported:unsupportedReason===null,unsupportedReason,annotations:{readOnlyHint:tool.annotations?.readOnlyHint===true,destructiveHint:tool.annotations?.destructiveHint===true},enabled:false,effect:'write'};
 }
 function toolGrant(value){
-  keys(value,['name','description','inputSchema','schemaHash','effect','enabled']);
+  keys(value,['name','description','inputSchema','schemaHash','effect','enabled','autonomous']);
   const name=text(value.name,128);if(!/^[a-zA-Z0-9_.:-]{1,128}$/u.test(name)||typeof value.schemaHash!=='string'||!/^[0-9a-f]{64}$/u.test(value.schemaHash)||!['read','write'].includes(value.effect))fail('INVALID_CUSTOM_MCP_SETTINGS');
   assertCapabilitySchema(value.inputSchema);if(value.inputSchema.type!=='object')fail('MCP_OBJECT_INPUT_REQUIRED');
-  return {name,description:text(value.description??'',3000,{empty:true,multiline:true}),inputSchema:structuredClone(value.inputSchema),schemaHash:value.schemaHash,effect:value.effect,enabled:flag(value.enabled)};
+  return {name,description:text(value.description??'',3000,{empty:true,multiline:true}),inputSchema:structuredClone(value.inputSchema),schemaHash:value.schemaHash,effect:value.effect,enabled:flag(value.enabled),autonomous:flag(value.autonomous)};
 }
 export function normalizeCustomMcpServer(value,{discovery=false}={}){
   keys(value,['id','name','enabled','transport','command','args','cwd','env','url','headerEnv','timeoutMs','tools']);

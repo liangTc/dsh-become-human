@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "package": "dsh-become-human-web",
-  "version": "0.7.0-beta.11",
+  "version": "0.7.0-beta.28",
   "upstream": {
     "name": "dsh-im",
     "version": "4.39.0",
@@ -1976,7 +1976,7 @@
   },
   "client": {
     "file": "../im-client.js",
-    "sha256": "0fe7623a70af458309f380e2d9d130e0d9ecc5b21654e0474378ebbca03fe79f",
+    "sha256": "39dbfaeec709e9b894fe2c258f2187fbbb81e28f2c06a91846142e28ba45c06e",
     "inputs": [
       {
         "file": "im/package.json",

@@ -1,27 +1,30 @@
 <p align="center">
+
   <img src="docs/assets/banner-pixel.png" alt="Become Human pixel art banner: a single-session autonomous agent for DSH" width="100%">
 </p>
 
 # Become Human
 
-**A DSH agent that remembers, learns, starts conversations, and works toward goals through one persistent session.**
+> **beta.28 development source · Experimental and incomplete.** The core focuses on event selection, action execution, outcome feedback and growth. Learning is an optional behavior pack, disabled by default. This source includes extension management, recovery and conversation fixes; there is no public beta.28 Release package yet. See [core design](docs/CORE_DESIGN.md) and [testing status](docs/TESTING_STATUS.md).
+
+**A DSH agent that chooses actions in an event loop, remembers experiences and can grow through one persistent session.**
 
 [简体中文](README.md) · [Installation](docs/INSTALLATION.md) · [Usage](docs/USAGE.md) · [Configuration](docs/CONFIGURATION.md) · [Testing status](docs/TESTING_STATUS.md) · [Architecture](docs/ARCHITECTURE.md)
 
 > [!WARNING]
 > **Test release · Development is incomplete.** The current public test release is `0.7.0-beta.5` (GitHub Prerelease). Windows, Node.js 24+, and DSH `0.2.0-rc.2` are required. Complete acceptance and long-running reliability remain unverified, including the fresh-DSH native DeepSeek flow; see [testing status](docs/TESTING_STATUS.md).
 
-`main` contains **`0.7.0-beta.11` development source**, with no public Release package for that version. The beta.5 downloads below do not include later development changes.
+`main` contains **`0.7.0-beta.28` development source**, which requires a source build. The beta.5 downloads below do not include later development changes.
 
 | Version | Availability and status |
 | --- | --- |
-| `0.7.0-beta.11` | Public development source with local builds, upgrades, and limited real-model checks; build from source, no published installation package |
+| `0.7.0-beta.28` | Current development source with local builds, upgrades and limited real-model/Web checks; no corresponding public Release package |
 | `0.7.0-beta.5` | Current public test release, with a prebuilt bundle and SHA-256 file; see installation below |
 | `0.7.0-beta.4` | Historical test release; its package does not include beta.5 additions |
 
 ## What it does
 
-Become Human adds an event loop to a persistent DSH conversation. It uses **the current persona → valid memories, feedback, and goals → model topic selection** to decide whether to wait, learn, check in, chat, or advance a bounded task.
+Become Human adds an event loop to a persistent DSH conversation. It uses **the current persona → valid memories, feedback, and goals → model choice** to decide whether to wait, check in, chat, or use an enabled capability. Goals and learning are optional activities, not a fixed identity or a mandatory task list.
 
 DSH Web is the management surface. A paired phone is another channel into the same conversation. Persona configuration guides expression and topic selection; code handles scheduling, budgets, execution boundaries, and records. This project explores persistent, contextual agent behavior. It does not claim consciousness, genuine emotions, or verified long-term personality development.
 
@@ -46,21 +49,23 @@ DSH Web is the management surface. A paired phone is another channel into the sa
 | Model setup · beta.5 | DSH's native DeepSeek API Key adapter and third-party routes using host credential references |
 | Conversation continuity · development | Complete dialogue turns, evidence-linked rolling summaries, pending original turns, and relevant long-term memory; inspect coverage and compression usage |
 | Images and personal choices · development | Image input for confirmed vision models; agree, negotiate, decline, or reconsider ordinary requests without turning relationship scores into permissions |
-| Learning and work support · development | Learning motivation, teasers and follow-up, valid note retrieval, authorized DSH session observation, and pre-save checks of exact quotes against task scope |
+| Optional learning and work support · development | Learning requires its own behavior pack and is disabled by default; existing notes remain readable. Authorized DSH observation and conversational sharing follow configuration without forcing research tasks |
+| Behavior extensions · development | Event, opportunity, execution receipt and feedback contracts; Web installation, configuration, enable/disable, upgrade and removal, with experience and learning reference packs |
 
 DSH session writes are disabled by default and require scoped configuration and per-operation approval. Cancellation targets the specific turn returned by a session read and rejects stale requests after the task changes. Human does not provide browser tab or window control. Text Skills provide guidance; they do not grant arbitrary code execution or operating-system access.
 
 [Shared matters and reviews in the task board](docs/CHARACTER_BOARD.md) use the existing main session, IM binding, and execution lane. Manual focus does not start the driver; recording a goal or commitment does not dispatch it. Accepting a review does not grant permissions or retry failed work. The view shows concise intentions and evidence, not raw chain of thought or proof of consciousness. Additions marked beta.5 are included in this test package and still require separate acceptance checks.
 
-### beta.11 development progress
+### beta.12–beta.28 development progress
 
-Recent development focuses on three areas:
+Recent development separates business behaviors from the core loop:
 
-- **Conversation and sharing:** complete turns and rolling summaries preserve continuity; natural follow-up can retrieve valid notes. A serial reply check targets unsupported personal experiences and unsolicited pressure to answer, with at most one revision. Chat, compression, and reply review have separate accounting outside the autonomous budget.
-- **Learning quality:** sentence-based evidence IDs and exact source quotes, followed by a review of the saved quotes against the current question and goal constraints. Rejected candidates create neither notes nor knowledge memories. Review consumes autonomous requests and tokens; acceptance does not independently verify the source or its claims.
-- **Tasks and recovery:** goal cancellation, concurrent export cleanup, crash recovery checks, and goal revalidation after supporting evidence is withdrawn. Failed records remain available; unknown outcomes are not retried automatically.
+- **Core loop:** validate current events and candidates before choosing work on one execution lane. Persist terminal outcomes with feedback work; recover feedback without replaying external actions. Experiences, method effectiveness and personality drift retain separate evidence requirements.
+- **Optional behavior packs:** `dsh-human-learning` is no longer a default responsibility and remains disabled after installation. `dsh-human-experience` can take over experience reviews. Public event sources include RSS, Atom and JSON Feed. See the [extension API](docs/BEHAVIOR_API.md).
+- **Extension management:** install trusted local or published package sources and manage configuration, enablement, upgrades and removal in Web. Local lifecycle checks cover configuration-preserving upgrades and failed-upgrade recovery; arbitrary third-party packages, public/authenticated registries, missing caches and interrupted recovery remain unverified. Text Skills and executable extensions are separate.
+- **Conversation and memory:** complete turns, rolling summaries and long-term memory preserve continuity. Fixes cover corrections, speaker attribution and independent protocol/semantic repair opportunities. Contextual review targets irrelevant defensive remarks, process explanations, pressure and unsupported experiences while preserving disagreement and necessary explanations. At most one protocol repair and one semantic repair, three drafts in total; no separate polishing stage.
 
-The latest beta.11 round includes 144 isolated checks plus limited real-model and Web checks. A scope review falsely accepted an earlier candidate; its test note was withdrawn. Excerpt ending completeness, cross-topic quality, public search, and connection timeouts remain open. Real preemption and quota-wait recovery in the new review phase, clean-machine installation, phone images, and long-running behavior still need acceptance. See the [changelog](CHANGELOG.md), [learning and conversation guide](docs/LEARNING_AND_CONVERSATION.md), and [test record](docs/TESTING_STATUS.md).
+beta.28 has 65 isolated dialogue checks, eight final real-model review cases and four final Web replies, including a draft rejected for unnecessary commentary and rewritten by the model before publication. Earlier local extension lifecycle and limited restart checks do not establish general conversation quality, long-term memory, personality growth or arbitrary extension compatibility. Failures remain documented in the [changelog](CHANGELOG.md) and [test record](docs/TESTING_STATUS.md). Learning quality remains a separate [optional activity](docs/LEARNING_AND_CONVERSATION.md), rather than the main measure of the core's progress.
 
 ## Architecture
 
@@ -94,7 +99,7 @@ Start DSH, open Human, and follow **existing model → persona and budget → cr
 
 **Native adapter validation:** the public beta.5 release retains its original acceptance scope. On October 28, a beta.6 development candidate passed real official model discovery, host-process credential reuse, background startup, and Flash requests in a separate empty directory on the same machine. This used shared dependency caches; it does not establish clean-machine success or retroactively validate beta.5. Uncached installation of the final release artifact, credential-priority combinations, and additional reasoning settings are tracked under [merged tests D1/D2](docs/TESTING_STATUS.md#merged-testing).
 
-Choose a persona, low/medium/high budget, optional owner name, and timezone. Enabling autonomous behavior during setup is off by default; phone binding is optional afterward. Existing installations retain their session, configuration, and binding. Later cold starts remain paused until explicitly resumed. The runtime continues to follow the DSH service lifecycle; this change does not add a resident service. See [configuration](docs/CONFIGURATION.md) and [usage](docs/USAGE.md).
+Choose a persona, low/medium/high budget, optional owner name, and timezone. Autonomous behavior is off by default. In beta.28, enabling it does not also enable learning: install and enable the learning pack, then configure learning separately. The public beta.5 wizard retains its historical options. Phone binding is optional afterward. Existing installations retain their session, configuration, and binding; cold starts remain paused until explicitly resumed. The runtime follows the DSH service lifecycle; this change does not add a resident service. See [configuration](docs/CONFIGURATION.md) and [usage](docs/USAGE.md).
 
 ## IM scope
 

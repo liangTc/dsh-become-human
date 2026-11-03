@@ -1,0 +1,6 @@
+- insert:
+    - id: human-extension.public-source-example
+      name: dsh-human-public-source-example
+      config:
+        sources: []
+        reviewWithModel: false

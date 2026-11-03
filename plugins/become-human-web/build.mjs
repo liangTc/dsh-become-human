@@ -4,6 +4,9 @@ import {createRequire} from 'node:module';
 const root=import.meta.dirname,source=path.resolve(root,'../become-human');
 const pkg=JSON.parse(await fs.readFile(path.join(source,'package.json'),'utf8'));
 await fs.mkdir(path.join(root,'runtime'),{recursive:true});await fs.mkdir(path.join(root,'runtime-bundle'),{recursive:true});
+// Retired generated modules must not survive an incremental build. These exact
+// files are build outputs; user profiles and installed extensions are separate.
+for(const file of ['learning-workflow.mjs','learning-opportunities.mjs'])await fs.unlink(path.join(root,'runtime',file)).catch(error=>{if(error.code!=='ENOENT')throw error;});
 for(const file of pkg.files)if(file!=='cordis.patch.yml')await fs.cp(path.join(source,file),path.join(root,'runtime',file),{recursive:true});
 await fs.writeFile(path.join(root,'runtime-bundle/package.json'),JSON.stringify({name:'dsh-become-human-runtime',version:pkg.version,type:'module',license:'Apache-2.0',author:'Become Human contributors',main:'index.mjs',exports:{'.':'./index.mjs','./client':'./client.js'},dsh:{bundle:{patch:'./cordis.patch.yml'},client:{platform:'web',immediately:true}}},null,2)+'\n');
 for(const file of ['LICENSE','NOTICE','THIRD_PARTY_NOTICES.md'])await fs.copyFile(path.join(source,file),path.join(root,'runtime-bundle',file));

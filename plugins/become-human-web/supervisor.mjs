@@ -3,7 +3,7 @@ import path from 'node:path';
 import {spawn} from 'node:child_process';
 import {createRequire} from 'node:module';
 import {createServer} from 'node:net';
-import YAML from 'yaml';
+import {prepareRuntimeProfile} from './runtime-profile.mjs';
 import {readSourceModelConfiguration} from './source-models.mjs';
 import {readSourceCredentialReferences} from './source-credentials.mjs';
 import {runtimeAttachmentLimits} from './runtime/multimodal.mjs';
@@ -75,9 +75,8 @@ export class RuntimeSupervisor {
       const link=path.join(profile,'node_modules',name);
       try{await fs.symlink(target,link,'junction');}catch(e){if(e.code!=='EEXIST')throw e;const existing=await fs.lstat(link);if(!existing.isSymbolicLink())throw new Error('PROFILE_PACKAGE_CONFLICT');if(await fs.realpath(link)!==await fs.realpath(target)){await fs.unlink(link);await fs.symlink(target,link,'junction');}}
     }
-    await fs.writeFile(path.join(profile,'package.json'),JSON.stringify({name:'become-human-private-runtime',private:true,type:'module',dsh:{profile:{bundles:['@deepseek-ai/dsh-base','@deepseek-ai/dsh-web-app','dsh-become-human-runtime']}}},null,2));
     const patch=[{id:'attachment-local',config:runtimeAttachmentLimits},{id:'llm-pi-ai',config:{providers:safeProviders}},{id:'llm-deepseek',name:'@deepseek-ai/dsh-llm-deepseek-api-key',disabled:!safeNativeProviders['deepseek-official'],config:safeNativeProviders['deepseek-official']??{}},{id:'agent-default-model',config:{provider:providerId,model:modelId}},{id:'become-human',config:{provider:providerId,model:modelId,allowedRoutes:this.allowedRoutes,modelCapabilities:this.modelCapabilities,tokenBudget:c.tokenBudget,localQuotaEnabled:false,budgetRound:c.budgetRound,maxCycles:c.maxCycles,intervalMs:c.intervalMs,interactiveOnly:c.interactiveOnly}},...['hmr','session-title-llm','session-log-deepseek','session-log-download','plugin-package-inventory-deepseek','desktop-product-telemetry','product-analytics','session-telemetry-otel','ui-settings-account','account-controller'].map(id=>({id,disabled:true}))];
-    await fs.writeFile(path.join(profile,'cordis.patch.yml'),YAML.stringify(patch));await fs.writeFile(path.join(c.runtimeHome,'runtime-selection.json'),JSON.stringify({provider:providerId,model:modelId,apiKeyEnv:provider.apiKeyEnv,apiKeyEnvs:[...new Set([...Object.values(safeProviders),...Object.values(safeNativeProviders)].map(p=>p.apiKeyEnv))]}));
+    await prepareRuntimeProfile(profile,patch);await fs.writeFile(path.join(c.runtimeHome,'runtime-selection.json'),JSON.stringify({provider:providerId,model:modelId,apiKeyEnv:provider.apiKeyEnv,apiKeyEnvs:[...new Set([...Object.values(safeProviders),...Object.values(safeNativeProviders)].map(p=>p.apiKeyEnv))]}));
     this.selection={provider:providerId,model:modelId};
   }
   async start(){

@@ -35,12 +35,12 @@ export function characterBoard(factory,id,{limit=50}={}){
     attention:{...snapshot.attention,basis:[{text:snapshot.attention.method},{text:'执行门禁：'+(snapshot.attention.gates?.reasons?.join('、')||'当前没有已记录阻塞')}],nextReviewAt:snapshot.attention.candidates?.[0]?.nextEligibleAt??null}};
 }
 
-export function compactCognition(agent,{limit=3}={}){
+export function compactCognition(agent,{limit=3,experience}={}){
   const store=agent.factory.cognition;if(!store)return null;
-  const self=store.selfModel(agent.id,{runtime:{running:!!agent.active,activeLane:agent.activeLane??null}}),focus=store.attentionState(agent.id);
+  const self=store.selfModel(agent.id,{experience,runtime:{running:!!agent.active,activeLane:agent.activeLane??null}}),focus=store.attentionState(agent.id);
   const items=store.contextMatters(agent.id,{limit});
   const focusValid=!focus.matterId||(()=>{try{return store.getMatter(agent.id,focus.matterId).refs.every(ref=>ref.valid);}catch{return false;}})();
-  return {version:1,revision:store.revision(agent.id),status:{desired:self.status.desired,phase:self.status.phase,autonomyPaused:self.status.paused,activeLane:self.status.activeLane},
+  return {experience:self.experience??null,version:1,revision:store.revision(agent.id),status:{desired:self.status.desired,phase:self.status.phase,autonomyPaused:self.status.paused,activeLane:self.status.activeLane},
     attention:{matterId:focus.matterId,taskId:focus.taskId,reason:focusValid?clip(focus.reason):'关联依据已失效，需先核对'},
     matters:items.map(item=>({id:item.id,version:item.version,title:clip(item.title,100),kind:item.kind,status:item.status,priority:item.priority,why:clip(item.why,120),nextAction:clip(item.nextAction,140),stopCondition:clip(item.stopCondition,140),sourceKind:item.sourceKind,refs:item.refs.slice(0,4).map(ref=>({type:ref.type,id:ref.id,valid:ref.valid}))})),
     reflections:store.reflections(agent.id,{limit:2}).items.map(record=>({id:record.id,taskId:record.evidence.task.id,result:record.evidence.task.status,reason:record.evidence.reason,nextStep:record.evidenceValidityChanged?'关联依据已变化，需先核对，不沿用旧结论。':clip(record.recommendation.reason,180),requiresReevaluation:record.evidenceValidityChanged===true,reviewStatus:record.review?.status??'unreviewed'})),
@@ -98,10 +98,12 @@ export function bindMatterTask(agent,task){
   return agent.factory.autonomy.getTask(task.id);
 }
 
-export function reconcileCognition(agent,task){
+export function reconcileCognition(agent,task,{feedback=true}={}){
   const store=agent.factory.cognition;if(!store)return;
-  if(task&&['completed','failed','cancelled'].includes(agent.factory.autonomy.getTask(task.id)?.status))store.reflectTask(agent.id,task.id);
-  store.reconcile(agent.id,{limit:4});
+  if(feedback){
+    if(task&&['completed','failed','cancelled'].includes(agent.factory.autonomy.getTask(task.id)?.status))store.reflectTask(agent.id,task.id);
+    store.reconcile(agent.id,{limit:4});
+  }
   const focus=store.attentionState(agent.id);
   if(focus.taskId&&(focus.taskId===task?.id||agent.activeLane==='foreground'))store.clearFocus(agent.id,'segment-released');
 }

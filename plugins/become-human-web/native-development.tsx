@@ -30,7 +30,7 @@ function PersonaContents({api,s,busy,ui,data,onChanged,mode}:any){
   const rows=data.history??[],traits=data.currentTraits??[],pending=data.pending??[];
   return <section className="hn-form-section" aria-label="人格偏移">
     <div className="hn-row hn-between"><h3>人格偏移</h3><Button disabled={busy} onClick={onChanged}>{mode==='settings'?'重新读取设置':'刷新偏移结果'}</Button></div>
-    <p className="hn-help">基于持久记忆、真实交流和学习经历，逐渐形成兴趣、习惯与行为倾向。结果独立保存，可以查看原因、追溯证据并逐条撤回。</p>
+    <p className="hn-help">基于持久记忆、真实交流、行动结果和学习经历，逐渐形成兴趣、习惯与行为倾向。结果独立保存，可以查看原因、追溯证据并逐条撤回。</p>
     {mode!=='records'&&<><Check label="开启人格偏移" disabled={busy} value={enabled} onChange={setEnabled}/>
     <p className="hn-help">{enabled?'恢复运行后，按调度回顾有效经历；证据不足的变化继续观察。':'关闭后不再自动形成或使用偏移；已有结果与历史保留。'}姓名、基础角色与权限仍由你配置。</p>
     <SettingsNotice {...{s,ui}}/>
@@ -43,6 +43,7 @@ function PersonaContents({api,s,busy,ui,data,onChanged,mode}:any){
       {traits.length?traits.map((trait:any)=><article className="hn-line" key={trait.kind+':'+trait.key}><div className="hn-grow"><strong>{trait.label}</strong><p>{trait.description}</p><p className="hn-note">{kindLabels[trait.kind]??trait.kind} · 更新于 {clock(trait.lastChangedAt)}</p><Evidence refs={trait.refs} ui={ui}/></div></article>):<Empty>还没有生效的人格偏移。恢复运行后，会在有足够依据时逐步形成。</Empty>}
       <p className="hn-note">回顾周期约 {Math.round(data.settings.reviewIntervalMs/3600000)} 小时 · 最近回顾：{clock(data.settings.lastReviewedAt)} · 最近生效：{clock(data.settings.lastAppliedAt)}{pending.length?` · ${pending.length} 项继续观察`:''}</p>
     </section>
+    <details className="hn-advanced"><summary>阶段角色与方法回顾</summary><p className="hn-help">方法是暂定解释；阶段角色有到期时间，不修改基础身份或权限。你可以撤回某次回顾。</p>{data.experience?.phaseRole&&<p>当前阶段角色：{data.experience.phaseRole.label} · 至 {clock(data.experience.phaseRole.expiresAt)}</p>}{(data.experience?.strategyHints??[]).map((hint:any)=><article className="hn-group" key={hint.id}><strong>{hint.lesson}</strong><p>{hint.nextApproach}</p><Button disabled={locked} onClick={()=>api.run(async()=>{await api.control({op:'experience-reflection-withdraw',id:hint.id});onChanged();},'已撤回这次方法回顾及关联阶段角色')}>撤回这次回顾</Button></article>)}</details>
     <details className="hn-advanced"><summary>偏移历史与依据 · {rows.length} 条</summary>
       {rows.length?rows.map((change:any)=><details className="hn-group" key={change.id}><summary>{change.label} · {label(change.status)} · {clock(change.created)}</summary><p>{change.description}</p><p><strong>变化原因：</strong>{change.reason||'未提供'}</p>{change.statusReason&&<p className="hn-note">状态说明：{reasonLabels[change.statusReason]??change.statusReason}</p>}<p className="hn-note">{kindLabels[change.kind]??change.kind} · {change.revertedAt?'撤回于 '+clock(change.revertedAt):'尚未撤回'}</p><Evidence refs={change.refs} evidence={change.evidence} ui={ui}/><JsonDetails label="查看变化前后" value={{before:change.before,after:change.after,strength:change.strength,confidence:change.confidence}}/>{['active','observing'].includes(change.status)&&<div className="hn-row"><Button danger disabled={locked} onClick={()=>setConfirm({change,expectedVersion:data.version})}>{change.status==='observing'?'撤回这条观察':'撤回这条偏移'}</Button></div>}</details>):<Empty>有回顾结果后，变化记录会出现在这里。</Empty>}
     </details>

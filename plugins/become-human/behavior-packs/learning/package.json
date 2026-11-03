@@ -1,0 +1,10 @@
+{
+  "name": "dsh-human-learning",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "Apache-2.0",
+  "description": "可选的探索与学习行为包；停用保留笔记和待续任务（测试版）",
+  "main": "index.mjs",
+  "files": ["index.mjs", "opportunities.mjs", "workflow.mjs", "cordis.patch.yml", "README.md", "LICENSE"],
+  "dsh": {"bundle": {"patch": "./cordis.patch.yml"}, "human": {"providesWorkflows": ["deep-learning"]}}
+}

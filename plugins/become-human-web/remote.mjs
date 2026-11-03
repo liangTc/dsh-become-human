@@ -32,6 +32,7 @@ export class RemoteGateway {
   queueControl(work){const current=this.controls.catch(()=>{}).then(work);this.controls=current;return current;}
   async controlRuntime(input,{automatic=false}={}){
     return this.queueControl(async()=>{
+      if(this.maintenance)throw new Error('EXTENSION_OPERATION_BUSY');
       if(this.closed)throw new Error('REMOTE_CLOSED');
       if(automatic&&(this.wakeBlock().blocked||!this.preference('reply-enabled')))return null;
       const result=await this.runtime.control(input);
@@ -42,6 +43,7 @@ export class RemoteGateway {
   }
   async resumeRuntime(){
     return this.queueControl(async()=>{
+      if(this.maintenance)throw new Error('EXTENSION_OPERATION_BUSY');
       if(this.closed)throw new Error('REMOTE_CLOSED');
       const state=await this.runtime.state();if(state.retiring)throw new Error('SESSION_RETIRING');
       if(state.desired==='paused'&&state.driveMode==='continuous'&&state.cycleLimit===null)await this.runtime.control({op:'start',sessionId:state.sessionId,expectedEpoch:state.cancelEpoch});

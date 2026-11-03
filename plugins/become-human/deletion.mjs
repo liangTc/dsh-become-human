@@ -8,7 +8,7 @@ import {Context} from '@deepseek-ai/cordis';
 import Jsonl from '@deepseek-ai/dsh-session-persistence-jsonl';
 import {Session} from '@deepseek-ai/dsh-session';
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
-const developmentTables=[...workObservationTableNames,'human_memory_overlay','human_memory_batch','human_memory_summary','human_memory_lifecycle_audit','human_persona_development_state','human_persona_development_review','human_persona_development_change'];
+const developmentTables=['human_activity_feedback','human_strategy_use','human_attention_window','human_plugin_event',...workObservationTableNames,'human_memory_overlay','human_memory_batch','human_memory_summary','human_memory_lifecycle_audit','human_persona_development_state','human_persona_development_review','human_persona_development_change'];
 export class DeletionLab {
   constructor(root,journal){
     this.root=path.resolve(root);this.journal=journal;this.ctx=new Context();this.previews=new Map();

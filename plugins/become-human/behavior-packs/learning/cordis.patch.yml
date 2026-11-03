@@ -1,0 +1,4 @@
+- insert:
+    - id: human-extension.learning
+      name: dsh-human-learning
+      disabled: true

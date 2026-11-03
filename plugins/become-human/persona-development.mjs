@@ -54,6 +54,10 @@ export class PersonaDevelopment {
       if(source.root!==source.id||developmentInput(source.body))return null;
       return {id,root:source.id,kind:'owner-source',hash:source.hash,occurred:source.occurred,memoryVersions,noteVersions:[],excerpt:source.body.slice(0,600),ownerPreference:false};
     }
+    if(source.kind==='trusted-result'&&this.domain.experience){
+      const experience=this.domain.experience.sourceEvidence(agent,id);
+      if(experience)return {id,root:experience.data.root,kind:'digital-experience',hash:source.hash,occurred:source.occurred,memoryVersions,noteVersions:[],experienceBasis:experience.basis,excerpt:source.body.slice(0,600),ownerPreference:false};
+    }
     if(!['imported','trusted-result'].includes(source.kind)||!this.table('learning_note'))return null;
     const body=parse(source.body),notes=this.db.prepare("SELECT id,memory_id,data,created FROM learning_note WHERE agent=? AND source_id=? AND status='active' ORDER BY id").all(agent,id),valid=[];
     if(!body||typeof body.excerpt!=='string'||typeof body.url!=='string')return null;

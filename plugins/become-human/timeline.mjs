@@ -1,6 +1,7 @@
 const parse=s=>{try{return JSON.parse(s);}catch{return null;}};
 const text=(s,n=220)=>typeof s==='string'?s.replace(/([?&](?:token|api_key|access_token)=)[^\s&]+/giu,'$1[隐藏]').replace(/sk-[\w-]{16,}/gu,'[隐藏]').slice(0,n):'';
 const labels={
+ 'behavior-selected':'选择当前行为','behavior-result':'记录实际执行结果','experience-recorded':'记住一次数字经历','experience-reflected':'回顾经历并调整方法','experience-reflection-withdrawn':'撤回方法回顾',
  'development-review-started':'回顾已有经历与记忆','development-review-completed':'保存本次经历回顾','development-review-suspended':'保存回顾进度，优先与你交流','development-review-failed':'本次回顾未完成，等待明确重试','development-review-interrupted':'回顾遇到运行中断，保留记录','persona-development-applied':'形成一小步有依据的人格偏移','persona-development-observing':'暂时保留观察，尚未改变人格','persona-development-reverted':'撤回一条人格偏移','persona-development-invalidated':'依据变化，撤去对应人格偏移','memory-lifecycle-summary-committed':'整理可追溯摘要，保留原文',
  'action-proposed':'整理报告草稿，等待单独批准','action-approved':'收到这一版本的文件写入授权','action-executing':'开始写入已批准的报告','action-completed':'生成文件并核对哈希','action-blocked':'文件行动需要处理，没有继续写入','action-cancelled':'取消文件行动','action-expired':'文件写入授权到期','action-notified':'在唯一会话告知行动结果','goal-report-prepared':'将学习成果整理成待批准报告',
  'owner-command-recorded':'记录本地指令的处理结果',

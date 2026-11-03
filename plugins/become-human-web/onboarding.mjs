@@ -140,7 +140,7 @@ export class HumanOnboarding {
     await this.persist({...this.saved,steps:{...this.saved.steps,persona:true}});state=await this.runtime.state();
    }
    if(!this.saved.steps.autonomy){
-    const settings={...budget,timeZoneOffsetMinutes:currentOffset(selection.timeZone),enabled:selection.startAutonomy,learningEnabled:selection.startAutonomy,proactiveEnabled:selection.startAutonomy,socialEnabled:selection.startAutonomy,searchEnabled:selection.startAutonomy,wakeIntervalMs:this.config.intervalMs};
+    const settings={...budget,timeZoneOffsetMinutes:currentOffset(selection.timeZone),enabled:selection.startAutonomy,learningEnabled:false,proactiveEnabled:selection.startAutonomy,socialEnabled:selection.startAutonomy,searchEnabled:false,wakeIntervalMs:this.config.intervalMs};
     if(Object.keys(settings).some(key=>settings[key]!==state.autonomy.settings[key]))await this.runtime.control({op:'autonomy-configure',sessionId:state.sessionId,expectedRevision:state.management.revision,settings});
     await this.persist({...this.saved,steps:{...this.saved.steps,autonomy:true}});state=await this.runtime.state();
    }

@@ -1,0 +1,10 @@
+{
+  "name": "dsh-human-signal-example",
+  "version": "0.2.0",
+  "type": "module",
+  "license": "Apache-2.0",
+  "description": "Minimal trusted Human event and behavior extension",
+  "main": "index.mjs",
+  "files": ["index.mjs", "review.mjs", "cordis.patch.yml", "README.md", "LICENSE"],
+  "dsh": {"bundle": {"patch": "./cordis.patch.yml"}}
+}

@@ -1,4 +1,5 @@
 import {randomUUID,createHash} from 'node:crypto';
+import {isDeepStrictEqual} from 'node:util';
 import {researchUrl} from './learning.mjs';
 import {goalAcceptance,goalSupport,evaluateGoal} from './goal-support.mjs';
 
@@ -18,7 +19,7 @@ function directionQuestion(value){
 const directionKey=value=>createHash('sha256').update(directionQuestion(value).toLowerCase().replace(/[\s“”"'‘’、，,；;：:（）()【】\[\]？?!！。]/gu,'')).digest('hex');
 const sameIds=(a,b)=>Array.isArray(a)&&Array.isArray(b)&&a.length===b.length&&new Set(a).size===a.length&&new Set(b).size===b.length&&[...a].sort().every((id,n)=>id===[...b].sort()[n]);
 
-// Durable finite research and local-report objectives. The existing driver
+// Durable finite objectives with registered behavior, research and report steps. The existing driver
 // claims every task/action in its one lane; this store starts no model loop.
 // A proposal grants no authority: only a management/user activation can make it
 // eligible, and every dispatch still consults the current signed settings.
@@ -27,6 +28,23 @@ export class GoalEngine {
     this.journal=journal;this.db=journal.db;this.domain=domain;this.autonomy=autonomy;this.clock=clock;this.actions=actions;
     this.db.exec(`CREATE TABLE IF NOT EXISTS human_goal_plan(agent TEXT,goal TEXT PRIMARY KEY,steps TEXT,origin_note TEXT,created INTEGER,updated INTEGER,reason TEXT,retry_at INTEGER,evaluation TEXT);
       CREATE INDEX IF NOT EXISTS human_goal_agent ON human_goal_plan(agent,created);`);
+  }
+  setBehaviors(behaviors,context){this.behaviors=behaviors;this.behaviorContext=context;return this;}
+  behaviorResult(agent,step){
+    const task=step.taskId&&this.autonomy.getTask(step.taskId),result=task?.checkpoint?.behaviorResult;
+    if(!task||task.agent!==agent||task.status!=='completed'||task.kind!=='behavior'||task.checkpoint.behaviorId!==step.behaviorId||task.checkpoint.behaviorFingerprint!==step.behaviorFingerprint||!isDeepStrictEqual(task.checkpoint.plan?.input,step.input)||result?.status!=='completed')return null;
+    if(result.jobId){try{const job=this.behaviorContext(agent).factory.tools.get(agent,result.jobId);if(job.status!=='completed'||job.taskId!==task.id||result.resultDigest!==createHash('sha256').update(JSON.stringify(job.result)).digest('hex'))return null;}catch{return null;}}
+    return {taskId:task.id,behaviorId:step.behaviorId,summary:result.summary,jobId:result.jobId??null,digest:createHash('sha256').update(JSON.stringify(result)).digest('hex')};
+  }
+  checkedBehavior(agent,m){
+    let behavior=null;
+      if(m.kind==='behavior'){
+        if(!this.behaviors||!this.behaviorContext)fail('BEHAVIOR_UNAVAILABLE');
+        const context=this.behaviorContext(agent),definition=this.behaviors.definition(context,m.behaviorId);if(!definition)fail('BEHAVIOR_UNAVAILABLE');
+        const input=this.behaviors.validate(context,m.behaviorId,m.input,definition.fingerprint);if(secret(JSON.stringify(input))||Buffer.byteLength(JSON.stringify(input))>16384)fail('INVALID_GOAL');
+        behavior={behaviorId:m.behaviorId,behaviorFingerprint:definition.fingerprint,input};
+      }else if(m.behaviorId!==undefined||m.input!==undefined)fail('INVALID_GOAL_MILESTONE');
+    return behavior;
   }
   setActions(actions){this.actions=actions;return this;}
   now(agent){return Math.max(this.clock(),this.journal.value(agent,'goalTimeHighWater',0));}
@@ -43,12 +61,14 @@ export class GoalEngine {
   }
   propose(agent,{description,refs,expires,milestones,originNote=null,priority=3,expectedValue='',acceptance,origin='owner-plan'}){
     this.journal.assertAdmitted(agent);const now=this.checkpointTime(agent);description=clean(description,512);
-    const support=goalSupport({priority,expectedValue,acceptance,origin});
+    const generic=Array.isArray(milestones)&&milestones.some(step=>step?.kind==='behavior');
+    const support=goalSupport({priority,expectedValue,acceptance:acceptance??(generic?{minNotes:0,minIndependentSources:0,ownerReview:true}:undefined),origin});
     if(secret(description)||!Number.isSafeInteger(expires)||expires<=now||expires>now+90*86400000||!this.refsUsable(agent,refs)||!Array.isArray(milestones)||milestones.length<1||milestones.length>6)fail('INVALID_GOAL');
-    const steps=milestones.map((m,index)=>{if(!m||!['research','learn-ai','write-report'].includes(m.kind)||Object.keys(m).some(k=>!['kind','question','sourceUrl','noteIds'].includes(k)))fail('INVALID_GOAL_MILESTONE');const question=clean(m.question,240);if(secret(question)||m.kind!=='learn-ai'&&m.sourceUrl!==undefined||m.kind!=='write-report'&&m.noteIds!==undefined)fail('INVALID_GOAL_MILESTONE');
+    const steps=milestones.map((m,index)=>{if(!m||!['research','learn-ai','write-report','behavior'].includes(m.kind)||Object.keys(m).some(k=>!['kind','question','sourceUrl','noteIds','behaviorId','input'].includes(k)))fail('INVALID_GOAL_MILESTONE');const question=clean(m.question,240);if(secret(question)||m.kind!=='learn-ai'&&m.sourceUrl!==undefined||m.kind!=='write-report'&&m.noteIds!==undefined)fail('INVALID_GOAL_MILESTONE');
       if(m.kind==='write-report'){if(m.noteIds!==undefined&&(!Array.isArray(m.noteIds)||!m.noteIds.length||m.noteIds.length>8||new Set(m.noteIds).size!==m.noteIds.length||!m.noteIds.every(id=>typeof id==='string'&&!!this.validNote(agent,id))))fail('INVALID_GOAL_REPORT_NOTES');if(m.noteIds===undefined&&!milestones.slice(0,index).some(s=>['research','learn-ai'].includes(s?.kind)))fail('GOAL_REPORT_REQUIRES_NOTES');}
-      return {id:randomUUID(),kind:m.kind,question,...(m.kind==='learn-ai'?{sourceUrl:researchUrl(m.sourceUrl)}:{}),...(m.kind==='write-report'?{actionId:null,...(m.noteIds?{noteIds:[...m.noteIds]}:{})}:{}),status:'pending',taskId:null,noteId:null,attempts:[]};});
-    if(new Set(steps.map(s=>s.kind+':'+s.question+':'+(s.sourceUrl??'')+':'+JSON.stringify(s.noteIds??null))).size!==steps.length)fail('DUPLICATE_GOAL_MILESTONE');
+      const behavior=this.checkedBehavior(agent,m);
+      return {id:randomUUID(),kind:m.kind,question,...behavior,...(m.kind==='learn-ai'?{sourceUrl:researchUrl(m.sourceUrl)}:{}),...(m.kind==='write-report'?{actionId:null,...(m.noteIds?{noteIds:[...m.noteIds]}:{})}:{}),status:'pending',taskId:null,noteId:null,attempts:[]};});
+    if(new Set(steps.map(s=>s.kind+':'+s.question+':'+(s.sourceUrl??'')+':'+JSON.stringify([s.noteIds??null,s.behaviorId??null,s.input??null]))).size!==steps.length)fail('DUPLICATE_GOAL_MILESTONE');
     if(originNote!==null){const note=this.validNote(agent,originNote);if(!note)fail('INVALID_GOAL_ORIGIN');const old=this.db.prepare('SELECT goal FROM human_goal_plan WHERE agent=? AND origin_note=?').get(agent,originNote);if(old)return this.get(agent,old.goal);}
     if(this.db.prepare("SELECT count(*) AS n FROM goal_record g JOIN human_goal_plan p ON p.goal=g.id WHERE g.agent=? AND g.status IN ('proposed','active','blocked','paused','needs-evidence','awaiting-review') AND g.expires>?").get(agent,now).n>=8)fail('GOAL_LIMIT');
     return this.journal.transaction(()=>{const id=this.domain.goal(agent,{description,refs,expires});this.db.prepare('INSERT INTO human_goal_plan VALUES(?,?,?,?,?,?,NULL,NULL,NULL)').run(agent,id,JSON.stringify(steps),originNote,now,now);this.journal.put(agent,'goalSupport:'+id,support);this.journal.audit(agent,'goal-proposed',{goalId:id,steps:steps.length,originNote,priority,expectedValue:support.expectedValue,acceptance:support.acceptance,origin});return this.get(agent,id);});
@@ -100,7 +120,7 @@ export class GoalEngine {
     });return this.get(agent,id);
   }
   eligible(agent,step,settings){
-    if(!settings.enabled)return false;if(step.kind==='write-report')return !!this.actions;
+    if(!settings.enabled)return false;if(step.kind==='behavior'){const definition=this.behaviors?.definition(this.behaviorContext(agent),step.behaviorId);return !!definition&&definition.fingerprint===step.behaviorFingerprint;}if(step.kind==='write-report')return !!this.actions;
     if(!settings.learningEnabled)return false;
     if(step.kind==='research')return settings.searchEnabled===true;
     return settings.sources?.some(s=>s.url===step.sourceUrl)===true;
@@ -147,7 +167,7 @@ export class GoalEngine {
       if(!this.sourceValid(row)){if(row.status!=='blocked'||row.reason!=='goal-source-invalid')this.block(row,'goal-source-invalid');return;}
       if(row.expires<=this.now(agent)){row.status='expired';row.reason='goal-expired';row.evaluation=null;this.save(row,'goal-expired');return;}
       // Completed evidence stays subject to forgetting/correction after success.
-      for(const step of row.steps)if(step.status==='completed'&&!(step.kind==='write-report'?this.reportCompleted(row,step):this.validNote(agent,step.noteId,step.taskId))){this.block(row,'goal-evidence-invalid',step);return;}
+      for(const step of row.steps)if(step.status==='completed'&&!(step.kind==='write-report'?this.reportCompleted(row,step):step.kind==='behavior'?!!this.behaviorResult(agent,step):this.validNote(agent,step.noteId,step.taskId))){this.block(row,'goal-evidence-invalid',step);return;}
       if(row.steps.every(s=>s.status==='completed')&&['active','completed','needs-evidence','awaiting-review'].includes(row.status)){const before={status:row.status,basis:row.evaluation?.basis,achieved:row.evaluation?.achieved};this.evaluate(row);if(before.status!==row.status||before.basis!==row.evaluation.basis||before.achieved!==row.evaluation.achieved)this.save(row,'goal-evidence-evaluated',{unmet:row.evaluation.unmet});return;}
       if(row.status!=='active')return;
       const step=row.steps.find(s=>s.status!=='completed');if(!step)return;
@@ -164,6 +184,7 @@ export class GoalEngine {
       if(!task||task.agent!==agent||task.kind!==step.kind){this.block(row,'goal-task-missing',step);return;}
       if(['failed','cancelled'].includes(task.status)){this.block(row,task.checkpoint?.reason??'goal-task-'+task.status,step);return;}
       if(task.status!=='completed')return;
+      if(step.kind==='behavior'){const receipt=this.behaviorResult(agent,step);if(!receipt){this.block(row,'goal-behavior-no-result',step);return;}step.behaviorReceipt=receipt;this.completeStep(row,step);return;}
       const noteId=task.checkpoint?.noteId??this.db.prepare("SELECT id FROM learning_note WHERE agent=? AND status='active' AND json_extract(data,'$.taskId')=? ORDER BY created DESC LIMIT 1").get(agent,task.id)?.id;
       const note=noteId&&this.validNote(agent,noteId,task.id);if(!note||step.kind==='learn-ai'&&(note.data.source.requestedUrl??note.data.source.url)!==step.sourceUrl){this.block(row,'goal-task-no-evidence',step);return;}
       this.completeStep(row,step,{noteId:note.id});
@@ -173,14 +194,19 @@ export class GoalEngine {
     this.reconcile(agent);const turn=this.journal.value(agent,'goalSelectionTurn',0),rows=this.list(agent,{status:'active',limit:8}).sort((a,b)=>{const x=a.scheduling,y=b.scheduling,ax=turn-x.lastTurn>=16,ay=turn-y.lastTurn>=16;return Number(ay)-Number(ax)||(ax&&ay?x.lastTurn-y.lastTurn:0)||x.virtualRuntime-y.virtualRuntime||b.priority-a.priority||a.created-b.created;});
     for(const row of rows){if(row.expires<=now||!row.sourceValid)continue;const step=row.steps.find(s=>s.status!=='completed');if(!step||step.status!=='pending'||step.taskId||!this.eligible(agent,step,settings))continue;
       if(step.kind==='write-report'){const raw=this.raw(agent,row.id),noteIds=this.reportNotes(raw,step);if(!noteIds.length||noteIds.length>8||!noteIds.every(id=>!!this.validNote(agent,id))){this.journal.transaction(()=>this.block(raw,'goal-report-sources-missing',raw.steps.find(s=>s.id===step.id)));continue;}return {kind:'write-report',question:step.question,title:step.question,noteIds,requestId:'goal-report:'+row.id+':'+step.id+':'+step.attempts.length,goal:{id:row.id,stepId:step.id,version:row.version}};}
+      if(step.kind==='behavior'){
+        let eventIds;try{eventIds=this.behaviors.eventReferences(this.behaviorContext(agent),step.behaviorId,step.input);}catch(error){const raw=this.raw(agent,row.id);this.journal.transaction(()=>this.block(raw,error.message,raw.steps.find(s=>s.id===step.id)));continue;}
+        return {kind:'behavior',question:step.question,behaviorId:step.behaviorId,behaviorFingerprint:step.behaviorFingerprint,behaviorInput:step.input,behaviorDefinition:this.behaviors.definition(this.behaviorContext(agent),step.behaviorId),...(eventIds.length?{eventIds}:{}),goal:{id:row.id,stepId:step.id,version:row.version}};
+      }
       const sourceSpec=step.kind==='learn-ai'?settings.sources.find(s=>s.url===step.sourceUrl):null;
       return {kind:step.kind,question:step.question,goal:{id:row.id,stepId:step.id,version:row.version},...(sourceSpec?{sourceSpec:{url:sourceSpec.url,title:sourceSpec.title,topic:step.question}}:{})};
     }return null;
   }
   attachTask(agent,ref,taskId){
     this.journal.assertAdmitted(agent);this.reconcile(agent,ref?.id);const row=this.raw(agent,ref?.id),task=this.autonomy.getTask(taskId);this.version(row,ref?.version);
-    const step=row.steps.find(s=>s.id===ref?.stepId);if(row.status!=='active'||!step||step.kind==='write-report'||step!==row.steps.find(s=>s.status!=='completed')||step.status!=='pending'||step.taskId||!task||task.agent!==agent||task.kind!==step.kind||task.checkpoint?.candidate?.question!==step.question||step.kind==='learn-ai'&&(task.checkpoint.source?.requestedUrl??task.checkpoint.source?.url)!==step.sourceUrl||!['ready','suspended','waiting-budget'].includes(task.status)||!this.eligible(agent,step,this.autonomy.settings(agent)))fail('GOAL_TASK_NOT_ELIGIBLE');
+    const step=row.steps.find(s=>s.id===ref?.stepId);if(row.status!=='active'||!step||step.kind==='write-report'||step!==row.steps.find(s=>s.status!=='completed')||step.status!=='pending'||step.taskId||!task||task.agent!==agent||task.kind!==step.kind||task.checkpoint?.candidate?.question!==step.question||step.kind==='learn-ai'&&(task.checkpoint.sourceSpec?.url??task.checkpoint.source?.requestedUrl??task.checkpoint.source?.url)!==step.sourceUrl||!['ready','suspended','waiting-budget'].includes(task.status)||!this.eligible(agent,step,this.autonomy.settings(agent)))fail('GOAL_TASK_NOT_ELIGIBLE');
     if(this.linked(agent,task.id))fail('GOAL_TASK_ALREADY_LINKED');
+    if(step.kind==='behavior'&&(task.checkpoint.behaviorId!==step.behaviorId||task.checkpoint.behaviorFingerprint!==step.behaviorFingerprint||!isDeepStrictEqual(task.checkpoint.plan?.input,step.input)))fail('GOAL_BEHAVIOR_INPUT_CHANGED');
     step.status='running';step.taskId=task.id;step.attempts.push({taskId:task.id,status:'running',started:this.now(agent)});this.journal.transaction(()=>{this.recordDispatch(row);this.save(row,'goal-task-attached',{stepId:step.id,taskId:task.id});});return this.get(agent,row.id);
   }
   attachAction(agent,ref,actionId){
@@ -230,10 +256,10 @@ export class GoalEngine {
     const prior={priority:row.support.priority,expectedValue:row.support.expectedValue,acceptance:row.support.acceptance};
     const next=goalSupport({...row.support,...(priority===undefined?{}:{priority}),...(expectedValue===undefined?{}:{expectedValue}),...(acceptance===undefined?{}:{acceptance:goalAcceptance(acceptance)})},row.support.version===1);
     const additions=[];
-    for(const m of appendMilestones){if(!m||!['research','learn-ai','write-report'].includes(m.kind)||Object.keys(m).some(k=>!['kind','question','sourceUrl','noteIds'].includes(k)))fail('INVALID_GOAL_MILESTONE');const question=clean(m.question,240);if(secret(question)||m.kind!=='learn-ai'&&m.sourceUrl!==undefined||m.kind!=='write-report'&&m.noteIds!==undefined)fail('INVALID_GOAL_MILESTONE');
+    for(const m of appendMilestones){if(!m||!['research','learn-ai','write-report','behavior'].includes(m.kind)||Object.keys(m).some(k=>!['kind','question','sourceUrl','noteIds','behaviorId','input'].includes(k)))fail('INVALID_GOAL_MILESTONE');const question=clean(m.question,240);if(secret(question)||m.kind!=='learn-ai'&&m.sourceUrl!==undefined||m.kind!=='write-report'&&m.noteIds!==undefined)fail('INVALID_GOAL_MILESTONE');
       if(m.kind==='write-report'){if(m.noteIds!==undefined&&(!Array.isArray(m.noteIds)||!m.noteIds.length||m.noteIds.length>8||new Set(m.noteIds).size!==m.noteIds.length||!m.noteIds.every(n=>typeof n==='string'&&!!this.validNote(agent,n))))fail('INVALID_GOAL_REPORT_NOTES');if(m.noteIds===undefined&&![...row.steps,...additions].some(s=>['research','learn-ai'].includes(s.kind)))fail('GOAL_REPORT_REQUIRES_NOTES');}
-      const step={id:randomUUID(),kind:m.kind,question,...(m.kind==='learn-ai'?{sourceUrl:researchUrl(m.sourceUrl)}:{}),...(m.kind==='write-report'?{actionId:null,...(m.noteIds?{noteIds:[...m.noteIds]}:{})}:{}),status:'pending',taskId:null,noteId:null,attempts:[]};
-      if([...row.steps,...additions].some(s=>s.kind===step.kind&&s.question===step.question&&(s.sourceUrl??'')===(step.sourceUrl??'')&&sameIds(s.noteIds??[],step.noteIds??[])))fail('DUPLICATE_GOAL_MILESTONE');additions.push(step);
+      const step={id:randomUUID(),kind:m.kind,question,...this.checkedBehavior(agent,m),...(m.kind==='learn-ai'?{sourceUrl:researchUrl(m.sourceUrl)}:{}),...(m.kind==='write-report'?{actionId:null,...(m.noteIds?{noteIds:[...m.noteIds]}:{})}:{}),status:'pending',taskId:null,noteId:null,attempts:[]};
+      if([...row.steps,...additions].some(s=>s.kind===step.kind&&s.question===step.question&&(s.sourceUrl??'')===(step.sourceUrl??'')&&sameIds(s.noteIds??[],step.noteIds??[])&&(s.behaviorId??null)===(step.behaviorId??null)&&isDeepStrictEqual(s.input,step.input)))fail('DUPLICATE_GOAL_MILESTONE');additions.push(step);
     }
     if(priority===undefined&&expectedValue===undefined&&acceptance===undefined&&!additions.length)fail('INVALID_GOAL');
     next.revisionCount++;next.revisions=[...next.revisions,{at:this.now(agent),version:row.version,prior,appendedStepIds:additions.map(s=>s.id)}].slice(-3);if(acceptance!==undefined||additions.length)next.review=null;

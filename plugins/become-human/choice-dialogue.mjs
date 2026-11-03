@@ -13,8 +13,9 @@ const localInputFailure=code=>({rid:randomUUID(),localMessageId:randomUUID(),pro
 // Output format only. Interpretation and expression live in configurable Skills.
 export const choiceDialoguePolicy='\n最终回复可用JSON对象：reply为实际自然回复；dialogue和choice均可省略或为null，不为填写字段制造互动或分数。dialogue可含focus(最多240字符)、intent(最多80字符)、sourceIds(1至16个本轮可见来源)、address:{value(最多40字符),sourceIds(仅用户来源)}或null、attributions:[{messageId,speaker:user或assistant,span(回复内最多240字符)}](最多8项)、corrections:[{messageId(助手来源),sourceIds(用户来源),summary(最多240字符)}](最多4项)。choice仅确有选择或关系影响时填写，沿用stance/requestKey/reasonSummary/delta/evidenceSourceIds合同，重新考虑时引用真实assistantMessageId。learningLookup.requested为true而尚无当前笔记时，应先实际读取；确实需要澄清而不能选择材料时，可给 learningLookupDecision:"clarify"，reply只提出简短澄清，不声称已有笔记结论。内部字段不展示给用户。需要工具或看板时仍返回原capability/board协议；已有foregroundSources时只用资料片段协议。';
 
-/** Meaning stays in the model. Two draft attempts at most, with serial narrow
- * review calls in the runtime. Tool and extractive-source protocols bypass it. */
+/** Meaning stays in the model. One protocol repair and one conversation repair
+ * are independent; an earlier formatting repair must not consume the only
+ * opportunity to fix a later semantic rejection. All requests remain serial. */
 export function choiceDialogueRequest(request){
   return async function choiceRequest(agent,signal,options){
     const f=agent.factory,j=f.journal,id=agent.id;
@@ -27,7 +28,8 @@ export function choiceDialogueRequest(request){
       const contract={reply:'自然回复',dialogue:'可选，按本轮真实含义更新',choice:null};
       let system=textOf(options.messages[0]);const suffix=personaPolicy+contextPolicy;if(system.endsWith(suffix))system=system.slice(0,-suffix.length);
       let messages=contextMessages(agent,'foreground',system+choiceDialoguePolicy,{...data,...(relationship?{relationship}:{}),choiceOutputContract:contract});
-      for(let pass=0;pass<2;pass++){
+      const repaired={protocol:false,conversation:false};
+      for(let pass=0;pass<3;pass++){
         const response=await request(agent,signal,{...options,messages}),parsed=parse(response.text);
         if(protocol(parsed))return response;
         let reply=parsed===undefined?response.text:plain(parsed)&&typeof parsed.reply==='string'?parsed.reply.trim():null;
@@ -51,7 +53,9 @@ export function choiceDialogueRequest(request){
         }
         if(contractError){
           j.endAttempt(response.rid,{state:'validation-rejected',usage:response.usage,usageConfidence:response.usage?'reported':'unknown',error:contractError.message,textChars:response.text.length,reasoningChars:response.reasoningChars,failureFacts:{validationDiagnostic:contractError.validationDiagnostic}});
-          if(pass)throw contractError;
+          const repairKind=conversationIssues?'conversation':'protocol';
+          if(repaired[repairKind]||pass===2)throw contractError;
+          repaired[repairKind]=true;
           j.audit(id,'dialogue-contract-repair',{attemptId:response.rid,validationDiagnostic:contractError.validationDiagnostic,maximumAdditionalCalls:1});
           messages=contextMessages(agent,'foreground',system+choiceDialoguePolicy,{...data,...(relationship?{relationship}:{}),choiceOutputContract:contract,dialogueRepair:{validationDiagnostic:contractError.validationDiagnostic,...(conversationIssues?{conversationIssues}:{}),previousReply:response.text.slice(0,6000),unpublishedDraft:true}});
           continue;

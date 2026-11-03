@@ -13,7 +13,7 @@ const schemaFields=(schema:any)=>Object.entries(schema?.properties??{}) as [stri
 const supported=(schema:any):boolean=>schema?.type==='object'&&schemaFields(schema).every(([,field])=>['string','integer','number','boolean','object'].includes(field.type)||field.type==='array'&&field.items?.type==='string'||Array.isArray(field.enum));
 const initialInput=(schema:any)=>Object.fromEntries(schemaFields(schema).filter(([,field])=>field.default!==undefined&&field.default!==null||field.type==='boolean').map(([key,field])=>[key,field.default??false]));
 
-function normalizeInput(schema:any,value:any){
+export function normalizeInput(schema:any,value:any){
   const input:any={};
   for(const [key,field] of schemaFields(schema)){
     const raw=value[key],required=(schema.required??[]).includes(key),label=field.title??fieldLabels[key]??key;
@@ -44,7 +44,7 @@ function normalizeInput(schema:any,value:any){
   return input;
 }
 
-function ToolFields({schema,value,onChange,disabled,ui}:any){
+export function ToolFields({schema,value,onChange,disabled,ui}:any){
   const {Field,Input,Text,Select,Check}=ui;
   return <div className="hn-fields">{schemaFields(schema).map(([key,field])=>{
     const label=(field.title??fieldLabels[key]??key)+((schema.required??[]).includes(key)?' *':''),hint=field.description??fieldHints[key];

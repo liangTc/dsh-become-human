@@ -49,7 +49,7 @@ export class SkillStore {
     }else if(kind!=='manual')throw new Error('INVALID_SKILL_SOURCE');
     const {meta,body}=parse(text),name=input.name||meta.name;
     if(!nameOk(name)||typeof (input.description??meta.description??'')!=='string'||!body)throw new Error('INVALID_SKILL_METADATA');
-    const scopes=input.scopes??['foreground'];if(!Array.isArray(scopes)||!scopes.length||scopes.some(s=>!phases.has(s)))throw new Error('INVALID_SKILL_SCOPE');
+    const scopes=input.scopes??['foreground'];if(!Array.isArray(scopes)||!scopes.length||scopes.some(s=>!phases.has(s)&&!(typeof s==='string'&&/^behavior:[a-z][a-z0-9._:-]{0,159}$/.test(s))))throw new Error('INVALID_SKILL_SCOPE');
     if(!['compact','on-demand'].includes(input.loadMode??'on-demand'))throw new Error('INVALID_SKILL_MODE');
     const triggers=input.triggers??[];if(!Array.isArray(triggers)||triggers.length>20||triggers.some(t=>typeof t!=='string'||t.length<1||t.length>80))throw new Error('INVALID_SKILL_TRIGGER');
     return {name,description:(input.description??meta.description??name).slice(0,500),content:body,sha256:hash(body),origin,ref,sourceType:kind,packageVersion:String(input.packageVersion??meta.metadata?.version??'1.0.0').slice(0,80),license:String(meta.license??'未声明').slice(0,120),scopes:[...new Set(scopes)],loadMode:input.loadMode??'on-demand',triggers,builtin:false};

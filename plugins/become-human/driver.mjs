@@ -6,12 +6,18 @@ import {RelationshipChoice} from './relationship-choice.mjs';
 import {RollingDialogueSummary} from './dialogue-summary.mjs';
 import {commitLearningOffer,commitLearningFollowUp} from './learning-engagement.mjs';
 import {AutonomyStore} from './autonomy-store.mjs';
+import {BehaviorRegistry,syncCapabilityBehaviors} from './behaviors.mjs';
+import {PluginEvents,wakeForPluginEvent} from './plugin-events.mjs';
+import {PublicSources} from './public-sources.mjs';
+import {ExperienceStore,registerExperienceBehavior} from './experience.mjs';
 import {PersonaDevelopment} from './persona-development.mjs';
 import {MemoryLifecycle} from './memory-lifecycle.mjs';
 import {runDevelopmentReview} from './development-runtime.mjs';
 import {WorkObservation} from './work-observation.mjs';
 import {runWorkObservation} from './work-observation-runtime.mjs';
 import {runAutonomyTurn} from './autonomy.mjs';
+import {drainActivityFeedback} from './activity-feedback.mjs';
+import {LearningPack} from './learning-pack.mjs';
 import {ReminderStore,runReminderTurn} from './reminders.mjs';
 import {EventLog} from './event-log.mjs';
 import {HumanManagement} from './management.mjs';
@@ -43,6 +49,7 @@ export class ControlJournal {
       CREATE TABLE IF NOT EXISTS reservation(id TEXT PRIMARY KEY, agent TEXT NOT NULL, amount INTEGER NOT NULL, status TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS audit(seq INTEGER PRIMARY KEY, agent TEXT, kind TEXT, data TEXT);
       CREATE TABLE IF NOT EXISTS metadata(agent TEXT,key TEXT,value TEXT,PRIMARY KEY(agent,key));
+      CREATE TABLE IF NOT EXISTS human_attention_window(agent TEXT,scope TEXT,entry TEXT,seen INTEGER NOT NULL,PRIMARY KEY(agent,scope,entry));
       CREATE TABLE IF NOT EXISTS outbox(seq INTEGER PRIMARY KEY,agent TEXT,kind TEXT,text TEXT,created INTEGER);
       CREATE TABLE IF NOT EXISTS user_request(agent TEXT,request_id TEXT,text TEXT,message_id TEXT,status TEXT,PRIMARY KEY(agent,request_id));
       CREATE TABLE IF NOT EXISTS response_stage(id TEXT PRIMARY KEY,agent TEXT,turn INTEGER,epoch INTEGER,kind TEXT,payload TEXT,state TEXT,created INTEGER);
@@ -509,6 +516,7 @@ export class HumanFactory extends Service {
   static inject=['agents','sessions','sessionPersistence','sessionProjections','llm'];
   constructor(ctx,config){
     super(ctx,'becomeHuman');this.runtime={ctx};this.config=config;this.journal=new ControlJournal(config.journal);this.handles=new Set();this.closing=false;this.domain=new DomainMemory(this.journal);this.personaDevelopment=new PersonaDevelopment(this.journal,this.domain);this.memoryLifecycle=new MemoryLifecycle(this.journal,this.domain);this.domain.development=this.personaDevelopment;this.domain.lifecycle=this.memoryLifecycle;this.autonomy=new AutonomyStore(this.journal,this.domain);this.goals=new GoalEngine(this.journal,this.domain,this.autonomy);this.actions=new ActionStore(this.journal,this.domain,{root:path.resolve(path.dirname(config.journal),'artifacts'),validNote:(agent,note)=>this.goals.validNote(agent,note),validGoal:(agent,ref,action)=>this.goals.actionAllowed(agent,action)});this.goals.setActions(this.actions);this.tools=new ToolExecutor(this.journal);this.workObservation=new WorkObservation(this.journal,{bridgeSettings:id=>this.tools.configuration(id).bridge});this.domain.workObservation=this.workObservation;this.reminders=new ReminderStore(this.journal);this.management=new HumanManagement(this);this.cognition=new CognitionStore(this.journal,this.domain,{factory:this});this.tickets=new WeakMap();this.inflight=0;
+    this.learningPack=new LearningPack();this.behaviors=new BehaviorRegistry();this.pluginEvents=new PluginEvents(this.journal,{agentId:()=>this.controllerSessionId,wake:id=>wakeForPluginEvent(this,id)});this.autonomy.pluginEvents=this.pluginEvents;this.publicSources=new PublicSources(this.journal,this.pluginEvents,{agentId:()=>this.controllerSessionId});this.publicSources.start();this.experience=new ExperienceStore(this.journal,this.domain,{tools:this.tools});this.domain.experience=this.experience;registerExperienceBehavior(this);this.goals.setBehaviors(this.behaviors,id=>{syncCapabilityBehaviors(this,id);return {id,factory:this};});
     this.relationship=new RelationshipChoice(this.journal,this.domain);this.journal.relationship=this.relationship;
     this.conversationSummary=new RollingDialogueSummary(this.journal,this.domain);
     this.dialogueState=new DialogueState(this.journal,this.domain);this.journal.dialogueState=this.dialogueState;
@@ -522,7 +530,7 @@ export class HumanFactory extends Service {
     if(config.sharedBudgetGuard)ctx.on('llm/stream',(options,next)=>this.guardedStream(options,next));
     ctx.sessionProjections.register(inboxProjection);ctx.sessionProjections.register(boundaryProjection);
     ctx.agents.setFactory(this);
-    ctx.effect(()=>async()=>{this.closing=true;await Promise.all([...this.handles].map(h=>h.dispose()));await this.customMcpCapabilities.close();await this.mcpCapabilities.close();this.bridgeCapabilities();this.management.close();this.journal.close();},'becomeHuman.ownership');
+    ctx.effect(()=>async()=>{this.closing=true;await this.publicSources.close();await Promise.all([...this.handles].map(h=>h.dispose()));await this.customMcpCapabilities.close();await this.mcpCapabilities.close();this.bridgeCapabilities();this.management.close();this.journal.close();},'becomeHuman.ownership');
   }
   createAgent(owner,options){return this.build(owner,options,false);}
   resume(owner,options){return this.build(owner,options,true);}
@@ -572,7 +580,7 @@ export class HumanFactory extends Service {
       }
       await writer.flush();initAbort.signal.throwIfAborted();owner.fiber.assertActive();
       agent=new HumanAgent(this,session,writer,options.agentOptions??{},options.parentAgent);
-      this.journal.recoverAttempts(id);this.journal.reconcile(session);this.reminders.recover(session);
+      this.journal.recoverAttempts(id);this.journal.reconcile(session);this.reminders.recover(session);drainActivityFeedback(this,id);
       // Nest the exact scope disposer into the owner's ordered lifecycle.
       // Otherwise provider unload can unwind the scope before its driver finishes.
       ownershipMoved=true;unfollow();
