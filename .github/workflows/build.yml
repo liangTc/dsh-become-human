@@ -17,6 +17,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+      - name: Install package manager for real DSH registry tests
+        run: npm install --global pnpm@11.23.0
       - name: Install declared dependencies
         run: npm ci --prefix plugins/become-human-web
       - name: Build IM and Human bundle
