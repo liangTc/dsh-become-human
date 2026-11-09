@@ -4,7 +4,7 @@
 
 # Become Human
 
-> **本次测试发行：0.7.0-beta.39。** [下载组合安装包](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.39)，安装和验证边界以[本版发行说明](https://github.com/liangTc/dsh-become-human/blob/main/docs/RELEASE_BETA39.md)为准。下文 beta.5 为历史发行说明；npm 发布状态单独确认。
+> **本次测试发行：0.7.0-beta.39。** [下载组合安装包](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.39)，安装和验证边界以[本版发行说明](https://github.com/liangTc/dsh-become-human/blob/main/docs/RELEASE_BETA39.md)为准。下文 beta.5 为历史发行说明；npm [beta.39](https://www.npmjs.com/package/dsh-become-human-web/v/0.7.0-beta.39) 已发布并完成下载校验。
 
 **让一个有持续记忆、独特性格和自主行动能力的数字人，生活在你的 DSH 中。**
 
@@ -54,11 +54,22 @@ Become Human 是一个 DSH Web 插件，配有独立运行模块。它围绕一�
 | --- | --- |
 | 本目录开发源码 `0.7.0-beta.39` | 包含本页所述新能力；可从上方测试发行下载组合包，也可自行构建 |
 | [历史测试发行 `0.7.0-beta.5`](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.5) | 提供 `.tgz` 与 SHA-256，但存在首次创建 Human 可能失败的已知初始化问题；修复已进入后续源码 |
-| npm | 尚未发布；不要把包名当作已可用的 npm 安装来源 |
+| [npm](https://www.npmjs.com/package/dsh-become-human-web/v/0.7.0-beta.39) | 已发布 0.7.0-beta.39，推荐固定版本安装；仍为测试版 |
 
 **首次体验请优先使用 beta.39 组合包，或由对应源码构建。** 本地源码、GitHub 分支与 Release 可能不同步，先核对下载源码的 `package.json`；源码 ZIP 本身不是插件安装包。
 
-### 2. 构建并安装
+### 2. 从 npm 安装
+
+先配置宿主 DSH 的模型，升级前备份并停止对应服务。执行：
+
+```powershell
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add dsh-become-human-web@0.7.0-beta.39 --registry=https://registry.npmjs.org/
+npx @deepseek-ai/dsh@0.2.0-rc.2 web --no-open
+```
+
+安装包包含 Web 插件和独立运行模块。使用固定版本，不必自行构建。
+
+### 可选：从源码构建并安装
 
 先准备上述支持版本的 DSH，并在宿主中配置可用模型。进入所下载源码的根目录，执行：
 

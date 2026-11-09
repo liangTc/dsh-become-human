@@ -1,13 +1,13 @@
 # 安装与升级
 
-> **本次测试发行：0.7.0-beta.39。** [下载组合安装包](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.39)，安装和验证边界以[本版发行说明](https://github.com/liangTc/dsh-become-human/blob/main/docs/RELEASE_BETA39.md)为准。下文 beta.5 为历史发行说明；npm 发布状态单独确认。
+> **本次测试发行：0.7.0-beta.39。** [下载组合安装包](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.39)，安装和验证边界以[本版发行说明](https://github.com/liangTc/dsh-become-human/blob/main/docs/RELEASE_BETA39.md)为准。下文 beta.5 为历史发行说明；npm [beta.39](https://www.npmjs.com/package/dsh-become-human-web/v/0.7.0-beta.39) 已发布并完成下载校验。
 
 [返回首页](../README.md) · [配置说明](CONFIGURATION.md) · [使用指南](USAGE.md) · [测试状态](TESTING_STATUS.md)
 
 > [!WARNING]
-> **`0.7.0-beta.5` 是测试版本（Prerelease），尚未开发完成。** 本页是公开发行的安装流程，不表示干净机器安装与全部能力已完成验收。
+> **`0.7.0-beta.39` 是测试版本（Prerelease），尚未开发完成。** 本页是公开发行的安装流程，不表示干净机器安装与全部能力已完成验收。
 
-本页公开下载链接指向 beta.5 组合包；源码构建使用所下载源码的版本，以 `package.json` 为准，两者不可混用。beta.39 组合包见本页顶部发行链接。历史 beta.4 包仍可查阅，但不包含 beta.5 的新增能力。原生 DeepSeek 最终发行包的全新安装整链仍保留待测；发布测试包不等于该流程已经通过。
+本页公开下载链接指向 beta.39 组合包；源码构建使用所下载源码的版本，以 `package.json` 为准，两者不可混用。beta.39 组合包见本页顶部发行链接。历史 beta.4 包仍可查阅，但不包含 beta.5 的新增能力。原生 DeepSeek 最终发行包的全新安装整链仍保留待测；发布测试包不等于该流程已经通过。
 
 **已知问题：** beta.5 首次创建 Human 可能因初始化顺序失败；修复自 beta.6 起进入开发源码。需要后续修复、可选行为包和扩展页面时，请按下方步骤构建对应开发源码，并核对版本与测试记录。最新干净安装仍需单独验收。
 
@@ -28,7 +28,7 @@
 
 安装流程是：**安装一个组合包 → 打开 Human 完成首次设置 → 创建并启动**。组合包已经包含后台代码；插件自动准备专用运行目录和内部 profile，复用宿主的 Node 与 DSH 启动后台，无需另装第二套 Human 程序。
 
-安装入口为 [v0.7.0-beta.5 测试发行](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.5) 的预构建 `.tgz` 与 SHA-256 文件。npm 包尚未发布；社区登记的提交或合并不替代本页的版本与安装要求。
+安装入口为 [v0.7.0-beta.39 测试发行](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.39) 的预构建 `.tgz` 与 SHA-256 文件。npm beta.39 已发布；社区登记的提交或合并不替代本页的版本与安装要求。
 
 ## 1. 准备 DSH 与模型
 
@@ -57,20 +57,30 @@ npx @deepseek-ai/dsh@0.2.0-rc.2 web
 
 ## 2. 获取安装包
 
+### 从 npm 安装当前测试版
+
+停止要更新的 DSH 服务后执行（与下方 `.tgz` 方式二选一）：
+
+```powershell
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add dsh-become-human-web@0.7.0-beta.39 --registry=https://registry.npmjs.org/
+```
+
+安装后直接进入第 4 步启动与配置，无需重复安装本地包。首次发布时镜像可能延迟，示例指定 npm 官方仓库。
+
 <a id="使用预构建包推荐"></a>
 
 ### 使用预构建包
 
-从 [v0.7.0-beta.5 Release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.5) 下载以下两个附件，并保存到同一目录：
+从 [v0.7.0-beta.39 Release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.39) 下载以下两个附件，并保存到同一目录：
 
-- [dsh-become-human-web-0.7.0-beta.5.tgz](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.5/dsh-become-human-web-0.7.0-beta.5.tgz)
-- [dsh-become-human-web-0.7.0-beta.5.tgz.sha256](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.5/dsh-become-human-web-0.7.0-beta.5.tgz.sha256)
+- [dsh-become-human-web-0.7.0-beta.39.tgz](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.39/dsh-become-human-web-0.7.0-beta.39.tgz)
+- [dsh-become-human-web-0.7.0-beta.39.tgz.sha256](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.39/dsh-become-human-web-0.7.0-beta.39.tgz.sha256)
 
 在该目录打开 PowerShell，校验后再安装：
 
 ```powershell
-$humanExpectedSha = ((Get-Content -LiteralPath './dsh-become-human-web-0.7.0-beta.5.tgz.sha256' -Raw).Trim() -split '\s+')[0]
-$humanActualSha = (Get-FileHash -LiteralPath './dsh-become-human-web-0.7.0-beta.5.tgz' -Algorithm SHA256).Hash
+$humanExpectedSha = ((Get-Content -LiteralPath './dsh-become-human-web-0.7.0-beta.39.tgz.sha256' -Raw).Trim() -split '\s+')[0]
+$humanActualSha = (Get-FileHash -LiteralPath './dsh-become-human-web-0.7.0-beta.39.tgz' -Algorithm SHA256).Hash
 if ($humanExpectedSha -notmatch '^[a-fA-F0-9]{64}$' -or $humanActualSha -ine $humanExpectedSha) {
   throw '安装包校验失败，请重新核对下载来源和文件。'
 }
@@ -103,7 +113,7 @@ npm run release:package
 在安装包所在目录执行，文件名替换为实际文件名：
 
 ```powershell
-npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./dsh-become-human-web-0.7.0-beta.5.tgz
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./dsh-become-human-web-0.7.0-beta.39.tgz
 ```
 
 这是 DSH 官方组合包安装路径，会更新 profile 的依赖与 bundle 列表。不要用普通 `npm install` 代替 profile 注册，也不要只复制 `manager.mjs`。[官方打包与安装说明](https://deepseek-harness.github.io/deepseek-harness/develop/basic/publish) 说明了 `.tgz`、本地目录和 profile 的区别。

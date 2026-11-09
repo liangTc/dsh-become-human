@@ -60,13 +60,13 @@
     },
     {
       "path": "README.en.md",
-      "bytes": 17423,
-      "sha256": "52bc583b2cfba0cb1abd7a02ab40c5c780c4919b18f64e5b307ae755f7c35b61"
+      "bytes": 17875,
+      "sha256": "1d66f727fea884ccbb80542f562057751bc1a6152a673685de41ce9ef3d20df7"
     },
     {
       "path": "README.md",
-      "bytes": 10470,
-      "sha256": "93aa7e76fbc0b2c2d405a34dcdb54175e125db0b7d302d2eb19c6391be170b90"
+      "bytes": 11037,
+      "sha256": "c4980e0370e12e9513e74b535630543bd78fe452a0b71dfb919ff7cd80aeb6ad"
     },
     {
       "path": "SECURITY.md",
@@ -115,8 +115,8 @@
     },
     {
       "path": "docs/INSTALLATION.md",
-      "bytes": 16470,
-      "sha256": "a780df8f39bd0d034a9ba08ea0136d7c99750f185aa2806043cc7f314cd97526"
+      "bytes": 16985,
+      "sha256": "f01bc6fdbaa8758cc873fca0fd00022b4c467eee1786cbb6f7420a2e9e4448ed"
     },
     {
       "path": "docs/LEARNING_AND_CONVERSATION.md",
@@ -140,8 +140,8 @@
     },
     {
       "path": "docs/RELEASE_BETA39.md",
-      "bytes": 2792,
-      "sha256": "8c6b48d68c75262c76418de91ad1f9318898472edbe27ed92815f981a834dd1c"
+      "bytes": 3018,
+      "sha256": "fa44d6141073d0a97bcc088dd85d42744d09b46f6c79332aaaa2c4c6ea5be24e"
     },
     {
       "path": "docs/RELEASE_BETA39_CHECKS.json",
@@ -270,8 +270,8 @@
     },
     {
       "path": "plugins/become-human-web/README.md",
-      "bytes": 8837,
-      "sha256": "14db92c6b04c4d29ef4b800096fba84378c5a00bb1e18ad301a82e1906c1031f"
+      "bytes": 8579,
+      "sha256": "ebf0539a99e3e40d59bf9322ba757121a0568d87ec28801296f454009efc64e1"
     },
     {
       "path": "plugins/become-human-web/THIRD_PARTY_NOTICES.md",

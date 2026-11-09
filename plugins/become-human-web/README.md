@@ -1,6 +1,6 @@
 # Become Human · DSH Web 插件
 
-> **本次测试发行：0.7.0-beta.39。** [下载组合安装包](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.39)，安装和验证边界以[本版发行说明](https://github.com/liangTc/dsh-become-human/blob/main/docs/RELEASE_BETA39.md)为准。下文 beta.5 为历史发行说明；npm 发布状态单独确认。
+> **本次测试发行：0.7.0-beta.39。** [下载组合安装包](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.39)，安装和验证边界以[本版发行说明](https://github.com/liangTc/dsh-become-human/blob/main/docs/RELEASE_BETA39.md)为准。下文 beta.5 为历史发行说明；npm [beta.39](https://www.npmjs.com/package/dsh-become-human-web/v/0.7.0-beta.39) 已发布并完成下载校验。
 
 > **beta.39 开发源码**：通用事件循环、单执行线、结果反馈与成长；Web 扩展安装、配置、启停和升级恢复；学习降为默认停用的独立行为包。新增 Human 内自定义 React 页面与扩展后台读写接口，复用 DSH 模块加载器和子插槽。隔离检查与真实验收分别记录，详见 [扩展页面](docs/EXTENSION_PAGES.md)、[核心设计](docs/CORE_DESIGN.md) 和 [测试状态](docs/TESTING_STATUS.md)。
 
@@ -14,13 +14,13 @@ beta.12–beta.28 将事件、行为、经历与反馈协议独立出来，提�
 
 ## 安装
 
-从 [v0.7.0-beta.5 测试发行](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.5) 下载[预构建 `.tgz`](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.5/dsh-become-human-web-0.7.0-beta.5.tgz) 和 [SHA-256 校验文件](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.5/dsh-become-human-web-0.7.0-beta.5.tgz.sha256)，核对后一次安装 Web 插件及其后台代码。npm 包尚未发布。安装示例：
+从 npm 安装当前测试版：
 
 ```powershell
-npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./dsh-become-human-web-0.7.0-beta.5.tgz
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add dsh-become-human-web@0.7.0-beta.39 --registry=https://registry.npmjs.org/
 ```
 
-beta.5 有首次创建 Human 可能失败的已知初始化问题；修复在 beta.6 开发源码中，尚无对应公开 Release 包。已有安装升级记录不证明干净安装通过，首次使用请先核对测试状态。
+也可从 [beta.39 Release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.39) 下载 `.tgz` 与校验文件。组合包包含 Web 与后台代码。升级前备份，保留原数据、会话和绑定。beta.5 的初始化问题已修复；完整干净安装仍按测试清单验收。
 
 安装后启动 DSH，进入 Human，按“选择已有模型 → 人物与额度 → 创建并启动”完成首次设置。路径、私有 profile 和内部空闲端口自动准备，无需另装后台或手工编辑 YAML。模型凭据通过 DSH 的 apiKeyEnv 引用解析；向导不接收明文密钥。详见 [安装与升级](https://github.com/liangTc/dsh-become-human/blob/main/docs/INSTALLATION.md)。单独安装内部 runtime 不属于支持方式。
 

@@ -11,7 +11,13 @@ npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./dsh-become-human-web-
 npx @deepseek-ai/dsh@0.2.0-rc.2 web --no-open
 ```
 
-组合包包含管理插件和独立运行模块，无需单独安装内部 runtime。升级前备份，保留原数据目录；启动后核对原会话、配置和 IM 绑定，再按页面状态恢复自主运行。GitHub 自动生成的源码 ZIP 不是组合安装包。npm 发布需另行确认，未确认前使用本页 `.tgz`。
+组合包包含管理插件和独立运行模块，无需单独安装内部 runtime。升级前备份，保留原数据目录；启动后核对原会话、配置和 IM 绑定，再按页面状态恢复自主运行。GitHub 自动生成的源码 ZIP 不是组合安装包。npm beta.39 已发布；官方仓库下载包已核对 SHA-512，与本 Release 的原始安装包完全一致。
+
+也可从 npm 安装：
+
+```powershell
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add dsh-become-human-web@0.7.0-beta.39 --registry=https://registry.npmjs.org/
+```
 
 ## 相对 beta.5 的主要变化
 
