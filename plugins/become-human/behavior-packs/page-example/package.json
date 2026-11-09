@@ -1,0 +1,26 @@
+{
+  "name": "dsh-human-page-example",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "Apache-2.0",
+  "description": "Human 声明式扩展页面示例，不调用模型或发送消息",
+  "main": "index.mjs",
+  "files": ["index.mjs", "cordis.patch.yml", "README.md", "LICENSE"],
+  "dsh": {
+    "bundle": {"patch": "./cordis.patch.yml"},
+    "human": {
+      "pages": [{
+        "version": 1,
+        "id": "overview",
+        "nodeId": "human-extension.page-example",
+        "title": "页面示例",
+        "description": "扩展可增加自己的页面，保留 Human 的唯一会话。",
+        "blocks": [
+          {"type": "text", "text": "这是安装包注册的独立页面。无需改写 Human 的页面分类，也不会创建新的会话。"},
+          {"type": "runtime-status"},
+          {"type": "list", "items": ["停用扩展后隐藏此页入口。", "移除扩展后清除页面注册，保留历史数据。", "本示例不会调用模型、读取聊天或发送手机消息。"]}
+        ]
+      }]
+    }
+  }
+}

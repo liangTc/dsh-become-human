@@ -1,13 +1,15 @@
 # 安装与升级
 
+> **本次测试发行：0.7.0-beta.38。** [下载组合安装包](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.38)，安装和验证边界以[本版发行说明](https://github.com/liangTc/dsh-become-human/blob/main/docs/RELEASE_BETA38.md)为准。下文 beta.5 为历史发行说明；npm 发布状态单独确认。
+
 [返回首页](../README.md) · [配置说明](CONFIGURATION.md) · [使用指南](USAGE.md) · [测试状态](TESTING_STATUS.md)
 
 > [!WARNING]
 > **`0.7.0-beta.5` 是测试版本（Prerelease），尚未开发完成。** 本页是公开发行的安装流程，不表示干净机器安装与全部能力已完成验收。
 
-本页公开下载链接指向 beta.5 组合包；源码构建段落使用当前 beta.28 开发源码，两者不可混用。历史 beta.4 包仍可查阅，但不包含 beta.5 的新增能力。原生 DeepSeek 最终发行包的全新安装整链仍保留待测；发布测试包不等于该流程已经通过。
+本页公开下载链接指向 beta.5 组合包；源码构建使用所下载源码的版本，以 `package.json` 为准，两者不可混用。beta.38 组合包见本页顶部发行链接。历史 beta.4 包仍可查阅，但不包含 beta.5 的新增能力。原生 DeepSeek 最终发行包的全新安装整链仍保留待测；发布测试包不等于该流程已经通过。
 
-**已知问题：** beta.5 首次创建 Human 可能因初始化顺序失败；修复自 beta.6 起进入开发源码。需要后续修复、可选行为包和扩展管理时，请按下方步骤构建当前 beta.28 源码；尚无 beta.28 公开 Release 包。最新干净安装仍需单独验收。
+**已知问题：** beta.5 首次创建 Human 可能因初始化顺序失败；修复自 beta.6 起进入开发源码。需要后续修复、可选行为包和扩展页面时，请按下方步骤构建对应开发源码，并核对版本与测试记录。最新干净安装仍需单独验收。
 
 ## 支持范围
 
@@ -55,7 +57,9 @@ npx @deepseek-ai/dsh@0.2.0-rc.2 web
 
 ## 2. 获取安装包
 
-### 使用预构建包（推荐）
+<a id="使用预构建包推荐"></a>
+
+### 使用预构建包
 
 从 [v0.7.0-beta.5 Release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.5) 下载以下两个附件，并保存到同一目录：
 
@@ -76,7 +80,7 @@ if ($humanExpectedSha -notmatch '^[a-fA-F0-9]{64}$' -or $humanActualSha -ine $hu
 
 ### 从源码构建
 
-下载或克隆 [liangTc/dsh-become-human](https://github.com/liangTc/dsh-become-human) 的 `main` 分支，进入仓库根目录。本文更新时源码版本为 beta.28；构建前核对 `package.json` 和变更记录。
+下载或克隆 [liangTc/dsh-become-human](https://github.com/liangTc/dsh-become-human) 的 `main` 分支，进入仓库根目录。远程分支与本地开发源码可能不同步；构建前核对所下载版本的 `package.json` 和变更记录，不把本地 beta.38 的说明当作远程已同步的证明。
 
 ```powershell
 git clone --branch main --single-branch https://github.com/liangTc/dsh-become-human.git
@@ -86,7 +90,7 @@ npm run build --prefix plugins/become-human-web
 npm run release:package
 ```
 
-构建所需的本地依赖由 `package.json` 声明，主构建重建 IM 和 Human Web 客户端，并把同仓库的运行模块复制到分发包中。当前源码生成 `dsh-become-human-web-0.7.0-beta.28.tgz`；**以命令实际输出路径为准**。安装该包时，将下方示例中的 beta.5 文件名替换为实际生成的文件名。
+构建所需的本地依赖由 `package.json` 声明，主构建重建 IM 和 Human Web 客户端，并把同仓库的运行模块复制到分发包中。产物为 `dist/packages/dsh-become-human-web-<版本>.tgz`；**以命令实际输出路径为准**。安装该包时，将下方示例中的 beta.5 文件名替换为实际生成的文件名。
 
 定时规则产物随仓库提供，需要修改日历生成逻辑时，再按 [架构说明](ARCHITECTURE.md#开发与构建边界) 重新生成。`npm run release:source` 可另外导出干净源码，不会自动上传或发布。
 
@@ -116,7 +120,7 @@ npx @deepseek-ai/dsh@0.2.0-rc.2 web --no-open
 2. **人物与额度**：选择知秋、小埋、天昊或夏彦，选取低、中、高自主额度；可填写对你的称呼和时区。后续可在 Human 设置中继续编辑。
 3. **核对并创建**：检查选择后点击“创建并启动”。后台目录、内部 profile 和空闲回环端口自动准备，首次配置保存在插件管理的数据目录，无需编辑 YAML。
 
-首次自主活动默认关闭。保持关闭时先开始主人对话，需要自主活动时再明确开启。beta.28 中启用自主活动不会同时开启学习；学习需要另外安装并启用学习行为包、开启其学习设置。公开 beta.5 的旧向导仍显示“同时开启自主学习和主动交流”，不要用它判断当前源码的行为。创建过程不通过额外模型请求测试 API，也不会自动完成手机绑定。
+首次自主活动默认关闭。保持关闭时先开始主人对话，需要自主活动时再明确开启。当前开发版中启用自主活动不会同时开启学习；学习需要另外安装并启用学习行为包、开启其学习设置。公开 beta.5 的旧向导仍显示“同时开启自主学习和主动交流”，不要用它判断当前源码的行为。创建过程不通过额外模型请求测试 API，也不会自动完成手机绑定。
 
 创建失败时查看页面错误提示后重试，重试沿用已创建的进度和唯一会话。已有运行数据或显式旧配置的安装会继续原会话、人物、额度和手机绑定，不会重新套用首次设置预设。
 

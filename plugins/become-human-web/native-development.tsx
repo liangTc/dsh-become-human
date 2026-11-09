@@ -1,5 +1,5 @@
 import React,{useEffect,useState} from 'react';
-import {useDraftGuard,useDraftNavigation,pauseForConfiguration} from './native-shell';
+import {useDraftGuard,useDraftNavigation} from './native-shell';
 import {useRetainedRead} from './native-disclosure';
 
 const clock=(value:any)=>value?new Date(value).toLocaleString('zh-CN',{hour12:false}):'尚无记录';
@@ -8,7 +8,7 @@ const statusLabels:any={active:'当前生效',observing:'继续观察',invalid:'
 const reasonLabels:any={'independent-evidence-needed':'还需要更多独立经历作为依据','longer-observation-needed':'还需要更长时间的观察','confidence-below-threshold':'当前判断还不够确定','new-independent-evidence-needed':'还需要新的独立经历，重复引用不会推动变化','no-material-change':'与已有倾向接近，暂不新增变化','trait-capacity-reached':'当前偏移结果已达到上限，先保留观察','evidence-withdrawn-expired-or-revised':'关联依据已撤回、到期或修订','owner-reverted-single-change':'已由主人撤回'};
 const label=(value:any)=>statusLabels[value]??value??'未知';
 
-function SettingsNotice({s,ui}:any){const {Band}=ui;return s.desired!=='paused'||s.agentBusy?<Band>保存设置时会先暂停；记录撤回仍需暂停并等待空闲。</Band>:<p className="hn-help">保存后仍保持暂停。准备好时可在右上角恢复；整理和人格回顾共用自主额度与唯一执行线。</p>;}
+function SettingsNotice({s,ui}:any){const {Band}=ui;return s.desired!=='paused'||s.agentBusy?<Band>空闲时保存设置，成功后保持原运行状态；记录撤回仍需暂停。</Band>:<p className="hn-help">保存后仍保持暂停。准备好时可在右上角恢复；整理和人格回顾共用自主额度与唯一执行线。</p>;}
 function Evidence({refs,evidence,ui}:any){const {JsonDetails}=ui;return <JsonDetails label="查看依据与原记录编号" value={{refs:refs??[],evidence:evidence??[]}}/>;}
 
 export function ReviewStatus({api,s,busy,ui,runtime,dirty=false,onChanged}:any){
@@ -26,7 +26,7 @@ function PersonaContents({api,s,busy,ui,data,onChanged,mode}:any){
   const dirty=enabled!==baseline.enabled,stale=data.settings.version!==baseline.version,locked=busy||s.agentBusy||s.desired!=='paused';
   useDraftGuard(dirty);
   useEffect(()=>{if(!dirty&&data.settings.version!==baseline.version){setBaseline(data.settings);setEnabled(data.settings.enabled);}},[data.settings,baseline.version,dirty]);
-  const save=()=>api.run(async()=>{await pauseForConfiguration(api);await api.control({op:'persona-development-configure',settings:{enabled},expectedVersion:baseline.version});const fresh=await api.read({kind:'persona-development'});setBaseline(fresh.settings);setEnabled(fresh.settings.enabled);onChanged();},'人格偏移设置已保存');
+  const save=()=>api.run(async()=>{await api.control({op:'persona-development-configure',settings:{enabled},expectedVersion:baseline.version});const fresh=await api.read({kind:'persona-development'});setBaseline(fresh.settings);setEnabled(fresh.settings.enabled);onChanged();},'人格偏移设置已保存');
   const rows=data.history??[],traits=data.currentTraits??[],pending=data.pending??[];
   return <section className="hn-form-section" aria-label="人格偏移">
     <div className="hn-row hn-between"><h3>人格偏移</h3><Button disabled={busy} onClick={onChanged}>{mode==='settings'?'重新读取设置':'刷新偏移结果'}</Button></div>
@@ -67,7 +67,7 @@ function LifecycleContents({api,s,busy,ui,data,onChanged,mode}:any){
   useEffect(()=>{if(!dirty&&data.settings.version!==baseline.version){setBaseline(data.settings);setDraft(memoryDraft(data.settings));}},[data.settings,baseline.version,dirty]);
   const patch=(key:string,value:any)=>setDraft(previous=>({...previous,[key]:value}));
   const valid=Number.isSafeInteger(draft.intervalMs)&&draft.intervalMs>=3600000&&draft.intervalMs<=2592000000&&Number.isSafeInteger(draft.newRecordThreshold)&&draft.newRecordThreshold>=5&&draft.newRecordThreshold<=1000&&Number.isSafeInteger(draft.hotDays)&&draft.hotDays>=1&&draft.hotDays<=365&&Number.isSafeInteger(draft.coldDays)&&draft.coldDays>draft.hotDays&&draft.coldDays<=3650;
-  const save=()=>api.run(async()=>{await pauseForConfiguration(api);await api.control({op:'memory-lifecycle-configure',settings:draft,expectedVersion:baseline.version});const fresh=await api.read({kind:'memory-lifecycle'});setBaseline(fresh.settings);setDraft(memoryDraft(fresh.settings));onChanged();},'记忆整理设置已保存');
+  const save=()=>api.run(async()=>{await api.control({op:'memory-lifecycle-configure',settings:draft,expectedVersion:baseline.version});const fresh=await api.read({kind:'memory-lifecycle'});setBaseline(fresh.settings);setDraft(memoryDraft(fresh.settings));onChanged();},'记忆整理设置已保存');
   const counts=data.counts??{},batches=data.batches??[];
   return <>
     <div className="hn-row hn-between"><h3>记忆整理</h3><Button disabled={busy} onClick={onChanged}>{mode==='settings'?'重新读取设置':'刷新整理状态'}</Button></div>

@@ -1,0 +1,50 @@
+{
+  "version": "0.7.0-beta.38",
+  "date": "2026-11-09",
+  "kind": "isolated-regression",
+  "productionServicesChanged": false,
+  "realModelCalls": 0,
+  "results": [
+    {
+      "suite": "memory-continuity",
+      "exitCode": 0
+    },
+    {
+      "suite": "dialogue",
+      "exitCode": 0
+    },
+    {
+      "suite": "behavior-core",
+      "exitCode": 0
+    },
+    {
+      "suite": "attempt-lifecycle",
+      "exitCode": 0
+    },
+    {
+      "suite": "controller-admission",
+      "exitCode": 0
+    },
+    {
+      "suite": "extension-pages",
+      "exitCode": 0
+    },
+    {
+      "suite": "extension-management",
+      "exitCode": 0
+    },
+    {
+      "suite": "extension-registry",
+      "exitCode": 0
+    },
+    {
+      "suite": "worker-request",
+      "exitCode": 0
+    },
+    {
+      "suite": "web-experience",
+      "exitCode": 0
+    }
+  ],
+  "initialFailures": "Three suites could not resolve dependencies from the sibling source directory. Retested with declared web-package dependencies; relative source imports unchanged."
+}

@@ -17,8 +17,8 @@ const phases=new Set(['foreground','care','chat','share-insight','learning']);
 
 export function expressionPrompt(phase){
   if(!phases.has(phase))return '';
-  const fields=phase==='learning'?'本轮只将表达规则应用于 summary、relevance、share 的自然语言；简短聊天要求仅适用于 share。笔记的 summary、relevance、claims 按知识和证据需要写完整，证据不足时遵守原协议。':phase==='foreground'?'本轮直接给出一次最终聊天回复。日常交流通常 1 至 3 个短句，不靠额外润色、机械截断或拆成连续多条来变短；主人明确要求详细内容时按需充分回答。':'本轮只将表达规则应用于 JSON 的 text 字段；通常只分享一条发现、一个感受或一份关心，最多一个自然相关的问题，不强求提问；字段和任务协议照常保留。';
-  return '\n\n'+compact+'\n'+fields;
+  const fields=phase==='learning'?'本轮只将表达规则应用于 summary、relevance、share 的自然语言；简短聊天要求仅适用于 share。笔记的 summary、relevance、claims 按知识和证据需要写完整，证据不足时遵守原协议。':phase==='foreground'?'本轮直接给出一次最终聊天回复；按当前需要展开，不额外展示改写过程。':'本轮只将表达规则应用于 JSON 的 text 字段；通常只分享一条发现、一个感受或一份关心，不强求提问；字段和任务协议照常保留。';
+  return '\n\n'+(phase==='foreground'?body(dialogue):compact)+'\n'+fields;
 }
 
 export function expressionSkills(){

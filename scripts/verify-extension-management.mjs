@@ -125,6 +125,25 @@ await test('Unavailable runtime still pins recovery to the persisted session ide
  f.runtime.state=async()=>{if(firstRead){firstRead=false;throw Error('WORKER_UNAVAILABLE');}return f.state;};f.runtime.start=async()=>{if(firstStart){firstStart=false;throw Error('WORKER_START_FAILED');}f.state.sessionId='unexpected-session';};
  await f.submit({action:'toggle',name:'dsh-human-example',enabled:false});await f.manager.active;assert.equal(f.manager.blocked.recovery.code,'STALE_SESSION');assert.equal(f.resumes,0);
 });
+await test('Unavailable runtime cannot commit a successful start with a different persisted session',async f=>{
+ const identityDir=path.join(f.runtime.config.runtimeHome,'become-human');await fs.mkdir(identityDir);await fs.writeFile(path.join(identityDir,'agent.json'),JSON.stringify({sessionId:'preserved-session'}));let firstRead=true;
+ f.runtime.state=async()=>{if(firstRead){firstRead=false;throw Error('WORKER_UNAVAILABLE');}return f.state;};f.runtime.close=async()=>{f.closed=true;};f.runtime.start=async()=>{f.starts++;f.state.sessionId='unexpected-session';};
+ await f.submit({action:'toggle',name:'dsh-human-example',enabled:false});await f.manager.active;assert.equal(f.manager.jobs[0].status,'failed');assert.equal(f.manager.jobs[0].code,'STALE_SESSION');assert(f.manager.blocked);assert(f.closed);assert.equal(f.resumes,0);
+ assert.equal(JSON.parse(await fs.readFile(path.join(identityDir,'agent.json'))).sessionId,'preserved-session');
+});
+await test('Shutdown while startup is pending cannot resume or commit a late successful start',async f=>{
+ let finish;f.runtime.start=()=>new Promise(resolve=>{finish=resolve;});await f.submit({action:'toggle',name:'dsh-human-example',enabled:false});while(!finish)await new Promise(resolve=>setTimeout(resolve,5));
+ const closing=f.manager.close();finish();await closing;assert.equal(f.manager.jobs[0].status,'interrupted');assert.equal(f.manager.jobs[0].recovery.status,'interrupted');assert.equal(f.resumes,0);assert(f.manager.blocked);
+});
+await test('Shutdown while catalog verification is pending prevents a late resume',async f=>{
+ const file=path.join(f.pkg,'package.json'),m=JSON.parse(await fs.readFile(file));m.dsh.human={replacesBehaviors:['reflect-experience']};await fs.writeFile(file,JSON.stringify(m));let finish;
+ f.runtime.read=()=>new Promise(resolve=>{finish=resolve;});await f.submit({action:'toggle',name:'dsh-human-example',enabled:true});while(!finish)await new Promise(resolve=>setTimeout(resolve,5));
+ const closing=f.manager.close();finish([{id:'reflect-experience'}]);await closing;assert.equal(f.manager.jobs[0].status,'interrupted');assert.equal(f.resumes,0);assert.equal(f.state.desired,'paused');
+});
+await test('Shutdown during an already requested resume stops the late running process',async f=>{
+ let finish;f.remote.controlRuntime=()=>new Promise(resolve=>{finish=()=>{f.resumes++;f.state.desired='running';resolve();};});await f.submit({action:'toggle',name:'dsh-human-example',enabled:false});while(!finish)await new Promise(resolve=>setTimeout(resolve,5));
+ const closing=f.manager.close();finish();await closing;assert.equal(f.manager.jobs[0].status,'interrupted');assert.equal(f.manager.jobs[0].recovery.status,'interrupted');assert.equal(f.state.desired,'paused');assert.equal(f.resumes,1);assert.equal(f.stops,2);
+});
 await test('Downloaded replacement without a registered behavior fails and restores original package',async f=>{
  f.runtime.read=async()=>[];f.run=async packet=>{f.calls.push(packet.args);const file=path.join(f.pkg,'package.json'),m=JSON.parse(await fs.readFile(file));m.dsh.human={replacesBehaviors:['reflect-experience']};await fs.writeFile(file,JSON.stringify(m));};
  await f.submit({action:'install',source:'dsh-human-example@1.0.0'});await f.manager.active;const job=f.manager.jobs[0];assert.equal(job.code,'EXTENSION_BEHAVIOR_REGISTRATION_FAILED');assert.equal(job.recovery.status,'restored');assert.equal(f.resumes,0);assert.deepEqual((await f.manager.list()).items[0].replacesBehaviors,[]);
@@ -136,6 +155,24 @@ await test('Disabled replacement must be absent from actual runtime catalog',asy
 await test('Disabled replacement commits when runtime catalog confirms absence',async f=>{
  const file=path.join(f.pkg,'package.json'),m=JSON.parse(await fs.readFile(file));m.dsh.human={replacesBehaviors:['reflect-experience']};await fs.writeFile(file,JSON.stringify(m));f.runtime.read=async()=>[];
  await f.submit({action:'toggle',name:'dsh-human-example',enabled:false});await f.manager.active;assert.equal(f.manager.jobs[0].status,'completed');assert.equal((await f.manager.list()).items[0].nodes[0].disabled,true);
+});
+await test('Page registry follows enabled node and removal lifecycle',async f=>{
+ const file=path.join(f.pkg,'package.json'),m=JSON.parse(await fs.readFile(file));m.dsh.human={pages:[{id:'overview',version:1,nodeId:'human-extension.example',title:'Example',blocks:[{type:'runtime-status'}]}]};await fs.writeFile(file,JSON.stringify(m));
+ assert.equal((await f.manager.pages()).pages.length,1);await f.submit({action:'toggle',name:'dsh-human-example',enabled:false});await f.manager.active;assert.equal((await f.manager.pages()).pages.length,0);
+ await f.submit({action:'toggle',name:'dsh-human-example',enabled:true});await f.manager.active;assert.equal((await f.manager.pages()).pages.length,1);
+ await f.submit({action:'remove',name:'dsh-human-example'});await f.manager.active;assert.equal((await f.manager.pages()).pages.length,0);
+});
+await test('Invalid upload is rejected without stopping or staging an installation',async f=>{
+ for(const data of ['not-base64','====',Buffer.from('not a gzip').toString('base64'),'A'.repeat(6990512)])await assert.rejects(()=>f.manager.stageArchive({data}),/EXTENSION_ARCHIVE_INVALID/);
+ assert.equal(f.stops,0);assert.equal(f.manager.jobs.length,0);
+});
+await test('React page without live backend registration rolls installation back',async f=>{
+ f.runtime.read=async()=>[];f.run=async()=>{const file=path.join(f.pkg,'package.json'),m=JSON.parse(await fs.readFile(file));m.dsh.human={pages:[{id:'counter',version:2,nodeId:'human-extension.example',title:'Counter',client:'./client.js',methods:[{name:'counter.read',mode:'read',description:'Read counter'}]}]};await fs.writeFile(file,JSON.stringify(m));await fs.writeFile(path.join(f.pkg,'client.js'),'exports.contractVersion=2;');};
+ await f.submit({action:'install',source:'dsh-human-example@1.0.0'});await f.manager.active;assert.equal(f.manager.jobs[0].code,'EXTENSION_BEHAVIOR_REGISTRATION_FAILED');assert.equal(f.manager.jobs[0].recovery.status,'restored');assert.equal(f.resumes,0);assert.equal((await f.manager.pages()).pages.length,0);
+});
+await test('React page requires the registered method mode to match its declaration',async f=>{
+ const file=path.join(f.pkg,'package.json'),m=JSON.parse(await fs.readFile(file));m.dsh.human={pages:[{id:'counter',version:2,nodeId:'human-extension.example',title:'Counter',client:'./client.js',methods:[{name:'counter.read',mode:'read',description:'Read counter'}]}]};await fs.writeFile(file,JSON.stringify(m));await fs.writeFile(path.join(f.pkg,'client.js'),'exports.contractVersion=2;');
+ f.runtime.read=async input=>input.kind==='extension-page-catalog'?[{key:'dsh-human-example:counter',methods:[{name:'counter.read',mode:'write'}]}]:[];await f.submit({action:'toggle',name:'dsh-human-example',enabled:true});await f.manager.active;assert.equal(f.manager.jobs[0].code,'EXTENSION_BEHAVIOR_REGISTRATION_FAILED');assert.equal(f.resumes,0);
 });
 const result={at:new Date().toISOString(),passed:cases.filter(x=>x.passed).length,failed:cases.filter(x=>!x.passed).length,cases,scope:'Isolated management and service lifecycle with stub package manager; no production package installation'};
 if(process.env.BH_TEST_RESULT)await fs.writeFile(process.env.BH_TEST_RESULT,JSON.stringify(result,null,2));console.log(JSON.stringify({passed:result.passed,failed:result.failed}));if(result.failed)process.exitCode=1;

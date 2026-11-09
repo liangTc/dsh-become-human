@@ -1,5 +1,5 @@
 import React,{useEffect,useState} from 'react';
-import {useDraftGuard,pauseForConfiguration} from './native-shell';
+import {useDraftGuard} from './native-shell';
 import {useRetainedRead} from './native-disclosure';
 import css from './native-relationship-media.css';
 
@@ -16,7 +16,7 @@ function RelationshipContents({api,s,busy,ui,data,onChanged,mode}:any){
  useEffect(()=>{if(!dirty&&data.settings.version!==baseline.version){setBaseline(data.settings);setDraft(draftOf(data.settings));}},[data.settings,baseline.version,dirty]);
  const patch=(key:string,value:any)=>setDraft(previous=>({...previous,[key]:value})),patchInitial=(key:string,value:number)=>setDraft(previous=>({...previous,initial:{...previous.initial,[key]:value}}));
  const valid=typeof draft.enabled==='boolean'&&metricDefinitions.every(([key])=>isInt(draft.initial[key],0,100))&&isInt(draft.maxDeltaPerTurn,1,5)&&isInt(draft.positiveDailyLimit,1,20)&&isInt(draft.negativeDailyLimit,1,20);
- const save=()=>api.run(async()=>{await pauseForConfiguration(api);await api.control({op:'relationship-configure',settings:draft,expectedVersion:baseline.version,expectedRevision:s.management.revision});const fresh=await api.read({kind:'relationship'});setBaseline(fresh.settings);setDraft(draftOf(fresh.settings));onChanged();},'关系与自主选择设置已保存');
+ const save=()=>api.run(async()=>{await api.control({op:'relationship-configure',settings:draft,expectedVersion:baseline.version,expectedRevision:s.management.revision});const fresh=await api.read({kind:'relationship'});setBaseline(fresh.settings);setDraft(draftOf(fresh.settings));onChanged();},'关系与自主选择设置已保存');
  const history=Array.isArray(data.history)?data.history:[];
  return <section className="hn-relationship" aria-label="关系状态与自主选择"><style>{css}</style>
   <div className="hn-row hn-between"><h3>关系与自主选择</h3><Button disabled={busy} onClick={onChanged}>{mode==='settings'?'重新读取设置':'刷新关系状态'}</Button></div>
@@ -30,7 +30,7 @@ function RelationshipContents({api,s,busy,ui,data,onChanged,mode}:any){
    <Field label="每项24小时正向上限" hint="1–20。每个指标在过去24小时内最多增加的数值，避免连续示好快速刷分。"><Input type="number" min={1} max={20} step={1} value={draft.positiveDailyLimit} disabled={busy} onChange={(value:number)=>patch('positiveDailyLimit',value)}/></Field>
    <Field label="每项24小时负向上限" hint="1–20。每个指标在过去24小时内最多减少的数值，避免一次不愉快让关系骤变。"><Input type="number" min={1} max={20} step={1} value={draft.negativeDailyLimit} disabled={busy} onChange={(value:number)=>patch('negativeDailyLimit',value)}/></Field>
   </div></details>
-  {s.desired!=='paused'||s.agentBusy?<Band>保存此处修改会先暂停，草稿会保留。</Band>:<p className="hn-help">保存后仍保持暂停，准备好时可在右上角恢复运行。</p>}
+  {s.desired!=='paused'||s.agentBusy?<Band>空闲时保存，成功后保持原运行状态。</Band>:<p className="hn-help">保存后仍保持暂停，准备好时可在右上角恢复运行。</p>}
   {stale&&<Band>关系设置已在其他页面更新。当前草稿保留，请先核对最新设置。</Band>}
   {!valid&&<Band>请检查关系起点及变化上限，数值需为标注范围内的整数。</Band>}
   <div className="hn-row"><Button primary disabled={busy||stale||!dirty||!valid} onClick={save}>保存关系与自主选择</Button>{dirty&&<Button onClick={()=>{setBaseline(data.settings);setDraft(draftOf(data.settings));}}>放弃此处修改</Button>}</div>

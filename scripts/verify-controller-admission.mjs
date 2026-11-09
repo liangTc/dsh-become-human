@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';import {registerHooks} from 'node:module';import path from 'node:path';import {pathToFileURL} from 'node:url';
+const anchor=pathToFileURL(path.resolve('plugins/become-human-web/manager.mjs')).href;
+registerHooks({resolve(name,context,next){try{return next(name,context);}catch(e){if(e.code!=='ERR_MODULE_NOT_FOUND'||name.startsWith('.')||name.includes(':'))throw e;return next(name,{...context,parentURL:anchor});}}});
+const {HumanFactory}=await import('../plugins/become-human/driver.mjs');
+const controllerToken=Symbol('controller'),config={controllerToken};let entered=0;
+const owner={fiber:{assertActive(){entered++;throw Error('OWNER_LIFECYCLE_CHECK');}}},factory={config,build:HumanFactory.prototype.build};
+await assert.rejects(()=>HumanFactory.prototype.resume.call(factory,owner,{resumeSessionId:'original'}),/SINGLE_CONTROLLER_ONLY/);
+await assert.rejects(()=>HumanFactory.prototype.createAgent.call(factory,owner,{sessionId:'original',controllerToken:Symbol('controller')}),/SINGLE_CONTROLLER_ONLY/);assert.equal(entered,0);
+await assert.rejects(()=>HumanFactory.prototype.resume.call(factory,owner,{resumeSessionId:'original',controllerToken}),/OWNER_LIFECYCLE_CHECK/);
+await assert.rejects(()=>HumanFactory.prototype.createAgent.call(factory,owner,{sessionId:'next-retirement-session',controllerToken}),/OWNER_LIFECYCLE_CHECK/);assert.equal(entered,2);
+console.log(JSON.stringify({passed:4,scope:'Controller admission before lifecycle/persistence; real installation restart tested separately'}));

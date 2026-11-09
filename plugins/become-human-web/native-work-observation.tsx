@@ -1,5 +1,5 @@
 import React,{useEffect,useRef,useState} from 'react';
-import {useDraftGuard,pauseForConfiguration} from './native-shell';
+import {useDraftGuard} from './native-shell';
 
 const defaults={enabled:false,intervalMs:600000,retentionDays:14,maxSessionsPerCheck:3,maxMessagesPerSession:20};
 const categoryLabels:any={progress:'进展线索',decision:'决策线索',blocker:'阻塞线索',todo:'待办线索'};
@@ -51,10 +51,10 @@ function ObservationForm({api,s,busy,ui,data,bridge,connectionDraft,connectionSt
   const patch=(key:string,value:any)=>setDraft(previous=>({...previous,[key]:value}));
   const canRead=bridge?.sessionReadEnabled===true&&(bridge.sessionReadScope==='all'||(bridge.allowedSessionIds??[]).length>0),locked=busy||s.agentBusy||s.desired!=='paused',blocked=locked||!!readError||connectionDraft||connectionStale||stale;
   const save=()=>api.run(async()=>{
-    if(busy||readError||connectionDraft||connectionStale||stale)throw new Error('请处理未保存的工具授权并核对最新设置。');await pauseForConfiguration(api);
+    if(busy||readError||connectionDraft||connectionStale||stale)throw new Error('请处理未保存的工具授权并核对最新设置。');
     await api.control({op:'work-observation-configure',sessionId:s.sessionId,expectedRevision:base.revision,settings:payloadOf(draft)});
     const fresh=settingsOf(await onChanged());setBase({revision:fresh.revision??0,draft:draftOf(fresh)});setDraft(draftOf(fresh));
-  },'工作观察设置已保存，Human 仍保持暂停');
+  },'工作观察设置已保存，原运行状态已保留');
   const queued=status.requested===true||status.checkRequested===true||status.manualRequested===true,held=status.held===true;
   const stateLabel=!settings.enabled?'未开启工作观察':!canRead?'等待读取授权':held?'等待处理上次检查':status.running||['running','reading','extracting'].includes(status.phase)?'正在检查':queued?'已安排，恢复运行后检查':s.desired!=='running'||s.autonomy?.paused?'随 Human 暂停':'按周期检查';
   const records=rowsOf(data),total=data.memories?.total??records.length;
@@ -73,8 +73,8 @@ function ObservationForm({api,s,busy,ui,data,bridge,connectionDraft,connectionSt
     <p className="hn-help">无新增内容时不调用提炼模型；有变化时使用自主额度。用户原话和其他 Agent 的建议分开保存，分类是模型推断，不等于主人确认或实际完成；工作记忆不混入主人个人事实或人格证据。关闭观察或撤回读取授权后，不再向模型召回这些内容。</p>
     {connectionDraft||connectionStale?<Band>上方工具与连接存在未保存或过期的授权草稿。这里展示的是已保存范围；请先处理该草稿，再保存观察设置或安排检查。</Band>:null}
     {stale?<Band>工作观察设置已在其他页面更新。当前草稿已保留，请放弃修改并基于最新设置编辑。</Band>:null}
-    <div className="hn-row"><Button primary disabled={busy||readError||connectionDraft||connectionStale||stale||!dirty} onClick={save}>{s.desired==='running'?'暂停并保存工作观察':'保存工作观察'}</Button>{dirty?<Button disabled={busy} onClick={()=>{setBase({revision:settings.revision??0,draft:draftOf(settings)});setDraft(draftOf(settings));}}>放弃修改</Button>:null}</div>
-    <p className="hn-help">保存后保持暂停。提炼结果在资料的工作记忆中查看，检查进度在日志中查看。</p></>}
+    <div className="hn-row"><Button primary disabled={busy||readError||connectionDraft||connectionStale||stale||!dirty} onClick={save}>保存工作观察</Button>{dirty?<Button disabled={busy} onClick={()=>{setBase({revision:settings.revision??0,draft:draftOf(settings)});setDraft(draftOf(settings));}}>放弃修改</Button>:null}</div>
+    <p className="hn-help">保存成功后保持原运行状态。提炼结果在资料的工作记忆中查看，检查进度在日志中查看。</p></>}
     {mode==='diagnostics'&&    <details className="hn-advanced"><summary>检查状态与手动安排</summary>
       <div className="hn-setting-summary"><span>上次检查：{clock(status.lastCheckedAt)}</span><span>下次可检查：{clock(status.nextCheckAt??status.nextEligibleAt)}</span></div>
       {status.lastError?<Band>上次检查未完成，记录已保留。处理原因后，可在暂停时明确允许重新检查。</Band>:null}

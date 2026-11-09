@@ -1,0 +1,28 @@
+{
+  "name": "dsh-human-react-page-example",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "Apache-2.0",
+  "description": "Human React 页面与读写接口示例，不调用模型或发消息",
+  "main": "index.mjs",
+  "files": ["index.mjs", "client.js", "page.tsx", "build.mjs", "cordis.patch.yml", "README.md", "LICENSE"],
+  "dsh": {
+    "bundle": {"patch": "./cordis.patch.yml"},
+    "human": {
+      "pages": [{
+        "version": 2,
+        "id": "counter",
+        "nodeId": "human-extension.react-page-example",
+        "title": "交互页面示例",
+        "description": "React 页面直接读取扩展数据，写入前由 Human 确认。",
+        "client": "./client.js",
+        "methods": [
+          {"name": "counter.read", "mode": "read", "description": "读取示例计数器，不读取聊天或记忆。"},
+          {"name": "counter.add", "mode": "write", "description": "将示例计数器加一，只修改此扩展自己的数据文件。"},
+          {"name": "sample.error", "mode": "read", "description": "演示后台错误提示。"},
+          {"name": "sample.slow", "mode": "read", "description": "演示超时及停止后的取消。"}
+        ]
+      }]
+    }
+  }
+}

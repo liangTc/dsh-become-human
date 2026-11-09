@@ -1,6 +1,6 @@
 {
   "name": "dsh-become-human",
-  "version": "0.7.0-beta.28",
+  "version": "0.7.0-beta.38",
   "type": "module",
   "description": "Bounded autonomous Agent Web integration for DSH 0.2.0-rc.2",
   "main": "index.mjs",
@@ -14,6 +14,7 @@
   "files": [
     "index.mjs",
     "driver.mjs",
+    "conversation-recall.mjs",
     "api.mjs",
     "panel.html",
     "cordis.patch.yml",
@@ -135,7 +136,8 @@
     "learning-service.mjs",
     "learning-pack.mjs",
     "activity-outcome.mjs",
-    "activity-feedback.mjs"
+    "activity-feedback.mjs",
+    "extension-page-rpc.mjs"
   ],
   "dsh": {
     "client": {

@@ -1,6 +1,6 @@
 {
   "name": "dsh-become-human-web",
-  "version": "0.7.0-beta.28",
+  "version": "0.7.0-beta.38",
   "type": "module",
   "description": "DSH Web manager with an isolated, single-session autonomous runtime",
   "icon": "./docs/assets/icon-pixel.svg",
@@ -16,6 +16,7 @@
   "files": [
     "manager.mjs",
     "supervisor.mjs",
+    "worker-request.mjs",
     "worker.mjs",
     "source-models.mjs",
     "source-credentials.mjs",
@@ -95,7 +96,13 @@
     "native-extensions.tsx",
     "extension-config.mjs",
     "native-source-config.tsx",
-    "extension-recovery.mjs"
+    "extension-recovery.mjs",
+    "native-navigation.tsx",
+    "configuration-save.mjs",
+    "extension-pages.mjs",
+    "native-extension-pages.tsx",
+    "extension-page-bridge.mjs",
+    "native-react-page.tsx"
   ],
   "dsh": {
     "bundle": {
@@ -115,7 +122,8 @@
         "@deepseek-ai/dsh-client-ui-slots",
         "@deepseek-ai/dsh-client-locale",
         "@deepseek-ai/dsh-client-ui-layout",
-        "@deepseek-ai/dsh-client-ui-sidebar"
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-modules"
       ],
       "platform": "web"
     }
@@ -197,5 +205,10 @@
   "homepage": "https://github.com/liangTc/dsh-become-human#readme",
   "bugs": {
     "url": "https://github.com/liangTc/dsh-become-human/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "beta",
+    "registry": "https://registry.npmjs.org/"
   }
 }

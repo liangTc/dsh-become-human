@@ -52,7 +52,7 @@ export function taskBoard(factory,sessionId,input={}){
   for(const row of taskRows){
     const cp=parse(row.checkpoint,{})??{},goalId=typeof cp.goal?.id==='string'?cp.goal.id:null,matterId=typeof cp.matterId==='string'?cp.matterId:null;
     const executionAttempts=attempts.get(row.id)??[];
-    tasks.set(row.id,card('autonomy',{...row,title:cp.plan?.question||cp.candidate?.question||kindLabels[row.kind]},
+    tasks.set(row.id,card('autonomy',{...row,title:row.kind==='behavior-choice'?(cp.reason==='selection-wait'?'等待下一次机会':'选择下一步行动'):(cp.plan?.question||cp.candidate?.question||kindLabels[row.kind])},
       {taskId:row.id,goalId,matterId,origin:'autonomous',summary:clean(cp.plan?.value||kindLabels[row.kind]||'按本轮已记录方向执行'),reason:row.status!=='completed'&&cp.reason?clean(cp.reason):null,attempts:executionAttempts,usage:usageOf(executionAttempts),links:[ref('goal',goalId),ref('tool',cp.behaviorResult?.jobId),matterId?{source:'matter',id:'matter:'+matterId,recordId:matterId}:null].filter(Boolean),result:{noteId:typeof cp.noteId==='string'?cp.noteId:null,sourceReadCount:number(cp.researchReads),meaning:row.status==='completed'?'任务执行结束；不代表主人满意或手机已实收。':row.status==='cancelled'?'本次方向已结束，不代表产生了有效成果。':'结果以实际执行记录为准。'}}));
   }
   const goals=new Map();

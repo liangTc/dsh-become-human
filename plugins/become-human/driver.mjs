@@ -34,6 +34,7 @@ import {CustomMcpCapabilities} from './capability-custom-mcp.mjs';
 import {registerBridgeCapabilities} from './capability-bridge.mjs';
 import {registerReportCapability} from './capability-report.mjs';
 import {registerCalculationCapability} from './capability-calculation.mjs';
+import {registerConversationRecall} from './conversation-recall.mjs';
 import {parentCapabilityRequest} from './capability-parent.mjs';
 import {nextActionWork,runActionTurn} from './action-loop.mjs';
 import {ownerTurnPlan,beginOwnerBatch,bindOwnerResponse,restoreOwnerBatch,finishOwnerBatch,recoverOwnerBatch} from './owner-turns.mjs';
@@ -526,6 +527,7 @@ export class HumanFactory extends Service {
     this.bridgeCapabilities=registerBridgeCapabilities(this.tools,{request:(operation,input,options)=>parentCapabilityRequest(operation,input,{...options,context:{...options.context,policy:this.tools.configuration(options.context.agent).bridge,policyRevision:this.tools.configuration(options.context.agent).revision}})});
     registerReportCapability(this.tools,this.actions,this.journal);
     registerCalculationCapability(this.tools);
+    registerConversationRecall(this.tools,id=>[...this.handles].map(handle=>handle.agent).find(agent=>agent?.id===id));
     this.capabilities=Object.freeze({contractVersion:1,register:(name,descriptor)=>this.tools.register(name,descriptor),catalog:()=>this.controllerSessionId?this.tools.catalog(this.controllerSessionId):[]});
     if(config.sharedBudgetGuard)ctx.on('llm/stream',(options,next)=>this.guardedStream(options,next));
     ctx.sessionProjections.register(inboxProjection);ctx.sessionProjections.register(boundaryProjection);
@@ -542,6 +544,7 @@ export class HumanFactory extends Service {
     try{yield* next();}finally{this.inflight--;this.tickets.delete(options.signal);}
   }
   async build(owner,options,resume){
+    if(this.config.controllerToken&&options.controllerToken!==this.config.controllerToken)throw new Error('SINGLE_CONTROLLER_ONLY');
     owner.fiber.assertActive();if(this.closing)throw new Error('Factory closing');
     const id=resume?options.resumeSessionId:options.sessionId;
     if(this.controllerSessionId&&this.controllerSessionId!==id)throw new Error('SINGLE_CONTROLLER_ONLY');

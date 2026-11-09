@@ -21,6 +21,8 @@ export function DraftProvider({children,ui}:any){
   return <DraftContext.Provider value={{register,navigate,dirty,pending,dismiss:()=>setPending(null),discard:()=>{const action=pending?.action;drafts.current.clear();setDirty(false);setPending(null);action?.();}}}>{children}</DraftContext.Provider>;
 }
 export const useDraftNavigation=()=>useContext(DraftContext);
+// Permission changes keep their explicit pause requirement. Ordinary settings
+// use the serialized configuration-save endpoint instead.
 export async function pauseForConfiguration(api:any){
   if(api.snapshot.state?.desired==='running')await api.control({op:'pause'});
   const state=api.snapshot.state;
@@ -58,15 +60,15 @@ export const taskSections=[
  {id:'reflections',title:'决策与反思',group:'关注与复盘',description:'核对选择依据、任务结果和后续建议。',keywords:'结果 反思 决策 采纳 证据'}
  ,{id:'permission',title:'授权与补额',group:'执行与产物',description:'核对额外自主额度申请，按需批准。',keywords:'权限 授权 补额 token 请求 轮次 周期'}
 ];
-function moveTab(event:React.KeyboardEvent){
+export function moveTab(event:React.KeyboardEvent){
   if(!['ArrowDown','ArrowUp','ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
   const current=event.currentTarget as HTMLElement,group=current.closest('[role="tablist"]');
   const tabs=Array.from(group?.querySelectorAll<HTMLButtonElement>('[role="tab"]:not(:disabled)')??[]).filter(tab=>{if(!tab.getClientRects().length)return false;for(let details=tab.closest('details');details;details=details.parentElement?.closest('details')??null)if(!details.open)return false;return true;});if(!tabs.length)return;
   const index=tabs.indexOf(current as HTMLButtonElement),next=event.key==='Home'?0:event.key==='End'?tabs.length-1:(index+(['ArrowLeft','ArrowUp'].includes(event.key)?-1:1)+tabs.length)%tabs.length;
   event.preventDefault();tabs[next].focus();tabs[next].click();
 }
-export function WorkspaceTabs({active,onChange}:any){
-  const entries=[['chat','对话'],['tasks','任务'],['resources','资料'],['logs','日志'],['statistics','统计'],['settings','设置']];
+export function WorkspaceTabs({active,onChange,hasExtensions=false}:any){
+  const entries=[['chat','对话'],['tasks','任务'],['resources','资料'],['logs','日志'],['statistics','统计'],['settings','设置'],...(hasExtensions?[['extensions','扩展']]:[])];
   return <nav className="hn-workspace-tabs" role="tablist" aria-label="Human 工作区">{entries.map(([id,title])=><button type="button" key={id} role="tab" aria-selected={active===id} tabIndex={active===id?0:-1} onKeyDown={moveTab} onClick={()=>onChange(id)}>{title}</button>)}</nav>;
 }
 export function SectionWorkspace({kind,sections,active,onSelect,children,headerActions,onReset}:any){

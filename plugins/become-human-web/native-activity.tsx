@@ -4,11 +4,11 @@ import EventLog from './native-events';
 import css from './native-activity.css';
 const modes=[['brain','时间线'],['events','事件记录'],['runtime','运行诊断'],['delivery','手机投递']];
 const normalize=(value:string)=>modes.some(([key])=>key===value)?value:value==='activity'?'events':'brain';
-export default function ActivityPage({api,s,ui,initialMode='brain',renderRuntime,renderDelivery}:any){
+export default function ActivityPage({api,s,ui,initialMode='brain',onModeChange,renderRuntime,renderDelivery}:any){
   const [mode,setMode]=useState(()=>normalize(initialMode));
   const [visited,setVisited]=useState<Record<string,boolean>>(()=>({[normalize(initialMode)]:true}));
-  const select=(next:string)=>{setMode(next);setVisited(value=>({...value,[next]:true}));};
-  useEffect(()=>select(normalize(initialMode)),[initialMode]);
+  const select=(next:string)=>{onModeChange?.(next);setMode(next);setVisited(value=>({...value,[next]:true}));};
+  useEffect(()=>{const next=normalize(initialMode);setMode(next);setVisited(value=>({...value,[next]:true}));},[initialMode]);
   const bodies:any={brain:()=> <BrainTimeline {...{api,s,ui}}/>,events:()=> <EventLog {...{api,s,ui}}/>,runtime:renderRuntime,delivery:renderDelivery};
   return <section className="hn-activity hn-logs" aria-label="日志">
     <style>{css}</style><header className="hn-activity-heading"><div><h2>日志</h2><p>查看发生过什么，需要时再展开详情。</p></div></header>

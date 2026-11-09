@@ -9,6 +9,9 @@ import {ActionStore} from '../plugins/become-human/actions.mjs';
 import {ToolExecutor} from '../plugins/become-human/tool-executor.mjs';
 import {registerReportCapability} from '../plugins/become-human/capability-report.mjs';
 import {capabilityDialogue} from '../plugins/become-human/capability-dialogue.mjs';
+import {choiceDialogueRequest} from '../plugins/become-human/choice-dialogue.mjs';
+import {RollingDialogueSummary} from '../plugins/become-human/dialogue-summary.mjs';
+import {registerConversationRecall,conversationRecallTool} from '../plugins/become-human/conversation-recall.mjs';
 import {foregroundSourceHistory} from '../plugins/become-human/foreground-source-history.mjs';
 import {foregroundQuestionText} from '../plugins/become-human/foreground-source.mjs';
 import {learningResult,evidenceUnits} from '../plugins/become-human/learning.mjs';
@@ -17,6 +20,17 @@ import {relevantSearchResults,researchQueryPlan,regionalSearchQuery} from '../pl
 
 const cases=[],test=async(name,fn)=>{try{await fn();cases.push({name,passed:true});}catch(e){cases.push({name,passed:false,error:e.stack});}};
 const base=await fs.mkdtemp(path.join(process.env.BH_TEST_TMP??os.tmpdir(),'bh-four-fixes-'));
+function recallFixture(){
+ const f=fixture({ownerText:'我以前说过什么锻炼习惯？'}),sourceId=randomUUID(),body='我周末会去慢跑。',time=Date.now()-10000;
+ f.db.exec('CREATE TABLE IF NOT EXISTS outbox(seq INTEGER PRIMARY KEY AUTOINCREMENT,agent TEXT,kind TEXT,text TEXT,created INTEGER,event_key TEXT)');f.domain.source(f.agentId,{id:sourceId,kind:'user',body,occurred:time});f.db.prepare('INSERT INTO outbox(agent,kind,text,created,event_key) VALUES(?,?,?,?,?)').run(f.agentId,'user',body,time,'user:'+sourceId);
+ const current=f.agent.session.snapshotEvents();f.agent.session.snapshotEvents=()=>[{type:'user/message',time,data:{id:sourceId,role:'user',content:[{type:'text',text:body}]}},{type:'turn/start',time:time+1,data:{turn:1}},...current];f.agent.factory.conversationSummary=new RollingDialogueSummary(f.journal,f.domain);registerConversationRecall(f.tools,id=>id===f.agentId?f.agent:null);return {...f,sourceId};
+}
+await test('Foreground memory lookup uses ordinary capability protocol and returns original user evidence',async()=>{
+ const f=recallFixture();try{const before=f.db.prepare('SELECT count(*) n FROM memory_record').get().n;const r=await f.dialogue([JSON.stringify({capability:{tool:conversationRecallTool,input:{queries:['锻炼习惯','慢跑']}}}),data=>{const value=data.capabilityObservations.at(-1).result.value;assert.equal(value.matches[0].sourceId,f.sourceId);assert.equal(value.matches[0].speaker,'user');assert.equal(value.matches[0].text,'我周末会去慢跑。');return '你提过周末会去慢跑。';}]);assert.equal(r.result.text,'你提过周末会去慢跑。');assert.equal(f.db.prepare('SELECT count(*) n FROM memory_record').get().n,before);assert.equal(f.tools.list(f.agentId).items.length,1);}finally{f.close();}
+});
+await test('Withdrawing recalled evidence during generation prevents that reply from being returned',async()=>{
+ const f=recallFixture();try{await assert.rejects(f.dialogue([JSON.stringify({capability:{tool:conversationRecallTool,input:{queries:['慢跑']}}}),()=>{f.db.prepare("UPDATE source_record SET status='forgotten' WHERE agent=? AND id=?").run(f.agentId,f.sourceId);return '不应发布这个回顾。';}]),/STALE_CONVERSATION_MEMORY/);assert(f.ends.some(row=>row.state==='validation-rejected'&&row.error==='STALE_CONVERSATION_MEMORY'));}finally{f.close();}
+});
 function fixture({ownerText='【开发测试】请根据已有学习笔记生成 AbortController 的用途报告。'}={}){
  const agentId=randomUUID(),db=new DatabaseSync(':memory:'),values=new Map();let depth=0;
  db.exec('CREATE TABLE metadata(agent TEXT,key TEXT,value TEXT,PRIMARY KEY(agent,key)); CREATE TABLE learning_note(id TEXT PRIMARY KEY,agent TEXT,memory_id TEXT,source_id TEXT,data TEXT,status TEXT,created INTEGER,feedback TEXT);CREATE TABLE autonomy_task(id TEXT,agent TEXT,kind TEXT,status TEXT,updated INTEGER,created INTEGER);CREATE TABLE reminder(id TEXT,agent TEXT,status TEXT,due_at INTEGER)');
@@ -35,6 +49,19 @@ function fixture({ownerText='【开发测试】请根据已有学习笔记生成
  return {db,journal,domain,actions,tools,agent,agentId,ownerId,audits,ends,good,bad,messages,dialogue,submit,close:()=>db.close()};
 }
 const call=(tool,input)=>JSON.stringify({capability:{tool,input}});
+await test('A rejected promise and malformed action recover into one actual lookup through both dialogue layers',async()=>{
+ const f=recallFixture();try{
+  f.agent.factory.conversationReview=true;f.agent.factory.dialogueState={context:()=>null};let drafts=0,reviews=0;
+  const action=call(conversationRecallTool,{queries:['慢跑']});
+  const request=choiceDialogueRequest(async(_agent,_signal,options)=>{
+   const data=JSON.parse(options.messages[1].content[0].text);
+   if(options.purpose==='conversation-review'){reviews++;const value=reviews===1?{assessment:'Synthetic rejected promise fixture.',decision:'revise',issues:[{kind:'unsupported-tool-progress',span:'我查一下。',reason:'没有实际查询记录，承诺不能代替执行。'}]}:{assessment:'Synthetic supported reply fixture.',decision:'accept',issues:[]};return {rid:randomUUID(),text:JSON.stringify({...value,unitChecks:data.replyUnits.map(unit=>({id:unit.id,purpose:'answer',basis:'Synthetic protocol fixture, not a semantic verdict.'}))})};}
+   drafts++;if(drafts===1)return {rid:randomUUID(),text:'我查一下。'};if(drafts===2)return {rid:randomUUID(),text:'<tool_call>'+action+'</tool_call>'};if(drafts===3){assert.equal(data.capabilityObservations.at(-1).executed,false);return {rid:randomUUID(),text:action};}
+   assert.equal(data.capabilityObservations.at(-1).result.value.matches[0].sourceId,f.sourceId);return {rid:randomUUID(),text:'你说过周末会慢跑。'};
+  });
+  const response=await capabilityDialogue(f.agent,new AbortController().signal,{turn:1,epoch:1,admittedIds:[f.ownerId],messages:f.messages,request});assert.equal(response.text,'你说过周末会慢跑。');assert.equal(drafts,4);assert.equal(reviews,2);assert.equal(f.tools.list(f.agentId).items.length,1);assert(f.ends.some(r=>r.error==='INVALID_CAPABILITY_REQUEST'));
+ }finally{f.close();}
+});
 const page=()=>({url:'https://example.com/details#open',title:'Details element',digest:'b'.repeat(64),excerpt:'The open attribute is a boolean attribute. A closed details element shows its summary.',partial:false,fetchedAt:Date.now()});
 const reader=(f,name,result=page())=>f.tools.register(name,{description:'Synthetic public-page transport',effect:'read',scope:'public-web',inputSchema:{type:'object',properties:{url:{type:'string'}},required:['url'],additionalProperties:false},execute:async()=>result});
 const sourceAnswer=data=>{const source=data.foregroundSources.sources[0],unit=source.units.find(unit=>unit.text.includes('boolean'));assert(unit);return JSON.stringify({status:'supported',selections:[{sourceId:source.sourceId,unitId:unit.unitId}],style:'answer'});};

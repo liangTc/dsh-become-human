@@ -1,3 +1,5 @@
+import {pageClientAsset} from './extension-page-bridge.mjs';
+import {extensionPages,activeExtensionPages} from './extension-pages.mjs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
@@ -68,12 +70,18 @@ export class RuntimeExtensions {
     return this.run({entry,home:this.runtime.config.runtimeHome,profile:this.runtime.config.runtimeProfile,args:[...args,...storeArgs,...(args[0]==='remove'?[]:this.cliOptions)],signal:AbortSignal.any([signal,AbortSignal.timeout(180000)])});
   }
   async verifyBehaviorOwnership(ready,signal){
+    signal.throwIfAborted();
     const list=await this.list(),claimed=list.items.filter(item=>item.registered&&(item.replacesBehaviors?.length||item.providesWorkflows?.length));
-    if(!claimed.length)return;
+    signal.throwIfAborted();
+    const pageClaims=list.items.filter(item=>item.registered).flatMap(item=>(item.pages??[]).filter(page=>page.version===2&&item.nodes.some(node=>node.id===page.nodeId&&!node.disabled)).map(page=>({...page,key:item.name+':'+page.id})));
+    if(!claimed.length&&!pageClaims.length)return;
     for(let attempt=0;attempt<11;attempt++){
       signal.throwIfAborted();const behaviors=await this.runtime.read({kind:'behavior-catalog',sessionId:ready.sessionId}),workflows=claimed.some(item=>item.providesWorkflows?.length)?await this.runtime.read({kind:'workflow-catalog',sessionId:ready.sessionId}):[];
+      signal.throwIfAborted();
       const catalog=Array.isArray(behaviors)&&Array.isArray(workflows)?[...behaviors,...workflows]:null;
-      if(Array.isArray(catalog)&&claimed.every(item=>[...(item.replacesBehaviors??[]),...(item.providesWorkflows??[])].every(id=>catalog.filter(row=>row.id===id).length===(item.nodes.some(node=>!node.disabled)?1:0))))return;
+      const pageCatalog=pageClaims.length?await this.runtime.read({kind:'extension-page-catalog',sessionId:ready.sessionId}):[];
+      const pagesReady=pageClaims.every(page=>pageCatalog.some(row=>row.key===page.key&&page.methods.every(method=>row.methods.some(m=>m.name===method.name&&m.mode===method.mode))));
+      if(pagesReady&&Array.isArray(catalog)&&claimed.every(item=>[...(item.replacesBehaviors??[]),...(item.providesWorkflows??[])].every(id=>catalog.filter(row=>row.id===id).length===(item.nodes.some(node=>!node.disabled)?1:0))))return;
       if(attempt<10)await new Promise(resolve=>setTimeout(resolve,100));
     }
     fail('EXTENSION_BEHAVIOR_REGISTRATION_FAILED');
@@ -86,12 +94,17 @@ export class RuntimeExtensions {
     job.recovery.status='restoring';await this.save();
     try{
       await this.recoveryStore.restoreFiles(snapshot);signal.throwIfAborted();
-      if(snapshot.packages){await this.cli(['install',snapshot.files['pnpm-lock.yaml']?'--frozen-lockfile':'--config.lockfile=false','--offline','--ignore-scripts'],signal);await this.recoveryStore.verifyPackages(snapshot);await this.recoveryStore.restoreFiles(snapshot);}
+      if(snapshot.packages){
+        const isolated=await this.recoveryStore.isolateEmptyBaselineModules(snapshot);
+        if(isolated){job.recovery.isolatedModules=[...(job.recovery.isolatedModules??[]),isolated];await this.save();}
+        await this.cli(['install',snapshot.files['pnpm-lock.yaml']?'--frozen-lockfile':'--config.lockfile=false','--offline','--ignore-scripts'],signal);await this.recoveryStore.verifyPackages(snapshot);await this.recoveryStore.restoreFiles(snapshot);
+      }
       if((await profileImage(this.profile)).digest!==snapshot.digest)fail('EXTENSION_RECOVERY_VERIFY_FAILED');
-      job.recovery.filesVerified=true;this.runtime.closed=false;await this.runtime.start();const ready=await this.runtime.state();
+      job.recovery.filesVerified=true;this.runtime.closed=false;await this.runtime.start();signal.throwIfAborted();const ready=await this.runtime.state();
       await this.verifyBehaviorOwnership(ready,signal);
       if(snapshot.sessionId&&ready.sessionId!==snapshot.sessionId){await this.remote.stopRuntime();fail('STALE_SESSION');}
       if(ready.desired!=='paused'){await this.remote.stopRuntime();fail('EXTENSION_RECOVERY_NOT_PAUSED');}
+      signal.throwIfAborted();
       job.recovery={...job.recovery,status:'restored',finishedAt:Date.now(),runtime:'paused',code:null};await this.save();await this.recoveryStore.discard(job.id).catch(()=>{job.recovery.cleanupPending=true;});
     }catch(error){
       await this.runtime.close?.().catch(()=>{});job.recovery.status=signal.aborted?'interrupted':'failed';job.recovery.code=errorCode(error);
@@ -115,12 +128,21 @@ export class RuntimeExtensions {
     if(!Array.isArray(layers))fail('EXTENSION_NAMESPACE_REQUIRED');
     const nodes=layers.flatMap(layer=>plain(layer)&&Object.keys(layer).length===1&&Array.isArray(layer.insert)?layer.insert:[layer]);
     if(!Array.isArray(nodes)||!nodes.length||nodes.length>64||nodes.some(n=>!plain(n)||typeof n.id!=='string'||!/^human-extension\.[a-z0-9][a-z0-9._-]{0,120}$/.test(n.id))||new Set(nodes.map(n=>n.id)).size!==nodes.length)fail('EXTENSION_NAMESPACE_REQUIRED');
-    return {name,version:manifest.version,description:typeof manifest.description==='string'?manifest.description.slice(0,300):'',replacesBehaviors:behaviorReplacementIds(manifest),providesWorkflows:workflowIds(manifest),configEditors:extensionEditors(manifest,nodes),nodes:nodes.map(n=>({id:n.id,disabled:patch.find(p=>p.id===n.id)?.disabled??!!n.disabled,config:patch.find(p=>p.id===n.id)?.config??n.config??{}}))};
+    const pages=extensionPages(manifest,nodes);for(const page of pages)if(page.version===2)await pageClientAsset(this.profile,{...page,packageName:name});
+    return {name,version:manifest.version,description:typeof manifest.description==='string'?manifest.description.slice(0,300):'',replacesBehaviors:behaviorReplacementIds(manifest),providesWorkflows:workflowIds(manifest),pages,configEditors:extensionEditors(manifest,nodes),nodes:nodes.map(n=>({id:n.id,disabled:patch.find(p=>p.id===n.id)?.disabled??!!n.disabled,config:patch.find(p=>p.id===n.id)?.config??n.config??{}}))};
   }
   async list(){
     const c=await this.configuration(),bundles=c.manifest.dsh?.profile?.bundles??[],names=[...new Set([...bundles,...this.jobs.map(j=>j.name).filter(name=>Object.hasOwn(c.manifest.dependencies??{},name))])].filter(editable),items=[];
     for(const name of names)try{items.push({...await this.describe(name,c.patch),manageable:bundles.includes(name),registered:bundles.includes(name),...(!bundles.includes(name)?{code:'EXTENSION_NOT_REGISTERED'}:{})});}catch(e){items.push({name,manageable:false,registered:bundles.includes(name),code:errorCode(e),nodes:[]});}
     return {revision:c.revision,items,jobs:this.jobs.slice(-20).reverse().map(j=>({...j,canRecover:this.canRecover(j)})),recoveryRequired:this.blocked?{id:this.blocked.id,name:this.blocked.name,canRecover:this.canRecover(this.blocked)}:null,busy:!!this.active,scope:'human-private-runtime',trustedCode:true,installScripts:false};
+  }
+  async pages(){const catalog=await this.list();return {pages:activeExtensionPages(catalog.items),revision:catalog.revision};}
+  async stageArchive(input){
+    if(typeof input.data!=='string'||input.data.length>6990508||!input.data.length||input.data.length%4||!/^[A-Za-z0-9+/]*={0,2}$/.test(input.data))fail('EXTENSION_ARCHIVE_INVALID');
+    const bytes=Buffer.from(input.data,'base64');if(bytes.length>5*1024*1024||bytes.toString('base64')!==input.data)fail('EXTENSION_ARCHIVE_INVALID');
+    const manifest=archiveManifest(bytes),sha256=hash(bytes),source=path.join(this.root,sha256+'.tgz');
+    try{await fs.writeFile(source,bytes,{flag:'wx'});}catch(error){if(error.code!=='EEXIST')throw error;if(hash(await regular(source,{limit:5*1024*1024}))!==sha256)fail('EXTENSION_FILE_INVALID');}
+    return {source,name:manifest.name,version:manifest.version,sha256};
   }
   submit(input){const next=(this.submission??Promise.resolve()).catch(()=>{}).then(()=>this.submitOne(input));this.submission=next;return next;}
   async submitOne(input){
@@ -189,13 +211,17 @@ export class RuntimeExtensions {
       }
       runtimeExtensionPatch(patch);if(JSON.stringify(patch)!==JSON.stringify(after.patch))await atomic(path.join(this.profile,'human-extensions.patch.yml'),YAML.stringify(patch));
       job.recovery.after=(await profileImage(this.profile)).digest;job.recovery.status='starting';await this.save();
-      signal.throwIfAborted();this.runtime.closed=false;await this.runtime.start();const ready=await this.runtime.state();
+      signal.throwIfAborted();this.runtime.closed=false;await this.runtime.start();signal.throwIfAborted();const ready=await this.runtime.state();
       await this.verifyBehaviorOwnership(ready,signal);
-      if(previous?.sessionId&&ready.sessionId!==previous.sessionId){await this.runtime.close();fail('STALE_SESSION');}
+      if(expectedSession&&ready.sessionId!==expectedSession){await this.runtime.close();fail('STALE_SESSION');}
       if(resume){this.remote.maintenance=false;await this.remote.controlRuntime({op:'start',sessionId:ready.sessionId,expectedEpoch:ready.cancelEpoch});}
+      signal.throwIfAborted();
       job.status='completed';job.finishedAt=Date.now();job.runtime='started';job.resumed=!!resume;
       job.recovery.status='committed';await this.save();await this.recoveryStore.discard(job.id).catch(()=>{job.recovery.cleanupPending=true;});
     }catch(e){
+      // A late startup/control response cannot leave the driver running after
+      // shutdown cancelled this operation. The mutation remains unconfirmed.
+      if(signal.aborted)await this.remote.stopRuntime().catch(()=>{});
       job.status=signal.aborted?'interrupted':'failed';job.code=errorCode(e);job.finishedAt=Date.now();job.runtime='check-required';
       if(job.recovery&&!['committed','restored'].includes(job.recovery.status)){
         if(signal.aborted){job.recovery.status='interrupted';job.recovery.code='EXTENSION_RECOVERY_INSPECTION_REQUIRED';}

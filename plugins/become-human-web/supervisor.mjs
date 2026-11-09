@@ -7,6 +7,7 @@ import {prepareRuntimeProfile} from './runtime-profile.mjs';
 import {readSourceModelConfiguration} from './source-models.mjs';
 import {readSourceCredentialReferences} from './source-credentials.mjs';
 import {runtimeAttachmentLimits} from './runtime/multimodal.mjs';
+import {workerRequest} from './worker-request.mjs';
 export {readSourceModelConfiguration} from './source-models.mjs';
 import {OperationsLog,operationsLogPolicy,safeOperationCode,assertOfflineStoreUnlocked,acquireRunningLock,releaseRunningLock,assertRunningLock} from './operations-log.mjs';
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -132,10 +133,13 @@ export class RuntimeSupervisor {
   }
   async request(resource,body){
     if(!this.cookie||!this.child||this.child.exitCode!==null)throw new Error('WORKER_UNAVAILABLE');
-    let response;try{response=await fetch(this.base+'/api/become-human/'+resource,{...(body?{method:'POST',body:JSON.stringify(body)}:{}),headers:{cookie:this.cookie,...(body?{'Content-Type':'application/json'}:{})},redirect:'error',signal:AbortSignal.timeout(45000)});}catch(error){const code=safeOperationCode(error,'WORKER_REQUEST_FAILED');if(this.lastRequestError?.code!==code)this.recordLifecycle('worker-request-failed',{code,operation:resource.split('?')[0]});this.lastRequestError={at:Date.now(),code};throw error;}
-    let data;try{data=await response.json();}catch{const code='WORKER_RESPONSE_INVALID';if(this.lastRequestError?.code!==code)this.recordLifecycle('worker-request-failed',{code,operation:resource.split('?')[0]});this.lastRequestError={at:Date.now(),code};throw new Error(code);}
-    if(!response.ok){const error=new Error(data.error??'WORKER_REQUEST_FAILED');error.status=response.status;if(response.status>=500){const code=safeOperationCode(error,'WORKER_SERVER_ERROR');if(this.lastRequestError?.code!==code)this.recordLifecycle('worker-request-failed',{code,operation:resource.split('?')[0],status:response.status});this.lastRequestError={at:Date.now(),code};}throw error;}
-    if(this.lastRequestError){this.recordLifecycle('worker-request-recovered',{operation:resource.split('?')[0]});this.lastRequestError=null;}return data;
+    const child=this.child,cookie=this.cookie;
+    return workerRequest({base:this.base,cookie,resource,body,
+      timeoutMs:resource==='state'||resource==='read'&&['behavior-catalog','workflow-catalog','extension-page-catalog'].includes(body?.kind)?10000:45000,
+      sameWorker:()=>this.child===child&&this.cookie===cookie&&child.exitCode===null&&child.signalCode==null,
+      onFailure:details=>{if(details.status>=400&&details.status<500)return;if(this.lastRequestError?.code!==details.code)this.recordLifecycle('worker-request-failed',details);this.lastRequestError={at:Date.now(),...details};},
+      onRecovered:()=>{if(this.lastRequestError){this.recordLifecycle('worker-request-recovered',{operation:resource.split('?')[0]});this.lastRequestError=null;}}
+    });
   }
   state(){return this.request('state');}
   control(body){return this.request('control',body);}

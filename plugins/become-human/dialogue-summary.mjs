@@ -76,7 +76,17 @@ export class RollingDialogueSummary {
       if(sources.filter(row=>row.role==='user').some(row=>row.developmentOnly)!==scopeIsDev(scope))return [];
       return [{id:group.id,rows:sources}];
     });
-    const eligibleTurns=new Map(groups.map(group=>[group.id,group.rows])),record=this.record(agent,scope),chunks=record?.scope===scope?record.chunks.filter(chunk=>this.validChunk(agent,chunk,scope,eligibleTurns)):[],covered=new Set(chunks.flatMap(chunk=>chunk.turns.map(turn=>turn.id))),retiredThroughSeq=record?.scope===scope?record.retiredThroughSeq??0:0,uncovered=expired.filter(turn=>!covered.has(turn.id)&&Math.max(...turn.rows.map(row=>row.order))>retiredThroughSeq);
+    const eligibleTurns=new Map(groups.map(group=>[group.id,group.rows])),record=this.record(agent,scope);
+    // Old summaries outlive the bounded raw-history scan. Re-check only their
+    // retained completed turns against native events, durable attribution and
+    // current source policy; they are not added to new compression input.
+    const retainedReplyIds=record?.scope===scope?[...new Set(record.chunks.slice(-policy.maxChunks).flatMap(chunk=>Array.isArray(chunk?.turns)?chunk.turns.slice(0,policy.maxTurnsPerJob):[]).filter(turn=>typeof turn?.id==='string'&&turn.id.startsWith('reply:')&&!eligibleTurns.has(turn.id)).map(turn=>turn.id.slice(6)).filter(ident))]:[];
+    if(retainedReplyIds.length){
+      const retainedRows=this.history(agent,{lane:'foreground',admittedIds:options.admittedIds??[],retainedReplyIds});
+      const retainedTurns=new Set(retainedReplyIds.map(id=>'reply:'+id));
+      for(const row of retainedRows){if(!retainedTurns.has(row.dialogueTurnId))continue;const group=eligibleTurns.get(row.dialogueTurnId)??[];group.push(row);eligibleTurns.set(row.dialogueTurnId,group);}
+    }
+    const chunks=record?.scope===scope?record.chunks.filter(chunk=>this.validChunk(agent,chunk,scope,eligibleTurns)):[],covered=new Set(chunks.flatMap(chunk=>chunk.turns.map(turn=>turn.id))),retiredThroughSeq=record?.scope===scope?record.retiredThroughSeq??0:0,uncovered=expired.filter(turn=>!covered.has(turn.id)&&Math.max(...turn.rows.map(row=>row.order))>retiredThroughSeq);
     return {scope,recentTurnLimit,record,chunks,expired,uncovered,eligibleTurns,invalidChunks:record?.scope===scope?record.chunks.length-chunks.length:0,boundedRawTurns:groups.length,olderNativeRepliesOutsideScan:rows.coverage?.olderNativeRepliesOutsideScan??0};
   }
   basis(agent,state){return hash({scope:state.scope,expectedVersion:state.record?.revision??0,recentTurnLimit:state.recentTurnLimit,barrier:this.journal.value(agent.id,'memoryContextBarrierAt',0),uncovered:state.uncovered.map(turn=>({id:turn.id,sources:turn.rows.map(row=>({id:row.id,role:row.role,hash:row.hash,order:row.order}))}))});}
@@ -166,8 +176,15 @@ export class RollingDialogueSummary {
     this.admitted(agent);if(lane!=='foreground'||!Number.isSafeInteger(maxBytes)||maxBytes<512)return null;
     const state=this.archive(agent,{admittedIds}),chunks=state.chunks;if(!chunks.length)return null;
     const terms=retrievalTerms(typeof query==='string'?query.slice(0,1000):'',{limit:24}),items=[];
-    for(const chunk of chunks)for(const category of categories)for(const item of chunk.sections[category])items.push({category,item,chunk,score:terms.reduce((n,term)=>n+item.text.toLowerCase().includes(term),0)});
-    const priority={corrections:3,decisions:2,openQuestions:1,topics:0};items.sort((a,b)=>(terms.length?b.score-a.score:0)||priority[b.category]-priority[a.category]||b.chunk.created-a.chunk.created);
+    for(const chunk of chunks)for(const category of categories)for(const item of chunk.sections[category]){
+      const refs=chunk.sources.filter(ref=>item.sourceIds.includes(ref.id)),order=Math.max(...refs.map(ref=>ref.order)),observedThrough=Math.max(...refs.map(ref=>ref.time));
+      items.push({category,item:{...item,observedThrough,sourceOrder:order},chunk,order,score:terms.reduce((n,term)=>n+item.text.toLowerCase().includes(term),0)});
+    }
+    // Reserve the latest correction evidence before lexical ranking. An old
+    // wording can match a question perfectly while its correction uses new
+    // words. Use source chronology, not the time an old chunk was recomputed.
+    const latestCorrections=new Set(items.filter(row=>row.category==='corrections').sort((a,b)=>b.order-a.order).slice(0,3));
+    const priority={corrections:3,decisions:2,openQuestions:1,topics:0};items.sort((a,b)=>Number(latestCorrections.has(b))-Number(latestCorrections.has(a))||(latestCorrections.has(a)&&latestCorrections.has(b)?b.order-a.order:0)||(terms.length?b.score-a.score:0)||priority[b.category]-priority[a.category]||b.order-a.order);
     const allTurns=new Set(chunks.flatMap(chunk=>chunk.turns.map(turn=>turn.id))),sourceMap=new Map(chunks.flatMap(chunk=>chunk.sources).map(source=>[source.id,source])),sections=Object.fromEntries(categories.map(k=>[k,[]])),selected=new Set(),chunkIds=new Set();
     const base={version:state.record.revision,scope:state.scope,developmentOnly:scopeIsDev(state.scope),kind:'rolling-dialogue-summary',semanticValidation:'unverified-model-summary',truth:'inferred',status:'active',sourceTurnCount:allTurns.size,sourceMessageCount:sourceMap.size,coveredThrough:Math.max(...chunks.flatMap(chunk=>chunk.sources.map(row=>row.time))),updated:state.record.updated,originalsRetained:true,ownerFactsWritten:false,permissionsChanged:false,backlogTurns:state.uncovered.length,evictedChunks:state.record.evictedChunks??0,omittedOlderTurns:state.record.evictedTurns??0,olderNativeRepliesOutsideScan:state.olderNativeRepliesOutsideScan};
     const view=()=>({...base,sections,chunkIds:[...chunkIds],sources:[...selected].map(id=>{const ref=sourceMap.get(id),source=this.canonical(agent,ref);return {id:ref.id,role:ref.role,time:ref.time,hash:ref.hash,turnId:ref.turnId,quote:clip(source.text,maxBytes<=2048?40:120)};}),projection:{includedItems:Object.values(sections).reduce((n,rows)=>n+rows.length,0),omittedItems:items.length-Object.values(sections).reduce((n,rows)=>n+rows.length,0),includedSourceTurnCount:new Set([...selected].map(id=>sourceMap.get(id).turnId)).size,omittedSourceTurnCount:allTurns.size-new Set([...selected].map(id=>sourceMap.get(id).turnId)).size,maxBytes}});

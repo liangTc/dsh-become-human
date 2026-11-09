@@ -9,14 +9,14 @@ export function requestCost(input,config={},context){return estimateModelCost(in
 // All model work stays under the parent driver's single active interval and ticket gate.
 export async function modelRequest(agent,signal,{turn,epoch,lane,messages,admittedIds=[],taskId,purpose}){
   const compacting=purpose==='conversation-summary';
-  const reviewing=purpose==='conversation-review',learningReview=purpose==='learning-selection-review',internal=compacting||reviewing||learningReview;
+  const reviewing=purpose==='conversation-review',styleRepair=purpose==='conversation-style-repair',learningReview=purpose==='learning-selection-review',internal=compacting||reviewing||styleRepair||learningReview;
   if(lane==='foreground'&&!internal)messages=attachCurrentImages(nativeDialogueMessages(messages),agent,{admittedIds,requireCapability:false});
   const f=agent.factory,j=f.journal,config=f.management?.options(agent.id,lane)??f.config,store=f.autonomy,budgetClass=lane==='foreground'?'foreground':'autonomous';
   signal.throwIfAborted();if(agent.desired().epoch!==epoch)throw failure('STALE_EPOCH');
   const strategyTask=lane==='executor'&&taskId?store.getTask(taskId):null;
   const strategyUses=strategyTask?f.experience?.strategies.forTask(agent.id,strategyTask)??[]:[];
   messages=strategyRequest(messages,strategyUses);
-  recordContext(agent,messages,{taskId,turn,lane:compacting?'conversation-summary':reviewing?'conversation-review':learningReview?'learning-selection-review':lane});
+  recordContext(agent,messages,{taskId,turn,lane:compacting?'conversation-summary':reviewing?'conversation-review':styleRepair?'conversation-style-repair':learningReview?'learning-selection-review':lane});
   const ownerInputRevision=admittedIds.length?admittedIds.reduce((n,id)=>Math.max(n,j.db.prepare('SELECT rowid AS n FROM user_request WHERE agent=? AND message_id=?').get(agent.id,id)?.n??0),0):j.db.prepare('SELECT COALESCE(max(rowid),0) AS n FROM user_request WHERE agent=?').get(agent.id).n;
   let rid,amount,usage,finish,text='',reasoningChars=0,dispatched=false,settled=false;
   const requestSignal=signal;

@@ -22,6 +22,19 @@ export class ExtensionRecovery {
  }
  async load(job){const body=await recoveryFile(this.file(job.id));if(!body||digest(body)!==job.recovery.snapshotDigest)fail('EXTENSION_RECOVERY_CHANGED');const s=JSON.parse(body);if(s.id!==job.id||s.profile!==path.resolve(this.profile)||s.version!==1||Object.keys(s.files).sort().join()!==[...names].sort().join()||Object.values(s.files).some(x=>x!==null&&typeof x!=='string')||digest(JSON.stringify(s.files))!==s.digest)fail('EXTENSION_RECOVERY_INVALID');return s;}
  async restoreFiles(snapshot){for(const name of names)await replace(path.join(this.profile,name),snapshot.files[name]);}
+ async isolateEmptyBaselineModules(snapshot){
+  const manifest=JSON.parse(snapshot.files['package.json']);
+  if(['dependencies','devDependencies','optionalDependencies','peerDependencies'].some(key=>Object.keys(manifest[key]??{}).length))return null;
+  // pnpm checks node_modules/.pnpm/lock.yaml even when package.json has been
+  // restored to an empty baseline. Preserve the failed install for inspection,
+  // but do not let its lockfile participate in the offline restore.
+  const source=path.join(this.profile,'node_modules');
+  const stat=await fs.lstat(source).catch(error=>{if(error.code==='ENOENT')return null;throw error;});
+  if(!stat)return null;
+  if(!stat.isDirectory()||stat.isSymbolicLink())fail('EXTENSION_RECOVERY_FILE_INVALID');
+  const target=path.join(this.profile,'.human-recovery-modules-'+snapshot.id+'-'+randomUUID());
+  await fs.rename(source,target);return path.basename(target);
+ }
  async verifyPackages(snapshot){for(const [name,version] of Object.entries(snapshot.installed)){const body=await recoveryFile(path.join(this.profile,'node_modules',name,'package.json'));if(!body||JSON.parse(body).version!==version)fail('EXTENSION_RECOVERY_PACKAGE_MISMATCH');}}
  async discard(id){await fs.unlink(this.file(id)).catch(e=>{if(e.code!=='ENOENT')throw e;});}
 }

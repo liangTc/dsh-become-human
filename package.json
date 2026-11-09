@@ -1,6 +1,6 @@
 {
   "name": "become-human-workspace",
-  "version": "0.7.0-beta.28",
+  "version": "0.7.0-beta.38",
   "private": true,
   "license": "Apache-2.0",
   "description": "Experimental single-session autonomous companion for DeepSeek Harness",
@@ -13,7 +13,8 @@
     "release:licenses": "node scripts/collect-third-party.mjs",
     "release:package": "node scripts/package-release.mjs",
     "release:market": "node scripts/generate-market.mjs",
-    "release:behaviors": "node scripts/package-behavior-packs.mjs"
+    "release:behaviors": "node scripts/package-behavior-packs.mjs",
+    "verify:release": "node scripts/verify-release.mjs"
   },
   "repository": {
     "type": "git",
