@@ -19,10 +19,10 @@ jobs:
           node-version: '24'
       - name: Install declared dependencies
         run: npm ci --prefix plugins/become-human-web
-      - name: Run isolated release regression
-        run: npm run verify:release
       - name: Build IM and Human bundle
         run: npm run build
+      - name: Run isolated release regression
+        run: npm run verify:release
       - name: Prepare installable package
         run: npm run release:package
       - name: Export public source only

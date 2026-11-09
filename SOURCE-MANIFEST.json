@@ -31,7 +31,7 @@
     {
       "path": ".github/workflows/build.yml",
       "bytes": 852,
-      "sha256": "b047af987ed513716f0eb539555a1967ada074498629ed6ee7c48e7109c3fdd4"
+      "sha256": "ec3ff1fece95aaa12af27779712fcf5ec50dc4e1d2d181786731924db0abaaea"
     },
     {
       "path": ".gitignore",
