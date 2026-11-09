@@ -1,10 +1,10 @@
 # Become Human · DSH Web 插件
 
-> **本次测试发行：0.7.0-beta.38。** [下载组合安装包](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.38)，安装和验证边界以[本版发行说明](https://github.com/liangTc/dsh-become-human/blob/main/docs/RELEASE_BETA38.md)为准。下文 beta.5 为历史发行说明；npm 发布状态单独确认。
+> **本次测试发行：0.7.0-beta.39。** [下载组合安装包](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.39)，安装和验证边界以[本版发行说明](https://github.com/liangTc/dsh-become-human/blob/main/docs/RELEASE_BETA39.md)为准。下文 beta.5 为历史发行说明；npm 发布状态单独确认。
 
-> **beta.38 开发源码**：通用事件循环、单执行线、结果反馈与成长；Web 扩展安装、配置、启停和升级恢复；学习降为默认停用的独立行为包。新增 Human 内自定义 React 页面与扩展后台读写接口，复用 DSH 模块加载器和子插槽。隔离检查与真实验收分别记录，详见 [扩展页面](docs/EXTENSION_PAGES.md)、[核心设计](docs/CORE_DESIGN.md) 和 [测试状态](docs/TESTING_STATUS.md)。
+> **beta.39 开发源码**：通用事件循环、单执行线、结果反馈与成长；Web 扩展安装、配置、启停和升级恢复；学习降为默认停用的独立行为包。新增 Human 内自定义 React 页面与扩展后台读写接口，复用 DSH 模块加载器和子插槽。隔离检查与真实验收分别记录，详见 [扩展页面](docs/EXTENSION_PAGES.md)、[核心设计](docs/CORE_DESIGN.md) 和 [测试状态](docs/TESTING_STATUS.md)。
 
-> **测试版本，尚未开发完成。** 本目录为 `0.7.0-beta.38` 开发源码，对应测试包见上方 beta.38 发行链接；下方 beta.5 为历史说明。面向 Windows、Node.js 24+、DeepSeek Harness 0.2.0-rc.2 的 web profile。完整验收边界见[本包测试状态](docs/TESTING_STATUS.md)。
+> **测试版本，尚未开发完成。** 本目录为 `0.7.0-beta.39` 开发源码，对应测试包见上方 beta.39 发行链接；下方 beta.5 为历史说明。面向 Windows、Node.js 24+、DeepSeek Harness 0.2.0-rc.2 的 web profile。完整验收边界见[本包测试状态](docs/TESTING_STATUS.md)。
 
 为 DSH Web 增加一个拥有统一人格、记忆、可扩展行为与成长记录的 Human。管理插件嵌入 Web，独立运行模块处理事件循环；一个 Human 只有一个持久主会话，同时只绑定一个有效 IM 渠道。
 

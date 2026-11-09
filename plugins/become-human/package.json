@@ -1,6 +1,6 @@
 {
   "name": "dsh-become-human",
-  "version": "0.7.0-beta.38",
+  "version": "0.7.0-beta.39",
   "type": "module",
   "description": "Bounded autonomous Agent Web integration for DSH 0.2.0-rc.2",
   "main": "index.mjs",
@@ -162,7 +162,7 @@
     "zod": "4.6.6"
   },
   "dependencies": {
-    "@modelcontextprotocol/client": "2.0.0",
+    "@modelcontextprotocol/client": "2.4.0",
     "yaml": "^2.8.0"
   },
   "license": "Apache-2.0",

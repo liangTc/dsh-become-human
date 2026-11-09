@@ -5,9 +5,9 @@
 
 # Become Human
 
-> **Release candidate: 0.7.0-beta.38.** [Download the test release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.38). See [release notes](https://github.com/liangTc/dsh-become-human/blob/main/docs/RELEASE_BETA38.md) for verification limits. npm publication is tracked separately.
+> **Release candidate: 0.7.0-beta.39.** [Download the test release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.39). See [release notes](https://github.com/liangTc/dsh-become-human/blob/main/docs/RELEASE_BETA39.md) for verification limits. npm publication is tracked separately.
 
-> **beta.38 development source · Experimental and incomplete.** The core focuses on event selection, action execution, outcome feedback and growth. Learning is an optional behavior pack, disabled by default. This source includes extension management, custom React pages within Human and declared backend read/write methods; beta.38 is distributed as a test Release. See [core design](docs/CORE_DESIGN.md), [extension pages](docs/EXTENSION_PAGES.md) and [testing status](docs/TESTING_STATUS.md).
+> **beta.39 development source · Experimental and incomplete.** The core focuses on event selection, action execution, outcome feedback and growth. Learning is an optional behavior pack, disabled by default. This source includes extension management, custom React pages within Human and declared backend read/write methods; beta.39 is distributed as a test Release. See [core design](docs/CORE_DESIGN.md), [extension pages](docs/EXTENSION_PAGES.md) and [testing status](docs/TESTING_STATUS.md).
 
 **A DSH agent that chooses actions in an event loop, remembers experiences and can grow through one persistent session.**
 
@@ -16,11 +16,11 @@
 > [!WARNING]
 > **Test release · Development is incomplete.** The current public test release is `0.7.0-beta.5` (GitHub Prerelease). Windows, Node.js 24+, and DSH `0.2.0-rc.2` are required. Complete acceptance and long-running reliability remain unverified, including the fresh-DSH native DeepSeek flow; see [testing status](docs/TESTING_STATUS.md).
 
-This checkout contains **`0.7.0-beta.38` development source**, which requires a source build. The beta.5 downloads below do not include later development changes.
+This checkout contains **`0.7.0-beta.39` development source**, which requires a source build. The beta.5 downloads below do not include later development changes.
 
 | Version | Availability and status |
 | --- | --- |
-| `0.7.0-beta.38` | Current development source with local builds, upgrades and limited real-model/Web checks; no corresponding public Release package |
+| `0.7.0-beta.39` | Current development source with local builds, upgrades and limited real-model/Web checks; no corresponding public Release package |
 | `0.7.0-beta.5` | Current public test release, with a prebuilt bundle and SHA-256 file; see installation below |
 | `0.7.0-beta.4` | Historical test release; its package does not include beta.5 additions |
 

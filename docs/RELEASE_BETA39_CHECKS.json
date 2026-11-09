@@ -1,0 +1,65 @@
+{
+  "version": "0.7.0-beta.39",
+  "date": "2026-11-09",
+  "kind": "isolated-regression",
+  "realModelCalls": 0,
+  "productionServicesChanged": false,
+  "results": [
+    {
+      "suite": "memory-continuity",
+      "exitCode": 0
+    },
+    {
+      "suite": "dialogue",
+      "exitCode": 0
+    },
+    {
+      "suite": "behavior-core",
+      "exitCode": 0
+    },
+    {
+      "suite": "attempt-lifecycle",
+      "exitCode": 0
+    },
+    {
+      "suite": "controller-admission",
+      "exitCode": 0
+    },
+    {
+      "suite": "extension-pages",
+      "exitCode": 0
+    },
+    {
+      "suite": "extension-management",
+      "exitCode": 0
+    },
+    {
+      "suite": "extension-registry",
+      "exitCode": 0
+    },
+    {
+      "suite": "worker-request",
+      "exitCode": 0
+    },
+    {
+      "suite": "web-experience",
+      "exitCode": 0
+    }
+  ],
+  "mcpProjection": {
+    "passed": 7,
+    "failed": 0
+  },
+  "npmAuditProduction": {
+    "info": 0,
+    "low": 0,
+    "moderate": 0,
+    "high": 0,
+    "critical": 0,
+    "total": 0
+  },
+  "limitations": [
+    "Does not cover dev and host peer dependency security",
+    "No fresh machine service startup or 24-hour acceptance"
+  ]
+}

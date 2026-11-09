@@ -4,14 +4,14 @@
 
 # Become Human
 
-> **本次测试发行：0.7.0-beta.38。** [下载组合安装包](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.38)，安装和验证边界以[本版发行说明](https://github.com/liangTc/dsh-become-human/blob/main/docs/RELEASE_BETA38.md)为准。下文 beta.5 为历史发行说明；npm 发布状态单独确认。
+> **本次测试发行：0.7.0-beta.39。** [下载组合安装包](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.39)，安装和验证边界以[本版发行说明](https://github.com/liangTc/dsh-become-human/blob/main/docs/RELEASE_BETA39.md)为准。下文 beta.5 为历史发行说明；npm 发布状态单独确认。
 
 **让一个有持续记忆、独特性格和自主行动能力的数字人，生活在你的 DSH 中。**
 
 [English](README.en.md) · [安装指南](docs/INSTALLATION.md) · [使用指南](docs/USAGE.md) · [配置说明](docs/CONFIGURATION.md) · [测试状态](docs/TESTING_STATUS.md)
 
 > [!WARNING]
-> **测试中，尚未开发完成。** 本目录对应 `0.7.0-beta.38` 测试版，不能将历次短测视为完整稳定性验收。当前支持范围为 **Windows + Node.js 24+ + DSH `0.2.0-rc.2` 的 Web profile**。完整新装与长期稳定性仍待验收。
+> **测试中，尚未开发完成。** 本目录对应 `0.7.0-beta.39` 测试版，不能将历次短测视为完整稳定性验收。当前支持范围为 **Windows + Node.js 24+ + DSH `0.2.0-rc.2` 的 Web profile**。完整新装与长期稳定性仍待验收。
 
 ## 它是什么
 
@@ -52,11 +52,11 @@ Become Human 是一个 DSH Web 插件，配有独立运行模块。它围绕一�
 
 | 来源 | 当前状态 |
 | --- | --- |
-| 本目录开发源码 `0.7.0-beta.38` | 包含本页所述新能力；可从上方测试发行下载组合包，也可自行构建 |
+| 本目录开发源码 `0.7.0-beta.39` | 包含本页所述新能力；可从上方测试发行下载组合包，也可自行构建 |
 | [历史测试发行 `0.7.0-beta.5`](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.5) | 提供 `.tgz` 与 SHA-256，但存在首次创建 Human 可能失败的已知初始化问题；修复已进入后续源码 |
 | npm | 尚未发布；不要把包名当作已可用的 npm 安装来源 |
 
-**首次体验请优先使用 beta.38 组合包，或由对应源码构建。** 本地源码、GitHub 分支与 Release 可能不同步，先核对下载源码的 `package.json`；源码 ZIP 本身不是插件安装包。
+**首次体验请优先使用 beta.39 组合包，或由对应源码构建。** 本地源码、GitHub 分支与 Release 可能不同步，先核对下载源码的 `package.json`；源码 ZIP 本身不是插件安装包。
 
 ### 2. 构建并安装
 

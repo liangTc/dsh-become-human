@@ -1,13 +1,13 @@
 # 安装与升级
 
-> **本次测试发行：0.7.0-beta.38。** [下载组合安装包](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.38)，安装和验证边界以[本版发行说明](https://github.com/liangTc/dsh-become-human/blob/main/docs/RELEASE_BETA38.md)为准。下文 beta.5 为历史发行说明；npm 发布状态单独确认。
+> **本次测试发行：0.7.0-beta.39。** [下载组合安装包](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.39)，安装和验证边界以[本版发行说明](https://github.com/liangTc/dsh-become-human/blob/main/docs/RELEASE_BETA39.md)为准。下文 beta.5 为历史发行说明；npm 发布状态单独确认。
 
 [返回首页](../README.md) · [配置说明](CONFIGURATION.md) · [使用指南](USAGE.md) · [测试状态](TESTING_STATUS.md)
 
 > [!WARNING]
 > **`0.7.0-beta.5` 是测试版本（Prerelease），尚未开发完成。** 本页是公开发行的安装流程，不表示干净机器安装与全部能力已完成验收。
 
-本页公开下载链接指向 beta.5 组合包；源码构建使用所下载源码的版本，以 `package.json` 为准，两者不可混用。beta.38 组合包见本页顶部发行链接。历史 beta.4 包仍可查阅，但不包含 beta.5 的新增能力。原生 DeepSeek 最终发行包的全新安装整链仍保留待测；发布测试包不等于该流程已经通过。
+本页公开下载链接指向 beta.5 组合包；源码构建使用所下载源码的版本，以 `package.json` 为准，两者不可混用。beta.39 组合包见本页顶部发行链接。历史 beta.4 包仍可查阅，但不包含 beta.5 的新增能力。原生 DeepSeek 最终发行包的全新安装整链仍保留待测；发布测试包不等于该流程已经通过。
 
 **已知问题：** beta.5 首次创建 Human 可能因初始化顺序失败；修复自 beta.6 起进入开发源码。需要后续修复、可选行为包和扩展页面时，请按下方步骤构建对应开发源码，并核对版本与测试记录。最新干净安装仍需单独验收。
 
@@ -80,7 +80,7 @@ if ($humanExpectedSha -notmatch '^[a-fA-F0-9]{64}$' -or $humanActualSha -ine $hu
 
 ### 从源码构建
 
-下载或克隆 [liangTc/dsh-become-human](https://github.com/liangTc/dsh-become-human) 的 `main` 分支，进入仓库根目录。远程分支与本地开发源码可能不同步；构建前核对所下载版本的 `package.json` 和变更记录，不把本地 beta.38 的说明当作远程已同步的证明。
+下载或克隆 [liangTc/dsh-become-human](https://github.com/liangTc/dsh-become-human) 的 `main` 分支，进入仓库根目录。远程分支与本地开发源码可能不同步；构建前核对所下载版本的 `package.json` 和变更记录，不把本地 beta.39 的说明当作远程已同步的证明。
 
 ```powershell
 git clone --branch main --single-branch https://github.com/liangTc/dsh-become-human.git
