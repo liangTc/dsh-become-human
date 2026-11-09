@@ -3680,8 +3680,8 @@
     },
     {
       "path": "scripts/verify-release.mjs",
-      "bytes": 1072,
-      "sha256": "c7f3b3e56ee5cd0c3c671fddb0088d5340d1c1c2eae6486d34b48709813ecf4c"
+      "bytes": 1132,
+      "sha256": "ec1cedca687c7f05fd745c5b17a0ce40f9ef02892b3608eebb5f5be6e612c170"
     },
     {
       "path": "scripts/verify-research-quality.mjs",
