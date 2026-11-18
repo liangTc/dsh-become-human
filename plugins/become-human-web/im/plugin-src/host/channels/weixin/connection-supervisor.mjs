@@ -99,8 +99,8 @@ export class ConnectionSupervisor {
 
   async #reconcile() {
     try {
-      await this.#harness.ensureRunning();
-      if (this.#closed) return;
+      // initialize checks Harness only when an account actually needs starting.
+      // An idle/healthy channel must not depend on repeated full host probes.
       const status = await this.#controller.initialize();
       if (this.#closed) return;
       this.#resolveReady?.(status);

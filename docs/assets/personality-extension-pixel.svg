@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1070" viewBox="0 0 1440 1070" role="img" aria-labelledby="title desc">
+  <title id="title">Become Human：持续的人格与可扩展的行动</title>
+  <desc id="desc">左侧人格、关系和记忆为中央事件循环提供上下文；右侧事件、行为包、工具、Skill和页面扩展能力。中央从事件与机会开始，由模型选择行动或等待，执行后记录结果。结果成为经历并反馈到下一次选择；只有满足额外证据条件才形成可撤回的人格偏移。全程共享一个主会话和执行边界。测试版本。</desc>
+  <defs>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M32 0H0V32" fill="none" stroke="#112436" stroke-width="1"/></pattern>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0H5V2H7V4H10V6H7V8H5V10H0Z" fill="#70d8f5"/></marker>
+    <style>
+      text{font-family:'Microsoft YaHei','Noto Sans CJK SC',sans-serif;fill:#eaf5ff}
+      .title{font-size:42px;font-weight:700}.head{font-size:28px;font-weight:700}
+      .label{font-size:23px;font-weight:700}.body{font-size:20px;fill:#c5d7e5}
+      .small{font-size:17px;fill:#a4becf}.accent{fill:#83e1f9}
+      .panel{fill:#0b1b2c;stroke:#39576d;stroke-width:2}
+      .flow{fill:#102c3f;stroke:#70d8f5;stroke-width:2}
+      .line{fill:none;stroke:#70d8f5;stroke-width:3;marker-end:url(#arrow)}
+    </style>
+  </defs>
+  <path fill="#050c17" d="M0 0H1440V1070H0Z"/>
+  <path fill="url(#grid)" d="M0 0H1440V1070H0Z"/>
+  <path fill="#70d8f5" d="M48 50H64V66H48Z M70 50H78V58H70Z"/>
+  <text x="94" y="69" class="small accent">BECOME HUMAN / PRODUCT ARCHITECTURE</text>
+  <text x="48" y="134" class="title">持续的人格 × 可扩展的行动</text>
+  <text x="48" y="172" class="body">同一个数字人，在经历中形成倾向，通过插件拓展能力。</text>
+
+  <path class="panel" d="M48 226H64V210H400V226H416V714H400V730H64V714H48Z"/>
+  <text x="76" y="267" class="head">我是谁，此刻在意什么</text>
+  <text x="76" y="300" class="small">持久人格与经历 · 为选择提供背景</text>
+  <path stroke="#39576d" d="M76 320H388"/>
+  <text x="76" y="361" class="label">人物与关系</text>
+  <text x="76" y="393" class="body">身份、初始兴趣、相处方式</text>
+  <text x="76" y="444" class="label">对话与有效记忆</text>
+  <text x="76" y="476" class="body">共同经历、事实、更正与来源</text>
+  <text x="76" y="527" class="label">当前关注与经历方法</text>
+  <text x="76" y="559" class="body">关心的事、过往结果、下次方法</text>
+  <text x="76" y="610" class="label">可选人格偏移</text>
+  <text x="76" y="642" class="body">兴趣、性格倾向、习惯</text>
+  <text x="76" y="691" class="small accent">基础身份由用户管理 · 偏移可撤回</text>
+
+  <text x="720" y="238" text-anchor="middle" class="head">此刻值得做什么</text>
+  <path class="flow" d="M512 266H928V346H512Z"/>
+  <text x="720" y="299" text-anchor="middle" class="label">事件与可行机会</text>
+  <text x="720" y="328" text-anchor="middle" class="small">用户输入 · 时间 · 已接入的外部变化</text>
+  <path class="line" d="M720 347V379"/>
+  <path class="flow" d="M512 386H928V466H512Z"/>
+  <text x="720" y="419" text-anchor="middle" class="label">模型结合人格选择</text>
+  <text x="720" y="448" text-anchor="middle" class="small">交流 · 行动 · 协商 / 拒绝 · 等待</text>
+  <path class="line" d="M720 467V499"/>
+  <path class="flow" d="M512 506H928V586H512Z"/>
+  <text x="720" y="539" text-anchor="middle" class="label">执行选中的行动</text>
+  <text x="720" y="568" text-anchor="middle" class="small">核对输入与授权 · 保留任务状态</text>
+  <path class="line" d="M720 587V619"/>
+  <path class="flow" d="M512 626H928V706H512Z"/>
+  <text x="720" y="659" text-anchor="middle" class="label">记录结果与反馈</text>
+  <text x="720" y="688" text-anchor="middle" class="small">成功 · 失败 · 未知 · 用户反馈</text>
+
+  <path class="panel" d="M1024 226H1040V210H1376V226H1392V714H1376V730H1040V714H1024Z"/>
+  <text x="1052" y="267" class="head">我可以增加哪些能力</text>
+  <text x="1052" y="300" class="small">扩展入口 · 共享同一个核心</text>
+  <path stroke="#39576d" d="M1052 320H1364"/>
+  <text x="1052" y="361" class="label">事件与行为包</text>
+  <text x="1052" y="393" class="body">提供新信号、机会与行动方法</text>
+  <text x="1052" y="444" class="label">MCP / DSH 会话工具</text>
+  <text x="1052" y="476" class="body">在授权范围内读取与操作</text>
+  <text x="1052" y="527" class="label">Skill</text>
+  <text x="1052" y="559" class="body">补充方法与交流指导</text>
+  <text x="1052" y="610" class="label">React 页面 / 后台接口</text>
+  <text x="1052" y="642" class="body">增加可视化管理与交互入口</text>
+  <text x="1052" y="691" class="small accent">学习是可选行为包 · 默认停用</text>
+
+  <path class="line" d="M416 426H504"/>
+  <text x="464" y="411" text-anchor="middle" class="small">上下文</text>
+  <path class="line" d="M1024 546H936"/>
+  <text x="980" y="531" text-anchor="middle" class="small">能力</text>
+  <path class="line" d="M720 707V812"/>
+  <text x="745" y="779" class="small">结果成为后续选择的依据</text>
+  <path class="line" d="M232 820V738"/>
+  <text x="253" y="779" class="small">有效经历回到上下文</text>
+
+  <path fill="#102a31" stroke="#75c9bb" stroke-width="2" d="M48 836H64V820H1376V836H1392V976H1376V992H64V976H48Z"/>
+  <text x="76" y="864" class="head">经历与成长反馈</text>
+  <text x="76" y="902" class="body">结果记录 → 有效经历与反思 → 下一轮选择；满足额外证据条件后，才形成可撤回的人格偏移。</text>
+  <text x="76" y="938" class="body">一次成功不等于成长。基础身份、关系设定与工具权限不会被人格偏移自动改写。</text>
+  <text x="76" y="972" class="small accent">统一边界：一个主会话 · 单模型执行线 · 自主预算 · 权限与审批 · 可追溯记录</text>
+  <text x="48" y="1034" class="small">BETA / WORK IN PROGRESS · 架构示意，不代表长期人格进化或全部扩展兼容性已获验证。</text>
+</svg>

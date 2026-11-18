@@ -31,6 +31,14 @@ function fixture(){
  return {id,owner,usage,ids,agent,tools,dialogue,generated,reopen,row,get journal(){return journal;},get executions(){return executions;}};
 }
 const call=tool=>JSON.stringify({capability:{tool,input:{}}});
+await test('Background review failure is not presented as a missing owner reply',async f=>{
+ const events=[{seq:1,time:Date.now(),type:'turn/end',data:{turn:1,reason:{kind:'error',error:{code:'HUMAN_REVIEW_ERROR',message:'INVALID_MEMORY_SUMMARY'}}}}];
+ const session={id:f.id,snapshotEvents:()=>events};f.journal.reconcile(session);f.journal.reconcile(session);
+ const rows=f.journal.db.prepare("SELECT text FROM outbox WHERE agent=? AND kind='status'").all(f.id);
+ assert.equal(rows.length,1);assert.match(rows[0].text,/后台记忆与人格回顾/);assert.doesNotMatch(rows[0].text,/未投递回复/);
+ events.push({seq:2,time:Date.now(),type:'turn/end',data:{turn:2,reason:{kind:'error',error:{code:'HUMAN_DRIVER_ERROR',message:'MODEL_EXECUTION_FAILED'}}}});
+ f.journal.reconcile(session);assert.match(f.journal.db.prepare("SELECT text FROM outbox WHERE agent=? ORDER BY seq DESC LIMIT 1").get(f.id).text,/未投递回复/);
+});
 await test('Consumed read survives real SQLite close/reopen; uncommitted natural reply remains interruptible',async f=>{const r=await f.dialogue([call('fixture-read'),'Natural result.']),before=f.row(f.ids[0]),used=f.journal.get(f.id).used;assert.equal(before.state,'completed');assert.equal(f.row(r.rid).state,'generated');f.reopen().recoverAttempts(f.id);assert.deepEqual(f.row(f.ids[0]),before);assert.equal(f.row(r.rid).state,'interrupted');assert.equal(f.journal.get(f.id).used,used);assert.equal(f.executions,1);});
 await test('Rejected protocol remains rejected after cold reopen and is not executed',async f=>{await f.dialogue(['```json\n'+call('fixture-read')+'\n```',call('fixture-read'),'Done.']);const a=f.row(f.ids[0]);assert.equal(a.state,'validation-rejected');assert.equal(a.error,'INVALID_CAPABILITY_REQUEST');f.reopen().recoverAttempts(f.id);assert.deepEqual(f.row(f.ids[0]),a);assert.equal(f.executions,1);});
 await test('Completed model routing does not disguise a failed tool job',async f=>{await f.dialogue([call('fixture-fail'),'No result.']);assert.equal(f.row(f.ids[0]).state,'completed');assert.equal(f.tools.list(f.id).items[0].status,'failed');f.reopen().recoverAttempts(f.id);assert.equal(f.row(f.ids[0]).state,'completed');assert.equal(f.journal.db.prepare('SELECT status FROM human_tool_job').get().status,'failed');});

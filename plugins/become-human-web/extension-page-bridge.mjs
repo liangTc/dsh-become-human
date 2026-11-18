@@ -1,3 +1,4 @@
+import {activeExtensionPages} from './extension-pages.mjs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
@@ -11,8 +12,8 @@ export async function pageClientAsset(profile,page){
 }
 export class ExtensionPageBridge {
   constructor(extensions,runtime){this.extensions=extensions;this.runtime=runtime;this.tickets=new Map();}
-  async catalog(){
-    const source=await this.extensions.pages();let registered=[];
+  async catalog(installed){
+    const source=installed?{pages:activeExtensionPages(installed.items),revision:installed.revision}:await this.extensions.pages();let registered=[];
     if(source.pages.some(page=>page.version===2))registered=await this.runtime.read({kind:'extension-page-catalog'});
     const pages=await Promise.all(source.pages.map(async page=>{
       if(page.version!==2)return page;
@@ -38,7 +39,7 @@ export class ExtensionPageBridge {
   }
   async validate(input,mode){
     const page=await this.resolve(input),method=page.methods.find(m=>m.name===input.method);if(!method||method.mode!==mode)fail('EXTENSION_RPC_METHOD_NOT_ALLOWED');
-    const state=await this.runtime.state();if(!input.sessionId||state.sessionId!==input.sessionId)fail('STALE_SESSION');json(input.payload);return {page,method};
+    const state=await this.runtime.read({kind:'identity'});if(!input.sessionId||state.sessionId!==input.sessionId)fail('STALE_SESSION');json(input.payload);return {page,method};
   }
   async prepare(input){
     const {page,method}=await this.validate(input,'write');for(const [id,t] of this.tickets)if(t.expires<Date.now())this.tickets.delete(id);if(this.tickets.size>=128)fail('EXTENSION_RPC_BUSY');

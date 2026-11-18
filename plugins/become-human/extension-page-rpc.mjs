@@ -42,7 +42,7 @@ export class ExtensionPageRpc {
       this.journal.audit(session,'extension-page-call',{key:input.key,method:input.method,mode:input.mode,requestId:input.requestId,phase:'completed'});
       return {value,replayed:false};
     }catch(error){
-      const code=timeout.aborted?'EXTENSION_RPC_TIMEOUT':entry.controller.signal.aborted?'EXTENSION_RPC_DISPOSED':/^EXTENSION_[A-Z_]+$/.test(error?.message??'')?error.message:'EXTENSION_RPC_FAILED';
+      const code=timeout.aborted?'EXTENSION_RPC_TIMEOUT':entry.controller.signal.aborted?'EXTENSION_RPC_DISPOSED':/^(?:EXTENSION_[A-Z_]+|AGENT_BUSY|STALE_CONFIGURATION|STALE_NOTE|INVALID_LEARNING_[A-Z_]+|INVALID_AUTONOMY_[A-Z_]+|LEARNING_NOTE_NOT_FOUND)$/.test(error?.message??'')?error.message:'EXTENSION_RPC_FAILED';
       if(handler.mode==='write')this.journal.put(session,ledger,{digest,status:'unknown',code,created:Date.now()});
       this.journal.audit(session,'extension-page-call',{key:input.key,method:input.method,mode:input.mode,requestId:input.requestId,phase:'failed',code});throw Error(code);
     }finally{if(stop)signal.removeEventListener('abort',stop);}

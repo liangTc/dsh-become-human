@@ -135,7 +135,7 @@ export class RuntimeSupervisor {
     if(!this.cookie||!this.child||this.child.exitCode!==null)throw new Error('WORKER_UNAVAILABLE');
     const child=this.child,cookie=this.cookie;
     return workerRequest({base:this.base,cookie,resource,body,
-      timeoutMs:resource==='state'||resource==='read'&&['behavior-catalog','workflow-catalog','extension-page-catalog'].includes(body?.kind)?10000:45000,
+      timeoutMs:resource==='read'&&body?.kind==='identity'?4000:resource==='state'||resource==='read'&&['behavior-catalog','workflow-catalog','extension-page-catalog'].includes(body?.kind)?10000:45000,
       sameWorker:()=>this.child===child&&this.cookie===cookie&&child.exitCode===null&&child.signalCode==null,
       onFailure:details=>{if(details.status>=400&&details.status<500)return;if(this.lastRequestError?.code!==details.code)this.recordLifecycle('worker-request-failed',details);this.lastRequestError={at:Date.now(),...details};},
       onRecovered:()=>{if(this.lastRequestError){this.recordLifecycle('worker-request-recovered',{operation:resource.split('?')[0]});this.lastRequestError=null;}}

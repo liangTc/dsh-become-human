@@ -1,10 +1,55 @@
 {
   "name": "dsh-human-learning",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "license": "Apache-2.0",
   "description": "可选的探索与学习行为包；停用保留笔记和待续任务（测试版）",
   "main": "index.mjs",
-  "files": ["index.mjs", "opportunities.mjs", "workflow.mjs", "cordis.patch.yml", "README.md", "LICENSE"],
-  "dsh": {"bundle": {"patch": "./cordis.patch.yml"}, "human": {"providesWorkflows": ["deep-learning"]}}
+  "files": [
+    "index.mjs",
+    "opportunities.mjs",
+    "workflow.mjs",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE",
+    "page.tsx",
+    "client.js",
+    "build.mjs"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "human": {
+      "providesWorkflows": [
+        "deep-learning"
+      ],
+      "plugin": {
+        "version": 1,
+        "title": "探索与学习"
+      },
+      "pages": [
+        {
+          "version": 2,
+          "id": "learning",
+          "nodeId": "human-extension.learning",
+          "title": "学习设置与笔记",
+          "description": "管理学习方式、来源、已有笔记和反馈。",
+          "client": "./client.js",
+          "methods": [
+            {
+              "name": "learning.read",
+              "mode": "read",
+              "description": "读取学习设置、笔记及批注。"
+            },
+            {
+              "name": "learning.save",
+              "mode": "write",
+              "description": "保存学习设置、人工批注或学习反馈。不会扩大授权。"
+            }
+          ]
+        }
+      ]
+    }
+  }
 }

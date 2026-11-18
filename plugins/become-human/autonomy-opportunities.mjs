@@ -53,6 +53,7 @@ export async function candidate(agent,signal,settings,now=Date.now()){
       return {task:store.getTask(task.id)};
     }
   }
+  agent.factory.plugins?.selection({id:'selection:'+now,phase:'selection',now});
   const opportunities=[];
   const offer=next=>{if(next&&(!(learningKinds.has(next.kind)||next.kind==='share-insight')||pack.available(settings))&&!store.deferred(id,checkpointForOpportunity(next),now))opportunities.push(next);};
   offer(chat);offer(agent.factory.goals?.candidate(id,settings,now));offer(boardCandidate(agent,settings,{chat,now}));

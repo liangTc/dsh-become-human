@@ -1,5 +1,8 @@
+import {HumanPlugins} from './plugin-lifecycle.mjs';
 // DSH Web test driver. No tools; bounded text-only provider calls. Experimental, pinned ABI.
+import {logSafe} from './model-records.mjs';
 import {DatabaseSync} from 'node:sqlite';
+import {modelFailureDiagnostic,saveModelFailure,clearModelFailure} from './model-failure.mjs';
 import {Service,createScope,agentEvents,z,createAssistantMessage,interruptedTurnClosers} from './api.mjs';
 import {DomainMemory} from './domain.mjs';
 import {RelationshipChoice} from './relationship-choice.mjs';
@@ -59,6 +62,8 @@ export class ControlJournal {
     if(!this.db.prepare('PRAGMA table_info(outbox)').all().some(c=>c.name==='event_key'))this.db.exec('ALTER TABLE outbox ADD COLUMN event_key TEXT');
     if(!this.db.prepare('PRAGMA table_info(attempt)').all().some(c=>c.name==='failure_facts'))this.db.exec('ALTER TABLE attempt ADD COLUMN failure_facts TEXT');
     if(!this.db.prepare('PRAGMA table_info(attempt)').all().some(c=>c.name==='trigger'))this.db.exec('ALTER TABLE attempt ADD COLUMN trigger TEXT');
+    if(!this.db.prepare('PRAGMA table_info(attempt)').all().some(c=>c.name==='response_text'))this.db.exec('ALTER TABLE attempt ADD COLUMN response_text TEXT');
+    this.db.exec("CREATE INDEX IF NOT EXISTS attempt_agent_task_started ON attempt(agent,json_extract(request,'$.taskId'),started); CREATE INDEX IF NOT EXISTS outbox_agent_seq ON outbox(agent,seq DESC)");
     this.db.exec('CREATE UNIQUE INDEX IF NOT EXISTS outbox_event ON outbox(agent,event_key)');
     this.db.exec('CREATE INDEX IF NOT EXISTS outbox_agent_kind_time ON outbox(agent,kind,created DESC,seq DESC)');
     this.db.exec('CREATE INDEX IF NOT EXISTS attempt_agent_started ON attempt(agent,started)');
@@ -89,11 +94,12 @@ export class ControlJournal {
     }catch(e){this.db.exec('ROLLBACK');throw e;}
   }
   settle(rid,actual){
+    if(actual!==undefined&&(!Number.isSafeInteger(actual)||actual<0))throw new Error('INVALID_REPORTED_USAGE');
     this.safety?.settleBudget(rid,actual);
     const row=this.db.prepare('SELECT * FROM reservation WHERE id=?').get(rid);
     if(!row||row.status!=='pending')return;
     // Missing usage keeps the full conservative reservation. Never assumes a canceled request was free.
-    const amount=actual===undefined?row.amount:Math.max(row.amount,actual);
+    const amount=this.safety?.budget.entries.get(rid)?.amount??(actual===undefined?row.amount:actual);
     this.db.exec('BEGIN IMMEDIATE');
     this.db.prepare('UPDATE control SET used=used+? WHERE id=?').run(amount-row.amount,row.agent);
     this.db.prepare("UPDATE reservation SET status='settled',amount=? WHERE id=?").run(amount,rid);
@@ -123,7 +129,7 @@ export class ControlJournal {
     return {...baseline,elapsedMs:Date.now()-baseline.startedAt,observation24hElapsed:Date.now()-baseline.startedAt>=86400000,attempts:count(()=>true),autonomousAttempts:count(g=>g.trigger==='autonomous-tick'),inputAttempts:count(g=>g.trigger==='new-input'),summaryAttempts:count(g=>g.trigger==='conversation-summary'),expressions:count(g=>g.state==='completed'),waits:count(g=>g.state==='wait'),failures:count(g=>['failed','output-limit','interrupted'].includes(g.state)),cancelled:count(g=>g.state==='cancelled'),inflight:count(g=>['prepared','dispatched','response-ready'].includes(g.state)),reportedTokens:groups.reduce((n,g)=>n+(g.reportedTokens??0),0),conservativeTokens:this.get(id).used-baseline.initialCumulativeUsed,lastEnded:Math.max(0,...groups.map(g=>g.lastEnded??0))||null};
   }
   dispatchAttempt(rid,config){this.db.prepare("UPDATE attempt SET state='dispatched',config=? WHERE id=?").run(JSON.stringify(config),rid);}
-  endAttempt(rid,outcome){this.db.prepare('UPDATE attempt SET state=?,usage=?,usage_confidence=?,error=?,text_chars=?,reasoning_chars=?,failure_facts=?,ended=? WHERE id=?').run(outcome.state,JSON.stringify(outcome.usage??null),outcome.usageConfidence??'unknown',outcome.error??null,outcome.textChars??0,outcome.reasoningChars??0,JSON.stringify(outcome.failureFacts??null),Date.now(),rid);const row=this.db.prepare('SELECT * FROM attempt WHERE id=?').get(rid);if(row){const request=JSON.parse(row.request),config=JSON.parse(row.config??'{}');this.audit(row.agent,'attempt-'+outcome.state,{attemptId:rid,taskId:request.taskId,roundId:request.roundId,lane:request.lane,origin:request.lane==='foreground'?'owner':'timer',provider:config.provider,model:config.model,usage:outcome.usage??null,usageConfidence:outcome.usageConfidence??'unknown',reserved:this.safety?.budget.entries.get(rid)?.amount,error:outcome.error,started:row.started,ended:row.ended});}}
+  endAttempt(rid,outcome){if(typeof outcome.responseText==='string')this.db.prepare('UPDATE attempt SET response_text=? WHERE id=?').run(logSafe(outcome.responseText),rid);this.db.prepare('UPDATE attempt SET state=?,usage=?,usage_confidence=?,error=?,text_chars=?,reasoning_chars=?,failure_facts=?,ended=? WHERE id=?').run(outcome.state,JSON.stringify(outcome.usage??null),outcome.usageConfidence??'unknown',outcome.error??null,outcome.textChars??0,outcome.reasoningChars??0,JSON.stringify(outcome.failureFacts??null),Date.now(),rid);const row=this.db.prepare('SELECT * FROM attempt WHERE id=?').get(rid);if(row){const request=JSON.parse(row.request),config=JSON.parse(row.config??'{}');this.audit(row.agent,'attempt-'+outcome.state,{attemptId:rid,taskId:request.taskId,roundId:request.roundId,lane:request.lane,origin:request.lane==='foreground'?'owner':'timer',provider:config.provider,model:config.model,usage:outcome.usage??null,usageConfidence:outcome.usageConfidence??'unknown',reserved:this.safety?.budget.entries.get(rid)?.amount,error:outcome.error,textChars:outcome.textChars??0,reasoningChars:outcome.reasoningChars??0,failureFacts:outcome.failureFacts??null,started:row.started,ended:row.ended});}}
   assertAdmitted(id){this.safety?.assert(id);if(this.db.prepare('SELECT 1 FROM retirement WHERE id=?').get(id))throw new Error('SESSION_RETIRED');}
   stageResponse(id,rid,turn,epoch,kind,payload){
     this.transaction(()=>{
@@ -214,7 +220,7 @@ export class ControlJournal {
       const legacy=this.db.prepare('SELECT seq FROM outbox WHERE agent=? AND event_key IS NULL AND kind=? AND text=? ORDER BY seq LIMIT 1').get(id,kind,text);
       if(legacy){this.db.prepare('UPDATE outbox SET event_key=? WHERE seq=?').run(eventKey,legacy.seq);return legacy.seq;}
     }
-    return Number(this.db.prepare('INSERT INTO outbox(agent,kind,text,created,event_key) VALUES(?,?,?,?,?)').run(id,kind,text,created,eventKey).lastInsertRowid);
+    return this.transaction(()=>{const seq=Number(this.db.prepare('INSERT INTO outbox(agent,kind,text,created,event_key) VALUES(?,?,?,?,?)').run(id,kind,text,created,eventKey).lastInsertRowid);if(kind==='user')this.audit(id,'conversation-input-published',{messageId:eventKey?.startsWith('user:')?eventKey.slice(5):null,outboxSeq:seq,time:created});return seq;});
   }
   reconcile(session){
     this.assertAdmitted(session.id);
@@ -229,7 +235,7 @@ export class ControlJournal {
       if(e.type==='assistant/message')delivered.push({key:'assistant:'+e.data.message.id,kind:'assistant',text:textOf(e.data.message),time:e.time});
       if(e.type==='turn/end'&&['error','aborted'].includes(e.data.reason.kind)){
         const code=e.data.reason.error?.message??'USER_STOPPED';
-        const label=e.data.reason.kind==='aborted'?'本轮已停止，已领取的消息保留在历史中。':['OUTPUT_LIMIT','MODEL_FINISH_max-tokens'].includes(code)?'输出达到上限，本轮未投递回复。':'本轮调用失败，未投递回复。';
+        const label=e.data.reason.kind==='aborted'?'本轮已停止，已领取的消息保留在历史中。':e.data.reason.error?.code==='HUMAN_REVIEW_ERROR'?'后台记忆与人格回顾未完成，请在活动日志查看原因。':['OUTPUT_LIMIT','MODEL_FINISH_max-tokens'].includes(code)?'输出达到上限，本轮未投递回复。':'本轮调用失败，未投递回复。';
         delivered.push({key:'status:'+e.seq,kind:'status',text:label,time:e.time});
       }
     }
@@ -469,6 +475,7 @@ export class HumanAgent {
       journal.audit(this.id,'decision',{epoch,kind});
       const data=kind==='MESSAGE'?{turn,step:1,message:createAssistantMessage({content:[{type:'text',text}],source:{provider:prepared.config.provider,model:prepared.config.model}}),stream:[],...(usage?{usage}:{})}:null;
       if(data)bindOwnerResponse(this,ownerBatch,data.message.id);
+      journal.db.prepare('UPDATE attempt SET response_text=? WHERE id=?').run(logSafe(text),rid);
       journal.stageResponse(this.id,rid,turn,epoch,kind,{data,usage,textChars:text.length,reasoningChars,...(ownerBatch?{ownerBatch:{id:ownerBatch.id,inputIds:ownerBatch.inputIds}}:{})});staged=true;
       await config.responseCheckpoint?.('after-stage',this);
       signal.throwIfAborted();
@@ -481,8 +488,15 @@ export class HumanAgent {
       journal.reconcile(this.session);
       outcome=kind==='WAIT'?'wait':'completed';this.cycles++;
       journal.put(this.id,'lastError',null);
+      clearModelFailure(journal,this.id,'foreground');
     }catch(e){
       errorCode=signal.aborted?'USER_STOPPED':requestSignal?.aborted?'REQUEST_TIMEOUT':typeof e.code==='string'?e.code:'DRIVER_ERROR';
+      if(!signal.aborted&&!staged){
+        const diagnostic=modelFailureDiagnostic(finish?.failure??e,errorCode);
+        failureFacts={...failureFacts,diagnostic};
+        const route=rid?JSON.parse(journal.db.prepare('SELECT config FROM attempt WHERE id=?').get(rid)?.config??'{}'):config;
+        saveModelFailure(journal,this.id,{at:Date.now(),attemptId:rid??null,lane:'foreground',provider:route.provider,model:route.model,code:errorCode,...diagnostic,streamFinish:finish?.kind??null});
+      }
       outcome=signal.aborted?'cancelled':errorCode==='OUTPUT_LIMIT'?'output-limit':'failed';
       reason=signal.aborted?(this.cause?.kind==='owner-supplement'?{kind:'completed'}:{kind:'aborted',reason:this.cause??{kind:'user'}}):{kind:'error',error:{code:'HUMAN_DRIVER_ERROR',message:e.code??e.name}};
       if(signal.aborted)restoreOwnerBatch(this,ownerBatch);else if(ownerBatch)journal.put(this.id,'ownerBatch',{...ownerBatch,failed:true});
@@ -492,7 +506,7 @@ export class HumanAgent {
     }finally{
       const usageConfidence=!signal.aborted&&usage&&['stop','length','max-tokens'].includes(finish?.kind)?'reported':dispatched?'unknown':'not-dispatched';
       if(rid&&!staged){if(dispatched)journal.settle(rid,usageConfidence==='reported'?usage.inputTokens+(usage.cacheReadTokens??0)+(usage.cacheWriteTokens??0)+usage.outputTokens:undefined);else journal.release(rid);
-        journal.endAttempt(rid,{state:outcome,usage,usageConfidence,error:errorCode,textChars:text.length,reasoningChars,failureFacts});}
+        journal.endAttempt(rid,{state:outcome,usage,usageConfidence,error:errorCode,textChars:text.length,reasoningChars,failureFacts,responseText:text});}
       if(staged&&outcome!=='completed'&&outcome!=='wait'){
         // Keep a native-committed expression; otherwise an explicit cancellation fences it.
         const row=journal.db.prepare('SELECT payload FROM response_stage WHERE id=?').get(rid),payload=JSON.parse(row.payload);
@@ -517,7 +531,7 @@ export class HumanFactory extends Service {
   static inject=['agents','sessions','sessionPersistence','sessionProjections','llm'];
   constructor(ctx,config){
     super(ctx,'becomeHuman');this.runtime={ctx};this.config=config;this.journal=new ControlJournal(config.journal);this.handles=new Set();this.closing=false;this.domain=new DomainMemory(this.journal);this.personaDevelopment=new PersonaDevelopment(this.journal,this.domain);this.memoryLifecycle=new MemoryLifecycle(this.journal,this.domain);this.domain.development=this.personaDevelopment;this.domain.lifecycle=this.memoryLifecycle;this.autonomy=new AutonomyStore(this.journal,this.domain);this.goals=new GoalEngine(this.journal,this.domain,this.autonomy);this.actions=new ActionStore(this.journal,this.domain,{root:path.resolve(path.dirname(config.journal),'artifacts'),validNote:(agent,note)=>this.goals.validNote(agent,note),validGoal:(agent,ref,action)=>this.goals.actionAllowed(agent,action)});this.goals.setActions(this.actions);this.tools=new ToolExecutor(this.journal);this.workObservation=new WorkObservation(this.journal,{bridgeSettings:id=>this.tools.configuration(id).bridge});this.domain.workObservation=this.workObservation;this.reminders=new ReminderStore(this.journal);this.management=new HumanManagement(this);this.cognition=new CognitionStore(this.journal,this.domain,{factory:this});this.tickets=new WeakMap();this.inflight=0;
-    this.learningPack=new LearningPack();this.behaviors=new BehaviorRegistry();this.pluginEvents=new PluginEvents(this.journal,{agentId:()=>this.controllerSessionId,wake:id=>wakeForPluginEvent(this,id)});this.autonomy.pluginEvents=this.pluginEvents;this.publicSources=new PublicSources(this.journal,this.pluginEvents,{agentId:()=>this.controllerSessionId});this.publicSources.start();this.experience=new ExperienceStore(this.journal,this.domain,{tools:this.tools});this.domain.experience=this.experience;registerExperienceBehavior(this);this.goals.setBehaviors(this.behaviors,id=>{syncCapabilityBehaviors(this,id);return {id,factory:this};});
+    this.learningPack=new LearningPack();this.behaviors=new BehaviorRegistry();this.pluginEvents=new PluginEvents(this.journal,{agentId:()=>this.controllerSessionId,wake:id=>wakeForPluginEvent(this,id)});this.autonomy.pluginEvents=this.pluginEvents;this.publicSources=new PublicSources(this.journal,this.pluginEvents,{agentId:()=>this.controllerSessionId});this.publicSources.start();this.plugins=new HumanPlugins(this);this.plugins.start();this.experience=new ExperienceStore(this.journal,this.domain,{tools:this.tools});this.domain.experience=this.experience;registerExperienceBehavior(this);this.goals.setBehaviors(this.behaviors,id=>{syncCapabilityBehaviors(this,id);return {id,factory:this};});
     this.relationship=new RelationshipChoice(this.journal,this.domain);this.journal.relationship=this.relationship;
     this.conversationSummary=new RollingDialogueSummary(this.journal,this.domain);
     this.dialogueState=new DialogueState(this.journal,this.domain);this.journal.dialogueState=this.dialogueState;
@@ -532,7 +546,7 @@ export class HumanFactory extends Service {
     if(config.sharedBudgetGuard)ctx.on('llm/stream',(options,next)=>this.guardedStream(options,next));
     ctx.sessionProjections.register(inboxProjection);ctx.sessionProjections.register(boundaryProjection);
     ctx.agents.setFactory(this);
-    ctx.effect(()=>async()=>{this.closing=true;await this.publicSources.close();await Promise.all([...this.handles].map(h=>h.dispose()));await this.customMcpCapabilities.close();await this.mcpCapabilities.close();this.bridgeCapabilities();this.management.close();this.journal.close();},'becomeHuman.ownership');
+    ctx.effect(()=>async()=>{this.closing=true;this.plugins.close();await this.publicSources.close();await Promise.all([...this.handles].map(h=>h.dispose()));await this.customMcpCapabilities.close();await this.mcpCapabilities.close();this.bridgeCapabilities();this.management.close();this.journal.close();},'becomeHuman.ownership');
   }
   createAgent(owner,options){return this.build(owner,options,false);}
   resume(owner,options){return this.build(owner,options,true);}

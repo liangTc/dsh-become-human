@@ -1,20 +1,27 @@
-import ReactPage from './native-react-page';
 import React,{useEffect,useState} from 'react';
-import {SectionWorkspace} from './native-shell';
+import ReactPage from './native-react-page';
+import Extensions from './native-extensions';
+import {SectionWorkspace,useDraftNavigation} from './native-shell';
 import {useLocationValue} from './native-navigation';
-
-export function useExtensionPages(api:any){
- const [result,setResult]=useState<any>({pages:[],error:'',loading:true});
- useEffect(()=>{let live=true,timer:any;const read=async()=>{try{const value=await api.read({kind:'extension-pages'});if(live)setResult({pages:value.pages,error:'',loading:false});}catch{if(live)setResult({pages:[],error:'扩展页面暂时无法读取，请检查后台连接。',loading:false});}finally{if(live)timer=setTimeout(read,5000);}};void read();return ()=>{live=false;clearTimeout(timer);};},[api]);
- return result;
-}
-export default function ExtensionPages({catalog,api,s,ui,renderSlot,pageSlot}:any){
- const [active,setActive]=useLocationValue('humanExtension',''),page=catalog.pages.find((entry:any)=>entry.key===active)??(!active?catalog.pages[0]:null),{Band}=ui;
- if(catalog.error)return <div className="hn-content"><Band>{catalog.error}</Band></div>;
- if(catalog.loading)return <div className="hn-content"><Band>正在读取扩展页面…</Band></div>;
- if(!catalog.pages.length)return <div className="hn-content"><h2>扩展页面</h2><p>暂无已启用的扩展页面。可以在设置 → 工具与技能 → 行为扩展中安装或启用。</p></div>;
- const sections=catalog.pages.map((entry:any)=>({id:entry.key,title:entry.title,description:entry.description,group:entry.packageName,keywords:entry.title+' '+entry.packageName}));
- return <SectionWorkspace kind="扩展" sections={sections} active={page?.key??active} onSelect={setActive}>
-  {!page?<Band>此页面已停用或移除，请选择其他扩展页面。</Band>:<><p className="hn-note">来自 {page.packageName} · {page.packageVersion}</p>{page.version===2?(page.ready?<ReactPage key={page.fingerprint} {...{api,page,s,ui,renderSlot,pageSlot}}/>:<Band>扩展前台或后台接口尚未就绪，请核对安装状态。</Band>):page.blocks.map((block:any,index:number)=>block.type==='text'?<p key={index} style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{block.text}</p>:block.type==='list'?<ul key={index}>{block.items.map((item:string,i:number)=><li key={i}>{item}</li>)}</ul>:block.type==='runtime-status'?<section className="hn-card" key={index} aria-label="扩展运行状态"><h3>当前 Human</h3><p>{s.management.profile.name} · {s.desired==='running'?'运行中':'已暂停'}</p><p>{s.autonomy?.paused?'自主活动已暂停':'自主活动可用'} · 与网页共享原会话</p></section>:null)}</>}
+const hookNames:Record<string,string>={input:'收到消息',selection:'选择行动',result:'行动结果',feedback:'用户反馈',memory:'记忆变化',growth:'人物成长',delivery:'回复发布'};
+export default function PluginWorkspace({api,s,ui,renderSlot,pageSlot}:any){
+ const [data,setData]=useState<any>(null),[error,setError]=useState(''),[nonce,setNonce]=useState(0),[active,setActive]=useLocationValue('humanPlugin','install'),[pageKey,setPageKey]=useState(''),navigation=useDraftNavigation();
+ const reload=()=>setNonce(n=>n+1),{Band,Button,OptionalSection}=ui;
+ useEffect(()=>{let live=true,timer:any;const read=async()=>{let delay=15000;try{const next=await api.read({kind:'plugin-center'});if(live){setData(next);setError('');delay=next.busy?2000:15000;}}catch{if(live)setError('插件列表暂时无法读取，请检查后台连接。');}finally{if(live)timer=setTimeout(read,delay);}};void read();return ()=>{live=false;clearTimeout(timer);};},[api,nonce]);
+ const selected=data?.items.find((item:any)=>item.name===active),lifecycle=data?.lifecycle?.find((entry:any)=>entry.owner===active),pages=(data?.pages??[]).filter((page:any)=>page.packageName===active),page=pages.find((p:any)=>p.key===pageKey)??pages[0];
+ const sections=[{id:'install',title:'安装与管理',description:'为 Human 添加可选能力，已有会话与记忆继续沿用。',group:'管理',keywords:'安装 更新 恢复 插件'},...(data?.items??[]).map((item:any)=>({id:item.name,title:item.title??item.name,description:item.description,group:'已安装',keywords:item.name}))];
+ const choose=(key:string)=>navigation.navigate(()=>{setActive(key);setPageKey('');});
+ return <SectionWorkspace kind="插件" sections={sections} active={active} onSelect={choose} headerActions={<Button onClick={reload}>刷新</Button>}>
+  {error&&<Band>{error}</Band>}{!data?<p role="status">正在读取插件…</p>:<>
+   {active==='install'?<Extensions {...{api,s,ui}} embedded catalog={data} onReload={reload}/>:!selected?<Band>该插件已移除，请从左侧选择其他插件。</Band>:<>
+    <Extensions key={active} {...{api,s,ui}} embedded selected={active} catalog={data} onReload={reload}/>
+    {data.pageError&&<Band>{data.pageError}</Band>}
+    {data.busy?<Band>正在应用插件变更，完成后自动恢复页面…</Band>:selected.nodes?.every((node:any)=>node.disabled)?<Band>插件已停用。历史数据保留；启用后可使用它的页面和能力。</Band>:page?<>
+     {pages.length>1&&<div className="hn-tabs" role="tablist" aria-label="插件页面">{pages.map((p:any)=><Button key={p.key} role="tab" aria-selected={page.key===p.key} onClick={()=>navigation.navigate(()=>setPageKey(p.key))}>{p.title}</Button>)}</div>}
+     {page.version===2?(page.ready?<ReactPage key={page.fingerprint} {...{api,page,s,ui,renderSlot,pageSlot}}/>:<Band>插件页面尚未就绪，请检查后台是否运行，或更新插件。</Band>):page.blocks.map((block:any,i:number)=>block.type==='text'?<p key={i}>{block.text}</p>:block.type==='list'?<ul key={i}>{block.items.map((text:string,n:number)=><li key={n}>{text}</li>)}</ul>:block.type==='runtime-status'?<p key={i}>{s.management.profile.name} · {s.desired==='running'?'运行中':'已暂停'}</p>:null)}
+    </>:<p className="hn-note">此插件没有专属页面，已注册的能力由 Human 统一调用。</p>}
+    {lifecycle&&<OptionalSection title="参与的环节与定时活动"><p>{lifecycle.hooks.map((name:string)=>hookNames[name]??name).join('、')||'通过已注册的动作或工具参与'}</p>{lifecycle.held.length>0&&<Band>部分插件回调出现错误并已停止：{lifecycle.held.map((name:string)=>hookNames[name]??name).join('、')}。请导出日志排查。</Band>}{lifecycle.schedules.map((row:any)=><div className="hn-line" key={row.id}><strong>{row.title}</strong><p>{row.status==='pending'?'下次检查：'+new Date(row.nextAt).toLocaleString():row.status==='completed'?'已触发':'异常，等待处理'}</p></div>)}{!lifecycle.schedules.length&&<p className="hn-note">未注册额外定时活动。</p>}</OptionalSection>}
+   </>}
+  </>}
  </SectionWorkspace>;
 }

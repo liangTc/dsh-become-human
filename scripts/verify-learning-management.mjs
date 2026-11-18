@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {DatabaseSync} from 'node:sqlite';
+import {learningRead,learningWrite,learningSettingKeys} from '../plugins/become-human/learning-management.mjs';
+const db=new DatabaseSync(':memory:');db.exec('CREATE TABLE learning_note(id TEXT,agent TEXT,status TEXT,created INTEGER,data TEXT,feedback TEXT)');
+const s={learningEnabled:false,searchEnabled:true,searchProvider:'bing',searchEndpoint:'',sourceIntervalMs:3600000,sources:[],goalAutoActivateEnabled:false,tokenLimit:999},f={journal:{db},autonomy:{settings:()=>s,configure:async(_id,patch)=>Object.assign(s,patch)},management:{revision:()=>7,check:(_id,revision)=>{if(revision!==7)throw Error('STALE_CONFIGURATION');},bump:()=>{},read:()=>[]}};
+for(let i=0;i<21;i++)db.prepare('INSERT INTO learning_note VALUES(?,?,?,?,?,?)').run('n'+i,'original','active',i,JSON.stringify({title:'笔记'+i,summary:'已有学习内容',source:{url:'https://example.com/'}}),null);
+db.prepare('INSERT INTO learning_note VALUES(?,?,?,?,?,?)').run('foreign','other','active',100,JSON.stringify({title:'另一会话',summary:'不应混入'}),null);
+const before=db.prepare('SELECT * FROM learning_note ORDER BY id').all();
+assert.equal(learningRead(f,'original',{kind:'notes'}).total,21);assert.equal(learningRead(f,'original',{kind:'notes'}).items.length,8);assert.equal(learningRead(f,'original',{kind:'notes',offset:16}).items.length,5);
+assert.throws(()=>learningRead(f,'original',{kind:'note',noteId:'foreign'}),/NOT_FOUND/);
+assert.throws(()=>learningRead(f,'original',{kind:'notes',offset:-1}),/PAGINATION/);
+await assert.rejects(()=>learningWrite(f,'original',{operation:'settings',revision:6,settings:{learningEnabled:true}}),/STALE/);
+await assert.rejects(()=>learningWrite(f,'original',{operation:'settings',revision:7,settings:{tokenLimit:1}}),/INVALID_LEARNING/);assert.equal(s.tokenLimit,999);
+const result=await learningWrite(f,'original',{operation:'settings',revision:7,settings:{sourceIntervalMs:3660000}});assert.equal(result.settings.sourceIntervalMs,3660000);assert.equal(result.settings.learningEnabled,false);assert.deepEqual(Object.keys(result.settings),learningSettingKeys);
+assert.deepEqual(db.prepare('SELECT * FROM learning_note ORDER BY id').all(),before);db.close();console.log(JSON.stringify({passed:6,cases:['database pagination','original session isolation','pagination validation','stale revision protection','learning-only settings scope','history preserved during configuration']}));

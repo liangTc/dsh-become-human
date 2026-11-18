@@ -30,7 +30,7 @@ function CapabilityForm({api,s,busy,ui,server,onRefresh,readError}:any){
     await pauseForConfiguration(api);await api.control({op:'capability-configure',sessionId:s.sessionId,expectedRevision:base.revision,settings:next});
     await acceptFresh();
   },'工具与连接设置已保存，Human 仍保持暂停');
-  return <><h3>工具与连接</h3><Band>连接范围仅作用于当前 Human。读取和写入分别开启；写操作仍需逐笔批准。其他 DSH 会话作为外部资料或执行目标，不改变 Human 的唯一主会话。</Band>
+  return <><h3>连接与授权范围</h3><Band>连接范围仅作用于当前 Human。读取和写入分别开启；写操作仍需逐笔批准。其他 DSH 会话作为外部资料或执行目标，不改变 Human 的唯一主会话。</Band>
     <section className="hn-form-section"><h4 className="hn-section-heading">MCP 服务</h4><Check label="启用内置只读 MCP 服务" disabled={busy} value={mcp.bundledEnabled!==false} onChange={(enabled:boolean)=>setDraft(previous=>({...previous,settings:{...previous.settings,mcp:{...previous.settings.mcp,bundledEnabled:enabled}}}))}/><p className="hn-help">内置服务提供公开网页读取。自定义服务可连接你已准备好的本地程序或远程 MCP 端点；可用工具统一出现在“任务 → 工具与能力”。</p><McpConnections api={api} s={s} ui={ui} busy={busy||stale||!!readError} rows={draft.mcpRows} onChange={(mcpRows:any[])=>setDraft(previous=>({...previous,mcpRows}))} expectedRevision={base.revision}/></section>
     <section className="hn-form-section"><h4 className="hn-section-heading">DSH 会话</h4>
       <div className="hn-setting-summary"><span>读取：{!bridge.sessionReadEnabled?'未开启':bridge.sessionReadScope==='all'?'全部普通会话':'指定会话'}</span><span>使用：{!bridge.sessionWriteEnabled?'未开启':bridge.sessionWriteScope==='all'?'全部普通会话 · 逐笔批准':'指定会话 · 逐笔批准'}</span></div>

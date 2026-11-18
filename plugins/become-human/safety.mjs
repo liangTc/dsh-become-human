@@ -78,7 +78,7 @@ export class SafetyLedger {
     this.appendSync('reserve:'+rid,'budget-reserve',{rid,agent,amount,budgetClass,created,...(options.roundId?{roundId:options.roundId}:{})});return true;
   }
   dispatchBudget(rid){const row=this.budget.entries.get(rid);if(!row||row.status!=='prepared')throw new Error('INVALID_BUDGET_TICKET');this.appendSync('dispatch:'+rid,'budget-dispatch',{rid});}
-  settleBudget(rid,actual){const row=this.budget.entries.get(rid);if(!row||row.status==='released')return;const amount=actual===undefined?row.amount:Math.max(row.amount,actual);if(row.status==='settled'&&row.amount===amount)return;this.appendSync('settle:'+rid+':'+amount,'budget-settle',{rid,amount});}
+  settleBudget(rid,actual){if(actual!==undefined&&(!Number.isSafeInteger(actual)||actual<0))throw new Error('INVALID_REPORTED_USAGE');const row=this.budget.entries.get(rid);if(!row||row.status==='released')return;const amount=actual===undefined?row.amount:row.status==='settled'?Math.max(row.amount,actual):actual;if(row.status==='settled'&&row.amount===amount)return;this.appendSync('settle:'+rid+':'+amount,'budget-settle',{rid,amount});}
   releaseBudget(rid){const row=this.budget.entries.get(rid);if(row?.status!=='prepared')return;this.appendSync('release:'+rid,'budget-release',{rid});}
   async anchor(){const last=this.rows.at(-1);await atomic(path.join(this.root,'anchor.json'),JSON.stringify({id:this.id,keyId:this.mac('key-identity'),seq:this.rows.length,hash:last?.hash??''}));}
   assert(id){if(this.blocked||this.rows.some(r=>r.kind==='retire'&&JSON.parse(r.data).oldId===id))throw new Error(this.blocked?'BLOCKED_CONTROL_HISTORY':'SESSION_RETIRED');}

@@ -72,6 +72,7 @@ export class WeixinController {
   #attempts = new Map();
   #activeAttemptId = null;
   #transitions = new Map();
+  #reconnecting = new Map();
   #revision = 0;
   #closed = false;
 
@@ -112,10 +113,15 @@ export class WeixinController {
     if (this.#closed) return this.status();
     for (const config of this.#configStore.list()) {
       const current = this.#runtimes.get(config.botId);
-      if (current?.status?.ready === true) continue;
+      if (current?.status?.ready === true || current?.status?.weixinConnectionState === 'reconnecting') continue;
       await this.#withBotTransition(config.botId, async () => {
         const latest = this.#configStore.get(config.botId);
         if (!latest || this.#closed) return;
+        // A manual reconnect or another restore may have finished while queued.
+        // Re-check inside the serialized transition before stopping a fresh poller.
+        const status = this.#runtimes.get(config.botId)?.status;
+        if (status?.ready || status?.weixinConnectionState === 'reconnecting') return;
+        if (['stale-token', 'missing-token'].includes(status?.connectionError?.code ?? this.#errors.get(config.botId)?.code)) return;
         try {
           const token = await this.#resolveToken(latest.tokenRef);
           if (!token) throw weixinStageError('missing-token');
@@ -241,9 +247,12 @@ export class WeixinController {
   }
 
   async reconnectBot(botId) {
+    if (this.#closed) throw new Error('Weixin controller is closed');
+    if (this.#reconnecting.has(botId)) return this.#reconnecting.get(botId);
     const config = this.#configStore.get(botId);
     if (!config) throw new Error('Unknown Weixin account');
-    await this.#withBotTransition(botId, async () => {
+    const reconnect = this.#withBotTransition(botId, async () => {
+      if (this.#closed || !this.#configStore.get(botId)) return;
       try {
         const token = await this.#resolveToken(config.tokenRef);
         if (!token) throw weixinStageError('missing-token');
@@ -257,8 +266,9 @@ export class WeixinController {
       } finally {
         this.#touch();
       }
-    });
-    return this.status();
+    }).then(() => this.status()).finally(() => this.#reconnecting.delete(botId));
+    this.#reconnecting.set(botId, reconnect);
+    return reconnect;
   }
 
   async sendConnectionTest(botId) {
@@ -364,7 +374,7 @@ export class WeixinController {
         && runtimeStatus.harnessReachable === true;
       const state = connected
         ? 'connected'
-        : runtimeStatus?.weixinConnectionState === 'connecting'
+        : ['connecting', 'reconnecting'].includes(runtimeStatus?.weixinConnectionState)
           ? 'connecting'
           : this.#errors.has(config.botId) || runtimeStatus?.weixinConnectionState === 'failed'
             ? 'error'
@@ -389,8 +399,9 @@ export class WeixinController {
           status: connected ? sendFailed ? 'degraded' : 'healthy' : state === 'error' ? 'error' : 'offline',
           summary: connected
             ? sendFailed ? t('微信消息长轮询在线；最近发送失败，新互动后的发送仍需核对。') : t('微信消息长轮询运行正常；不代表平台当前允许发送。')
+            : state === 'connecting' ? t('微信连接暂时中断，正在自动恢复。')
             : state === 'error'
-              ? t('微信连接未就绪，插件会自动重试')
+              ? ['stale-token', 'missing-token'].includes(error?.code) ? t('微信登录凭据失效或缺失，需要重新扫码。') : t('微信连接未就绪，插件会自动重试')
               : t('微信连接当前离线'),
           lastCheckedAt: runtimeStatus?.lastCheckedAt ?? null,
         },
@@ -429,6 +440,7 @@ export class WeixinController {
     if (this.#closed) return;
     this.#closed = true;
     if (this.#activeAttemptId) await this.cancelProvisioning(this.#activeAttemptId);
+    await Promise.allSettled([...this.#transitions.values()]);
     await Promise.allSettled([...this.#runtimes.keys()].map((botId) => this.#stopRuntime(botId)));
     this.#diagnostics.clear();
   }

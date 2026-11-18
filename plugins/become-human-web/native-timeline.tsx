@@ -62,7 +62,7 @@ export default function BrainTimeline({api,s,ui}:any){
                 <section><h3>记住了什么</h3>{memories.length?memories.map((memory:any)=><div key={memory.id} className="hn-activity-memory"><strong>{memory.title}</strong><p>{memory.description}</p><small>{memory.truth==='inferred'?'来自资料的解释，仍可纠正':memory.truth==='fictional'?'角色虚构内容':'有来源的记录'} · {memory.status==='active'?'当前保留':'状态已变化'}</small></div>):<p className="hn-activity-muted">这段活动没有新增记忆。</p>}</section>
               </div>
               <footer className="hn-activity-record-footer"><span>{item.requests?count(ui,item.requests)+' 次模型请求 · '+count(ui,item.reportedTokens)+' 供应商报告 token':'没有模型请求记录'}</span><div>{item.taskId?<button type="button" className="hn-link" onClick={()=>setTask(item.taskId)}>追溯完整任务 <span aria-hidden="true">↗</span></button>:null}{item.actionId?<button type="button" className="hn-link" onClick={()=>setAction(item.actionId)}>查看行动与文件 <span aria-hidden="true">↗</span></button>:null}</div></footer>
-              {JsonDetails?<div className="hn-activity-record-ids"><JsonDetails value={{activityId:item.id,taskId:item.taskId??null,actionId:item.actionId??null,noteIds:item.noteIds??[],started:item.started,ended:item.ended}} label="记录标识与时间"/></div>:null}
+              {JsonDetails?<div className="hn-activity-record-ids"><JsonDetails value={{activityId:item.id,taskId:item.taskId??null,actionId:item.actionId??null,noteIds:item.noteIds??[],started:item.started,ended:item.ended}} label="查看相关内容"/></div>:null}
             </div>
           </details>
         </li>;

@@ -43,11 +43,6 @@ export function taskBoard(factory,sessionId,input={}){
   const taskRows=available('autonomy','autonomy_task')?db.prepare('SELECT id,kind,status,checkpoint,created,updated FROM autonomy_task WHERE agent=?').all(sessionId):[];
   const goalRows=available('goal','goal_record','human_goal_plan')?db.prepare('SELECT g.id,g.description,g.status,g.version,g.expires,p.steps,p.created,p.updated,p.reason,p.retry_at,p.evaluation FROM goal_record g JOIN human_goal_plan p ON p.agent=g.agent AND p.goal=g.id WHERE g.agent=?').all(sessionId):[];
   const attempts=new Map();
-  if(tables.has('attempt')){
-    const reserved=tables.has('reservation')?'(SELECT amount FROM reservation r WHERE r.id=a.id AND r.agent=a.agent)':'NULL';
-    for(const row of db.prepare(`SELECT id,state,usage,usage_confidence,error,started,ended,CASE WHEN json_valid(request) THEN json_extract(request,'$.taskId') END AS taskId,${reserved} AS reserved FROM attempt a WHERE agent=?`).all(sessionId))if(typeof row.taskId==='string'){const list=attempts.get(row.taskId)??[];list.push(attemptView(row));attempts.set(row.taskId,list);}
-    for(const list of attempts.values())list.sort((a,b)=>a.started-b.started||a.id.localeCompare(b.id));
-  }
   const tasks=new Map(),goalTasks=new Set(),all=[];
   for(const row of taskRows){
     const cp=parse(row.checkpoint,{})??{},goalId=typeof cp.goal?.id==='string'?cp.goal.id:null,matterId=typeof cp.matterId==='string'?cp.matterId:null;
@@ -92,8 +87,32 @@ export function taskBoard(factory,sessionId,input={}){
   const counts={all:all.length,pending:0,running:0,attention:0,done:0},sourceCounts=Object.fromEntries(sources.map(source=>[source,0]));
   for(const item of all){counts[item.group]++;sourceCounts[item.source]++;}
   const queryMatches=item=>!q.query||[item.title,item.summary,item.reason,item.recordId,item.kind,...item.children.map(child=>child.title)].some(value=>String(value??'').toLocaleLowerCase().includes(q.query));
-  const filtered=all.filter(item=>(q.source==='all'||item.source===q.source)&&(q.group==='all'||item.group===q.group)&&(q.recordId===undefined||item.recordId===q.recordId)&&(q.from===undefined||item.updated>=q.from)&&(q.to===undefined||item.updated<=q.to)&&queryMatches(item)).sort((a,b)=>b.updated-a.updated||b.created-a.created||a.id.localeCompare(b.id));
+  const matching=all.filter(item=>(q.source==='all'||item.source===q.source)&&(q.recordId===undefined||item.recordId===q.recordId)&&(q.from===undefined||item.updated>=q.from)&&(q.to===undefined||item.updated<=q.to)&&queryMatches(item));
+  const filteredCounts={all:matching.length,pending:0,running:0,attention:0,done:0};for(const item of matching)filteredCounts[item.group]++;
+  const filtered=matching.filter(item=>q.group==='all'||item.group===q.group).sort((a,b)=>b.updated-a.updated||b.created-a.created||a.id.localeCompare(b.id));
   const items=filtered.slice(q.offset,q.offset+q.limit);
+  // Hydrate model calls for the visible page only. Large request bodies must
+  // not be parsed for every retained task on every list refresh.
+  const keys=new Set();
+  for(const item of items){
+    if(item.source==='autonomy')keys.add(item.recordId);
+    if(item.source==='schedule')keys.add('schedule:'+item.recordId);
+    if(item.source==='goal')for(const child of item.children){if(child.taskId)keys.add(child.taskId);for(const a of child.attempts)if(a.taskId)keys.add(a.taskId);}
+  }
+  if(tables.has('attempt')&&keys.size){
+    const ids=[...keys],reserved=tables.has('reservation')?'(SELECT amount FROM reservation r WHERE r.id=a.id AND r.agent=a.agent)':'NULL';
+    for(let i=0;i<ids.length;i+=200){const batch=ids.slice(i,i+200);
+      for(const row of db.prepare("SELECT id,state,usage,usage_confidence,error,started,ended,json_extract(request,'$.taskId') AS taskId,"+reserved+" AS reserved FROM attempt a WHERE agent=? AND json_extract(request,'$.taskId') IN ("+batch.map(()=>'?').join(',')+") ORDER BY json_extract(request,'$.taskId'),started,id").all(sessionId,...batch)){const list=attempts.get(row.taskId)??[];list.push(attemptView(row));attempts.set(row.taskId,list);}
+    }
+  }
+  for(const item of items){
+    if(item.source==='goal'){
+      const calls=new Map();for(const child of item.children){
+        for(const taskId of [child.taskId,...child.attempts.map(a=>a.taskId)])for(const a of attempts.get(taskId)??[])calls.set(a.id,a);
+        if(child.task){child.task.attempts=attempts.get(child.taskId)??[];child.task.usage=usageOf(child.task.attempts);}
+      }item.usage=usageOf([...calls.values()]);
+    }else if(item.source==='autonomy'||item.source==='schedule'){item.attempts=attempts.get(item.source==='schedule'?'schedule:'+item.recordId:item.recordId)??[];item.usage=usageOf(item.attempts);}
+  }
   // Validation/redaction is bounded to the returned page. These getters are
   // read-only; never use reconcile, due, snapshot or file-receipt verification.
   for(const item of items){
@@ -102,5 +121,5 @@ export function taskBoard(factory,sessionId,input={}){
   }
   const live=[...(factory.handles??[])].map(handle=>handle.agent).find(agent=>agent?.id===sessionId),active=live?.active&&live.activeCognitionTask?.id;
   const activeTaskId=active&&tasks.get(active)?.status==='executing'?active:[...tasks.values()].find(task=>task.status==='executing')?.taskId??null;
-  return {version:1,sessionId,updatedAt:Date.now(),activeTaskId,items,total:filtered.length,offset:q.offset,limit:q.limit,hasMore:q.offset+items.length<filtered.length,counts,sourceCounts,scope:'当前唯一 Session 的留存记录。顶层统计已去除目标内收纳的自主任务；执行尝试不是独立子 Agent，执行完成不等于验收或手机实收。',notes:{warnings,countsBasis:'all-retained-top-level-records-before-filters',totalBasis:'filtered-top-level-records',historicalRetention:'旧自主执行记录可能按现有保留规则归档；缺失记录仅保留实际关联标识。',readOnly:true}};
+  return {version:1,sessionId,updatedAt:Date.now(),activeTaskId,items,total:filtered.length,offset:q.offset,limit:q.limit,hasMore:q.offset+items.length<filtered.length,counts,filteredCounts,sourceCounts,scope:'当前唯一 Session 的留存记录。顶层统计已去除目标内收纳的自主任务；执行尝试不是独立子 Agent，执行完成不等于验收或手机实收。',notes:{warnings,filteredCountsBasis:'matching-time-source-query-before-status-filter',countsBasis:'all-retained-top-level-records-before-filters',totalBasis:'filtered-top-level-records',historicalRetention:'旧自主执行记录可能按现有保留规则归档；缺失记录仅保留实际关联标识。',readOnly:true}};
 }

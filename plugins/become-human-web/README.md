@@ -1,10 +1,12 @@
 # Become Human · DSH Web 插件
 
-> **本次测试发行：0.7.0-beta.39。** [下载组合安装包](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.39)，安装和验证边界以[本版发行说明](https://github.com/liangTc/dsh-become-human/blob/main/docs/RELEASE_BETA39.md)为准。下文 beta.5 为历史发行说明；npm [beta.39](https://www.npmjs.com/package/dsh-become-human-web/v/0.7.0-beta.39) 已发布并完成下载校验。
+> **本次测试发行：0.7.0-beta.40。** [下载组合安装包](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.40)，安装和验证边界以[本版发行说明](https://github.com/liangTc/dsh-become-human/blob/main/docs/RELEASE_BETA40.md)为准。下文 beta.5 为历史发行说明；npm [beta.40](https://www.npmjs.com/package/dsh-become-human-web/v/0.7.0-beta.40) 已发布并完成下载校验。
 
-> **beta.39 开发源码**：通用事件循环、单执行线、结果反馈与成长；Web 扩展安装、配置、启停和升级恢复；学习降为默认停用的独立行为包。新增 Human 内自定义 React 页面与扩展后台读写接口，复用 DSH 模块加载器和子插槽。隔离检查与真实验收分别记录，详见 [扩展页面](docs/EXTENSION_PAGES.md)、[核心设计](docs/CORE_DESIGN.md) 和 [测试状态](docs/TESTING_STATUS.md)。
+> **beta.40 开发源码**：通用事件循环、单执行线、结果反馈与成长；Web 扩展安装、配置、启停和升级恢复；学习降为默认停用的独立行为包。新增 Human 内自定义 React 页面与扩展后台读写接口，复用 DSH 模块加载器和子插槽。隔离检查与真实验收分别记录，详见 [扩展页面](docs/EXTENSION_PAGES.md)、[核心设计](docs/CORE_DESIGN.md) 和 [测试状态](docs/TESTING_STATUS.md)。
 
-> **测试版本，尚未开发完成。** 本目录为 `0.7.0-beta.39` 开发源码，对应测试包见上方 beta.39 发行链接；下方 beta.5 为历史说明。面向 Windows、Node.js 24+、DeepSeek Harness 0.2.0-rc.2 的 web profile。完整验收边界见[本包测试状态](docs/TESTING_STATUS.md)。
+> **测试版本，尚未开发完成。** 本目录为 `0.7.0-beta.40` 开发源码，对应测试包见上方 beta.40 发行链接；下方 beta.5 为历史说明。面向 Windows、Node.js 24+、DeepSeek Harness 0.2.0-rc.2 的 web profile。完整验收边界见[本包测试状态](docs/TESTING_STATUS.md)。
+
+**beta.40** 新增插件中心与统一生命周期合同，学习包 0.2.0 自行提供设置和笔记页面；同时包含微信恢复、可读任务详情、按需查询及一键更新等近期修复。详见 [生命周期](docs/PLUGIN_LIFECYCLE.md) 与 [发行说明](docs/RELEASE_BETA40.md)。
 
 为 DSH Web 增加一个拥有统一人格、记忆、可扩展行为与成长记录的 Human。管理插件嵌入 Web，独立运行模块处理事件循环；一个 Human 只有一个持久主会话，同时只绑定一个有效 IM 渠道。
 
@@ -17,10 +19,10 @@ beta.12–beta.28 将事件、行为、经历与反馈协议独立出来，提�
 从 npm 安装当前测试版：
 
 ```powershell
-npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add dsh-become-human-web@0.7.0-beta.39 --registry=https://registry.npmjs.org/
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add dsh-become-human-web@0.7.0-beta.40 --registry=https://registry.npmjs.org/
 ```
 
-也可从 [beta.39 Release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.39) 下载 `.tgz` 与校验文件。组合包包含 Web 与后台代码。升级前备份，保留原数据、会话和绑定。beta.5 的初始化问题已修复；完整干净安装仍按测试清单验收。
+也可从 [beta.40 Release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.40) 下载 `.tgz` 与校验文件。组合包包含 Web 与后台代码。升级前备份，保留原数据、会话和绑定。beta.5 的初始化问题已修复；完整干净安装仍按测试清单验收。
 
 安装后启动 DSH，进入 Human，按“选择已有模型 → 人物与额度 → 创建并启动”完成首次设置。路径、私有 profile 和内部空闲端口自动准备，无需另装后台或手工编辑 YAML。模型凭据通过 DSH 的 apiKeyEnv 引用解析；向导不接收明文密钥。详见 [安装与升级](https://github.com/liangTc/dsh-become-human/blob/main/docs/INSTALLATION.md)。单独安装内部 runtime 不属于支持方式。
 

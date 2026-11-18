@@ -30,6 +30,23 @@ function fixture(){
   const call=(lane='foreground',purpose)=>modelRequest(agent,controller.signal,{turn:1,epoch:1,lane,messages,purpose,taskId:lane==='foreground'?undefined:'task-fixture'});
   return {id,db,ledger,journal,domain,agent,controller,messages,call,stats,audit,ends,reservations,configure,metadata,setPrepared:(value,window)=>{preparedConfig=value;context=window;},setReply:value=>{reply=value;},setFinish:value=>{finishReason=value;},onStream:value=>{onStream=value;},prepareFailure:value=>{prepareError=value;}};
 }
+await test('empty terminal response remains failed but settles reported usage instead of full reservation',async f=>{
+ f.setReply('');await assert.rejects(f.call('selection'),/EMPTY_MODEL_OUTPUT/);
+ const end=f.ends.at(-1);assert.equal(end.state,'failed');assert.equal(end.usageConfidence,'reported');assert.equal(end.failureFacts.textChars,0);assert.equal(end.failureFacts.streamCounts.finish,1);
+ assert.equal(f.agent.factory.autonomy.budget().reservedTokens,30);assert.equal(f.stats.streams,1);
+});
+await test('reported settlement survives ledger replay and repeated settlement cannot refund twice',async f=>{
+ await f.call('selection');const rid=f.reservations[0].rid;
+ assert.equal(f.agent.factory.autonomy.budget().reservedTokens,30);f.ledger.reload();
+ assert.equal(f.agent.factory.autonomy.budget().reservedTokens,30);
+ f.ledger.settleBudget(rid,0);assert.equal(f.agent.factory.autonomy.budget().reservedTokens,30);
+ assert.throws(()=>f.ledger.settleBudget(rid,-1),/INVALID_REPORTED_USAGE/);
+});
+await test('unknown stream failure retains its reservation even if partial usage arrived',async f=>{
+ f.setFinish({kind:'error'});await assert.rejects(f.call('selection'),/MODEL_EXECUTION_FAILED/);
+ assert.equal(f.agent.factory.autonomy.budget().reservedTokens,f.reservations[0].amount);
+ assert.equal(f.ends.at(-1).usageConfidence,'unknown');
+});
 await test('obsolete request controls do not reach the adapter',async f=>{await f.call();assert.deepEqual(f.stats.prepared[0],{provider:'fixture-provider',model:'fixture-model'});assert.equal(f.stats.signals[0],f.controller.signal);assert.equal(f.reservations[0].request.outputReservation,32768);});
 await test('reasoning selection survives without output or deadline overrides',()=>assert.deepEqual(modelCallOptions({provider:'p',model:'m',reasoningEffort:'high',maxTokens:64,requestTimeoutMs:1}),{provider:'p',model:'m',reasoningEffort:'high'}));
 await test('obsolete persisted controls are ignored while retrieval stays configured',()=>{const e=executionSettings({maxTokens:64,requestTimeoutMs:1,context:{memoryLimit:17,historyLimit:12,learningLimit:5,foregroundInputBudget:4096,selectionInputBudget:4096,executorInputBudget:4096},reasoningEffort:'high'});assert.equal(e.maxTokens,undefined);assert.equal(e.requestTimeoutMs,undefined);assert.deepEqual(e.context,{memoryLimit:17,historyLimit:12,learningLimit:5});assert.equal(e.reasoningEffort,'high');});
@@ -55,4 +72,5 @@ await test('natural reply envelope does not restore the removed output cap',asyn
 await test('upstream finish status survives without persisting supplier error text',async f=>{const privateText='sk-'+('x'.repeat(28));f.setFinish({kind:'error',failure:{status:429,code:'SUPPLIER_PRIVATE_CODE',message:privateText}});await assert.rejects(f.call('selection'),/MODEL_EXECUTION_FAILED/);assert.equal(f.ends.at(-1).failureFacts.httpStatus,429);assert.equal(f.ends.at(-1).failureFacts.streamFinish,'error');assert(!JSON.stringify(f.ends).includes(privateText));assert(!JSON.stringify(f.ends).includes('SUPPLIER_PRIVATE_CODE'));});
 await test('invalid supplier status is not persisted as a valid HTTP failure',async f=>{f.setFinish({kind:'error',failure:{status:900,message:'untrusted'}});await assert.rejects(f.call(),/MODEL_EXECUTION_FAILED/);assert.equal(f.ends.at(-1).failureFacts.httpStatus,undefined);});
 await test('a provider output finish remains distinct without restoring a local limit',async f=>{f.setFinish({kind:'max-tokens'});await assert.rejects(f.call(),/OUTPUT_LIMIT/);assert.equal(f.ends.at(-1).failureFacts.streamFinish,'max-tokens');assert.equal(f.stats.prepared[0].maxTokens,undefined);});
+await test('provider failure is visible with route and survives a different lane success',async f=>{f.setFinish({kind:'error',failure:{status:404,code:'MODEL_NOT_FOUND',message:'Model fixture-model does not exist'}});await assert.rejects(f.call('selection'),/MODEL_EXECUTION_FAILED/);const row=f.metadata.get('modelFailures').selection;assert.equal(row.category,'model-unavailable');assert.equal(row.model,'fixture-model');assert.equal(row.httpStatus,404);assert.equal(row.attemptId,f.ends.at(-1).rid);f.setFinish({kind:'stop'});await f.call('foreground');assert(f.metadata.get('modelFailures').selection);await f.call('selection');assert(!f.metadata.get('modelFailures').selection);});
 const report={at:new Date().toISOString(),scope:'Synthetic adapter plus actual request, context, choice and signed quota functions; no production/model/IM.',passed:tests.filter(t=>t.passed).length,failed:tests.filter(t=>!t.passed).length,cases:tests};console.log(JSON.stringify(report));if(report.failed)process.exitCode=1;

@@ -1,0 +1,110 @@
+{
+  "version": "0.7.0-beta.40",
+  "date": "2026-11-18",
+  "kind": "isolated-release-regression",
+  "results": [
+    {
+      "suite": "behavior-core",
+      "exitCode": 0
+    },
+    {
+      "suite": "memory-continuity",
+      "exitCode": 0
+    },
+    {
+      "suite": "dialogue",
+      "exitCode": 0
+    },
+    {
+      "suite": "attempt-lifecycle",
+      "exitCode": 0
+    },
+    {
+      "suite": "controller-admission",
+      "exitCode": 0
+    },
+    {
+      "suite": "plugin-lifecycle",
+      "exitCode": 0
+    },
+    {
+      "suite": "plugin-events",
+      "exitCode": 0
+    },
+    {
+      "suite": "learning-pack",
+      "exitCode": 0
+    },
+    {
+      "suite": "learning-management",
+      "exitCode": 0
+    },
+    {
+      "suite": "extension-pages",
+      "exitCode": 0
+    },
+    {
+      "suite": "extension-management",
+      "exitCode": 0
+    },
+    {
+      "suite": "extension-registry",
+      "exitCode": 0
+    },
+    {
+      "suite": "worker-request",
+      "exitCode": 0
+    },
+    {
+      "suite": "web-experience",
+      "exitCode": 0
+    },
+    {
+      "suite": "management-order",
+      "exitCode": 0
+    },
+    {
+      "suite": "weixin-recovery",
+      "exitCode": 0
+    },
+    {
+      "suite": "model-diagnostics",
+      "exitCode": 0
+    },
+    {
+      "suite": "budget-notifications",
+      "exitCode": 0
+    },
+    {
+      "suite": "unread-messages",
+      "exitCode": 0
+    },
+    {
+      "suite": "human-update",
+      "exitCode": 0
+    },
+    {
+      "suite": "user-records",
+      "exitCode": 0,
+      "checks": 7
+    },
+    {
+      "suite": "conversation-records",
+      "exitCode": 0,
+      "checks": 11
+    }
+  ],
+  "productionDependencyAudit": {
+    "info": 0,
+    "low": 0,
+    "moderate": 0,
+    "high": 0,
+    "critical": 0,
+    "total": 0
+  },
+  "firstRun": "Three behavior-core cases used a learning 0.1 registration fixture; fixture updated for the new plugin contract without weakening assertions, then passed.",
+  "productionServicesChanged": false,
+  "realModelCalls": 0,
+  "imTestMessages": 0,
+  "scope": "Source regression with isolated records/clocks. Registry cases use local synthetic packages and real DSH CLI/pnpm. Web acceptance from the preceding plugin-center verification is recorded separately. No clean-machine, multi-day or third-party compatibility claim."
+}

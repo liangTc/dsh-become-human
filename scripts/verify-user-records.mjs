@@ -1,0 +1,25 @@
+import assert from 'node:assert/strict';
+import {DatabaseSync} from 'node:sqlite';
+import {modelRecord,logSafe} from '../plugins/become-human/model-records.mjs';
+import {userRecord,modelText} from '../plugins/become-human-web/record-presentation.mjs';
+import {taskBoard} from '../plugins/become-human/task-board.mjs';
+const db=new DatabaseSync(':memory:'),cases=[];
+const test=(name,fn)=>{fn();cases.push(name);};
+db.exec(`CREATE TABLE attempt(id TEXT PRIMARY KEY,agent TEXT,request TEXT,response_text TEXT,state TEXT,error TEXT,started INTEGER,ended INTEGER,usage TEXT,usage_confidence TEXT);
+CREATE INDEX attempt_agent_task_started ON attempt(agent,json_extract(request,'$.taskId'),started);
+CREATE TABLE autonomy_task(id TEXT PRIMARY KEY,agent TEXT,kind TEXT,status TEXT,checkpoint TEXT,created INTEGER,updated INTEGER);`);
+const journal={db,assertAdmitted:id=>{if(id==='retired')throw Error('SESSION_RETIRED');}},insert=db.prepare('INSERT INTO attempt VALUES(?,?,?,?,?,?,?,?,?,?)');
+const request={taskId:'task1',messages:[{role:'user',content:[{type:'text',text:'请核对今天的安排'},{type:'image_url',image_url:{url:'data:image/png;base64,AAAA'}}]}],headers:{authorization:'secret'},token:'secret'};
+insert.run('a1','human',JSON.stringify(request),'这是实际返回','completed',null,1,2,null,'unknown');
+test('exact retained input and response are read on demand, not reconstructed',()=>{const r=modelRecord(journal,'human',{attemptId:'a1',taskId:'task1'});assert.equal(r.messages[0].content[0].text,'请核对今天的安排');assert.equal(r.response,'这是实际返回');assert.equal(r.request,undefined);assert.equal(r.messages[0].content[1].image_url.url,'[图片编码已省略]');});
+test('cross-session, mismatched task and retired reads are denied',()=>{assert.throws(()=>modelRecord(journal,'other',{attemptId:'a1'}),/TASK_NOT_FOUND/);assert.throws(()=>modelRecord(journal,'human',{attemptId:'a1',taskId:'other'}),/TASK_NOT_FOUND/);assert.throws(()=>modelRecord(journal,'retired',{attemptId:'a1'}),/SESSION_RETIRED/);});
+test('historical missing, empty returned output and partial failed output remain distinct',()=>{db.prepare('UPDATE attempt SET response_text=NULL WHERE id=?').run('a1');assert.equal(modelRecord(journal,'human',{attemptId:'a1'}).responseRecorded,false);db.prepare("UPDATE attempt SET response_text='',state='failed',error='EMPTY_MODEL_OUTPUT' WHERE id=?").run('a1');const r=modelRecord(journal,'human',{attemptId:'a1'});assert.equal(r.responseRecorded,true);assert.equal(r.response,'');assert.equal(r.error,'EMPTY_MODEL_OUTPUT');db.prepare('UPDATE attempt SET response_text=? WHERE id=?').run('部分已收到','a1');assert.equal(modelRecord(journal,'human',{attemptId:'a1'}).response,'部分已收到');});
+test('exports retain traceability while stripping credentials, reasoning and image bytes',()=>{const r=modelRecord(journal,'human',{attemptId:'a1',export:true});assert.equal(r.request.taskId,'task1');assert.equal(r.request.headers,undefined);assert.equal(r.request.token,undefined);assert.deepEqual(logSafe({reasoning_content:'private',apiKey:'secret',text:'Bearer abc sk-12345678901234567890'}),{text:'Bearer [已隐藏] [已隐藏]'});});
+test('user view omits internal references, opaque enums and unknown English leaves',()=>{const v=userRecord({summary:'整理了两段对话',memoryRefs:['memory-one'],learningNoteRefs:['note-one'],taskId:'opaque',randomField:'noise',status:'completed',result:{text:'仍保留有效正文'}});assert.equal(v['摘要'],'整理了两段对话');assert.equal(v['状态'],'已完成');assert.doesNotMatch(JSON.stringify(v),/memory-one|note-one|opaque|randomField|noise/);assert.match(JSON.stringify(v),/有效正文/);assert.equal(userRecord({memoryIds:['a'],learningNoteRefs:['b']}),null);});
+test('Chinese memory fields and model dialogue retain user-facing content',()=>{assert.deepEqual(userRecord({内容:'喜欢清淡口味'}),{内容:'喜欢清淡口味'});assert.equal(modelText('{"kind":"MESSAGE","data":{"text":"我在，慢慢说。"},"refs":["x"]}').内容.内容,'我在，慢慢说。');assert.equal(modelText('一段普通原话'),'一段普通原话');});
+test('large retained task lists hydrate only visible attempts with accurate paging',()=>{
+ const task=db.prepare('INSERT INTO autonomy_task VALUES(?,?,?,?,?,?,?)');db.exec('BEGIN');for(let i=0;i<10000;i++){task.run('t'+i,'human','chat',i%5?'completed':'failed','{}',i+10,i+10);insert.run('call'+i,'human',JSON.stringify({taskId:'t'+i,messages:[{role:'user',content:'x'.repeat(6000)}]}),null,'completed',null,i+10,i+11,JSON.stringify({totalTokens:7}),'reported');}db.exec('COMMIT');
+ const t=performance.now(),page=taskBoard({journal},'human',{limit:20,offset:20});const elapsed=performance.now()-t;
+ assert.equal(page.total,10000);assert.equal(page.counts.attention,2000);assert.equal(page.items.length,20);assert.equal(page.items[0].recordId,'t9979');assert.equal(page.items.reduce((n,x)=>n+x.attempts.length,0),20);assert.ok(page.items.every(x=>x.usage.reportedTokens===7));assert.ok(elapsed<3000,'10k query exceeded 3s: '+elapsed);console.log(JSON.stringify({syntheticTasks:10000,requestBytes:60000000,pageMs:elapsed}));
+});
+db.close();console.log(JSON.stringify({passed:cases.length,cases}));

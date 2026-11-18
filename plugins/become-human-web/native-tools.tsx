@@ -1,3 +1,5 @@
+import {capabilityName} from './record-presentation.mjs';
+import {RecordContent} from './native-records';
 import React,{useEffect,useRef,useState} from 'react';
 import {useDraftGuard,useDraftNavigation} from './native-shell';
 
@@ -67,7 +69,7 @@ function ToolSubmit({descriptor,api,s,busy,ui,onSubmitted}:any){
     await api.control({op:'tool-submit',tool:descriptor.id,input:normalized,requestId:pending.current.requestId});
     pending.current=null;setInput(initialInput(descriptor.inputSchema));onSubmitted();
   },descriptor.effect==='write'?'已生成待批准任务，请核对目标和参数后批准这一笔':s.desired==='running'?'已加入唯一执行队列':'已排队，恢复 Human 后执行');
-  return <section className="hn-group"><h3>{descriptor.title??descriptor.description??descriptor.id}</h3><p className="hn-note hn-mono">{descriptor.id} · {descriptor.backend??'内置'} · {descriptor.effect==='write'?'写入或外部操作 · 逐笔批准':'只读'}</p>
+  return <section className="hn-group"><h3>{capabilityName(descriptor.title??descriptor.description??descriptor.id)}</h3><p className="hn-note"> {descriptor.effect==='write'?'写入或外部操作 · 逐笔批准':'只读'}</p>
     {descriptor.title&&descriptor.description&&<p className="hn-help">{descriptor.description}</p>}
     <p className="hn-note">单次超时 {Math.round((descriptor.timeoutMs??0)/1000)} 秒 · 结果上限 {descriptor.maxResultBytes??'—'} 字节 · {descriptor.autonomous?'允许自主任务提出调用':'仅手动提交'}</p>
     {descriptor.scope&&<JsonDetails value={descriptor.scope} label="查看本项允许范围"/>}
@@ -81,15 +83,16 @@ function ToolSubmit({descriptor,api,s,busy,ui,onSubmitted}:any){
 function ToolResult({result,ui}:any){
   const {Band}=ui;
   if(result===undefined||result===null)return <Band>尚无可用结果。请查看任务状态与原因。</Band>;
-  if(typeof result==='object'&&typeof result.excerpt==='string')return <>{result.fetchedAt&&<p className="hn-note">读取时间：{time(result.fetchedAt)}</p>}{result.digest&&<p className="hn-mono">正文 SHA-256：{result.digest}</p>}{result.comparison&&<Band>{!result.comparison.baselineExists?'已建立首次成功读取基线':result.comparison.changed?'提取正文有变化':'提取正文指纹未变化'}。这不是语义差异分析。</Band>}<Band>{result.partial?'当前为部分摘录':'已提取可用正文'}；内容尚未经知识结论验证。</Band><pre className="hn-preview" style={previewStyle}>{result.excerpt}</pre></>;
-  return <pre className="hn-preview" style={previewStyle}>{print(result)}</pre>;
+  if(typeof result==='object'&&typeof result.excerpt==='string')return <>{result.fetchedAt&&<p className="hn-note">读取时间：{time(result.fetchedAt)}</p>}{result.comparison&&<Band>{!result.comparison.baselineExists?'已建立首次成功读取基线':result.comparison.changed?'提取正文有变化':'提取正文指纹未变化'}。这不是语义差异分析。</Band>}<Band>{result.partial?'当前为部分摘录':'已提取可用正文'}；内容尚未经知识结论验证。</Band><pre className="hn-preview" style={previewStyle}>{result.excerpt}</pre></>;
+  if(Array.isArray(result.messages))return <><p className="hn-note">当次读取的 DSH 会话片段 · {result.messages.length} 条{result.hasMore?' · 还有更早记录，可在读取工具中使用返回的分页位置继续读取。':''}{result.truncated?' · 部分内容被来源截断。':''}</p><ol className="hn-transcript">{result.messages.map((message:any,index:number)=><li className={'hn-transcript-message hn-transcript-'+message.role} key={message.seq??index}><header><strong>{message.role==='user'?'用户':message.role==='assistant'?'助手':'系统'}</strong><time>{time(message.time)}</time></header><p className="hn-record-text">{message.text}</p>{message.truncated&&<p className="hn-note">这条消息在来源中被截断。</p>}</li>)}</ol></>;
+  return typeof result==='string'?<p className="hn-record-text">{result}</p>:<RecordContent value={result}/>;
 }
 
 function PreparedPreview({row,ui}:any){
   const {Band}=ui,prepared=row.prepared,isReport=row.tool==='write-learning-report'||row.capabilitySnapshot?.backend==='managed-report';
   if(!prepared)return isReport?<Band>尚未取得完整文件预览，不能批准保存。请刷新任务。</Band>:null;
-  if(isReport)return <section className="hn-group"><h3>准备写入的实际文件</h3><p className="hn-mono" style={previewStyle}>{prepared.path??'未取得写入路径'}</p><p className="hn-mono" style={previewStyle}>文件内容 SHA-256：{prepared.digest??'—'} · {prepared.bytes??'—'} 字节</p><p className="hn-note">下方是本次批准绑定的完整报告原文。文件内容摘要与上方任务预览摘要用途不同，均需保持一致。</p>{typeof prepared.content==='string'&&prepared.content.length?<pre className="hn-preview" style={previewStyle}>{prepared.content}</pre>:<Band>未取得完整报告原文，不能批准保存。</Band>}</section>;
-  return <section className="hn-group"><h3>本次操作的完整预览</h3><pre style={previewStyle}>{print(prepared)}</pre></section>;
+  if(isReport)return <section className="hn-group"><h3>准备写入的实际文件</h3><p className="hn-mono" style={previewStyle}>{prepared.path??'未取得写入路径'}</p><p className="hn-note">下方是本次批准绑定的完整报告原文。文件内容摘要与上方任务预览摘要用途不同，均需保持一致。</p>{typeof prepared.content==='string'&&prepared.content.length?<pre className="hn-preview" style={previewStyle}>{prepared.content}</pre>:<Band>未取得完整报告原文，不能批准保存。</Band>}</section>;
+  return <section className="hn-group"><h3>本次操作的完整预览</h3><RecordContent value={prepared} sanitize={false}/></section>;
 }
 
 function ToolJob({row,api,busy,ui,onChanged}:any){
@@ -97,8 +100,8 @@ function ToolJob({row,api,busy,ui,onChanged}:any){
   const isReport=row.tool==='write-learning-report'||row.capabilitySnapshot?.backend==='managed-report',prepared=row.prepared,hasReportPreview=!isReport||typeof prepared?.content==='string'&&prepared.content.length>0&&typeof prepared?.path==='string'&&prepared.path.length>0&&/^[a-f0-9]{64}$/i.test(prepared?.digest??'')&&Number.isSafeInteger(prepared?.bytes)&&prepared.bytes>0;
   const approve=()=>api.run(async()=>{await api.control({op:'tool-approve',jobId:row.id,expectedVersion:row.version,digest:row.digest});setReviewed('');onChanged();},'只批准了当前版本的这一笔操作，等待唯一执行通道');
   const cancel=()=>api.run(async()=>{await api.control({op:'tool-cancel',jobId:row.id,expectedVersion:row.version});onChanged();},'任务已取消');
-  return <><Band>{statusLabels[row.status]??row.status} · 版本 {row.version} · 更新 {time(row.updated)}</Band><p className="hn-mono">{row.tool} · {row.id}</p><h3>本次目标与完整参数</h3><pre style={previewStyle}>{print(row.input)}</pre>
-    {row.digest&&<p className="hn-mono">完整任务预览 SHA-256：{row.digest}</p>}{row.approvalExpires?<p className="hn-note">本次批准有效至：{time(row.approvalExpires)}</p>:row.expires?<p className="hn-note">任务预览保留至：{time(row.expires)}</p>:null}
+  return <><Band>{statusLabels[row.status]??row.status} · 版本 {row.version} · 更新 {time(row.updated)}</Band><h3>本次目标与完整参数</h3><RecordContent value={row.input} sanitize={false}/>
+    {row.approvalExpires?<p className="hn-note">本次批准有效至：{time(row.approvalExpires)}</p>:row.expires?<p className="hn-note">任务预览保留至：{time(row.expires)}</p>:null}
     <PreparedPreview row={row} ui={ui}/>
     {row.status==='awaiting-approval'&&<><Band>请核对上方目标、完整参数{isReport?'、文件路径与完整报告原文':''}和当前版本。批准只作用于这一笔，不授权后续其他操作。{expired?'这份预览已到期，请重新检查任务。':''}</Band><Check label={isReport?'我已核对完整报告原文、写入路径与参数，批准保存当前版本':'我已核对目标和参数，批准执行当前版本的这一笔操作'} value={reviewed===approvalKey} disabled={busy||expired||!row.digest||!hasReportPreview} onChange={(checked:boolean)=>setReviewed(checked?approvalKey:'')}/><div className="hn-row"><Button primary disabled={busy||expired||!row.digest||!hasReportPreview||reviewed!==approvalKey} onClick={approve}>批准这一笔操作</Button></div></>}
     {row.status==='unknown'&&<Band>操作可能已经发生，但未取得确定回执。请先人工核对目标页面或会话；此任务不会自动重试，本页也不会重新提交。</Band>}
@@ -120,11 +123,11 @@ export default function Tools({api,s,busy,ui}:any){
   const items=lastCatalog.current,selected=items.find((item:any)=>item.id===tool);
   useEffect(()=>{if(!tool&&items.length)setTool((items.find((item:any)=>item.available!==false)??items[0]).id);},[tool,catalog.data]);
   const refresh=()=>setNonce(value=>value+1);
-  return <><div className="hn-row hn-between"><h3>工具与能力</h3><Button disabled={busy} onClick={refresh}>刷新能力与任务</Button></div><Band>所有任务与聊天、学习共用唯一执行通道。只读工具按已配置范围读取；写入和浏览器操作需要逐笔预览批准。工具结果不会自动成为长期记忆。</Band>
-    <ReadState result={catalog}>{()=>items.length?<Field label="选择能力"><Select value={tool} options={items.map((item:any)=>[item.id,(item.title??item.description??item.id)+(item.available===false?' · 未启用':'')])} onChange={(next:string)=>{if(next!==tool)navigation?.navigate?navigation.navigate(()=>setTool(next)):setTool(next);}}/></Field>:<Empty>暂无已注册能力。</Empty>}</ReadState>
+  return <><div className="hn-row hn-between"><h3>调用工具</h3><Button disabled={busy} onClick={refresh}>刷新能力与任务</Button></div><Band>所有任务与聊天、学习共用唯一执行通道。只读工具按已配置范围读取；写操作需要逐笔预览批准。工具结果不会自动成为长期记忆。</Band>
+    <ReadState result={catalog}>{()=>items.length?<Field label="选择能力"><Select value={tool} options={items.map((item:any)=>[item.id,capabilityName(item.title??item.description??item.id)+(item.available===false?' · 未启用':'')])} onChange={(next:string)=>{if(next!==tool)navigation?.navigate?navigation.navigate(()=>setTool(next)):setTool(next);}}/></Field>:<Empty>暂无已注册能力。</Empty>}</ReadState>
     {selected&&<ToolSubmit key={selected.id} descriptor={selected} api={api} s={s} busy={busy||catalog.loading||!!catalog.error} ui={ui} onSubmitted={refresh}/>}
     <h3 className="hn-section-title">任务与回执</h3><Field label="筛选任务状态"><Select value={filter} options={[["","全部状态"],...Object.entries(statusLabels)]} onChange={setFilter}/></Field>
-    <ReadState result={rows}>{(data:any)=>{const visible=rowsOf(data).filter((row:any)=>!filter||row.status===filter);return visible.length?visible.map((row:any)=><section className="hn-group" key={row.id}><div className="hn-row hn-between"><strong>{row.capabilitySnapshot?.title??row.tool}</strong><span>{statusLabels[row.status]??row.status}</span></div><p className="hn-note">{time(row.updated)} · 版本 {row.version}</p><p className="hn-mono" style={previewStyle}>{print(row.input)}</p>{row.error&&<p className="hn-note">原因：{ui.errorText(typeof row.error==='string'?row.error:row.error.code??row.error.message??print(row.error))}</p>}<Button onClick={()=>setActiveId(row.id)}>{row.status==='awaiting-approval'?'预览目标 / 批准':'查看结果与回执'}</Button></section>):<Empty>暂无符合条件的工具任务。</Empty>;}}</ReadState>
+    <ReadState result={rows}>{(data:any)=>{const visible=rowsOf(data).filter((row:any)=>!filter||row.status===filter);return visible.length?visible.map((row:any)=><section className="hn-group" key={row.id}><div className="hn-row hn-between"><strong>{capabilityName(row.capabilitySnapshot?.title??row.tool)}</strong><span>{statusLabels[row.status]??row.status}</span></div><p className="hn-note">{time(row.updated)} · 版本 {row.version}</p><p className="hn-note">{row.input?.title??row.input?.url??(row.input?.sessionId?'DSH 会话操作':'参数与结果见详情')}</p>{row.error&&<p className="hn-note">原因：{ui.errorText(typeof row.error==='string'?row.error:row.error.code??row.error.message??print(row.error))}</p>}<Button onClick={()=>setActiveId(row.id)}>{row.status==='awaiting-approval'?'预览目标 / 批准':'查看结果与回执'}</Button></section>):<Empty>暂无符合条件的工具任务。</Empty>;}}</ReadState>
     {activeId&&<ToolJobDetail key={activeId} id={activeId} {...{api,busy,ui}} nonce={nonce+revision} onChanged={refresh} onClose={()=>setActiveId('')}/>}
   </>;
 }

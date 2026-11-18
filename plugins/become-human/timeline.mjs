@@ -1,6 +1,7 @@
 const parse=s=>{try{return JSON.parse(s);}catch{return null;}};
 const text=(s,n=220)=>typeof s==='string'?s.replace(/([?&](?:token|api_key|access_token)=)[^\s&]+/giu,'$1[隐藏]').replace(/sk-[\w-]{16,}/gu,'[隐藏]').slice(0,n):'';
 const labels={
+ 'memory-lifecycle-maintained':'完成记忆分层维护','memory-lifecycle-batch-proposed':'准备记忆摘要批次','memory-lifecycle-batch-failed':'记忆摘要未完成','memory-lifecycle-batch-restored':'恢复记忆批次',
  'behavior-selected':'选择当前行为','behavior-result':'记录实际执行结果','experience-recorded':'记住一次数字经历','experience-reflected':'回顾经历并调整方法','experience-reflection-withdrawn':'撤回方法回顾',
  'development-review-started':'回顾已有经历与记忆','development-review-completed':'保存本次经历回顾','development-review-suspended':'保存回顾进度，优先与你交流','development-review-failed':'本次回顾未完成，等待明确重试','development-review-interrupted':'回顾遇到运行中断，保留记录','persona-development-applied':'形成一小步有依据的人格偏移','persona-development-observing':'暂时保留观察，尚未改变人格','persona-development-reverted':'撤回一条人格偏移','persona-development-invalidated':'依据变化，撤去对应人格偏移','memory-lifecycle-summary-committed':'整理可追溯摘要，保留原文',
  'action-proposed':'整理报告草稿，等待单独批准','action-approved':'收到这一版本的文件写入授权','action-executing':'开始写入已批准的报告','action-completed':'生成文件并核对哈希','action-blocked':'文件行动需要处理，没有继续写入','action-cancelled':'取消文件行动','action-expired':'文件写入授权到期','action-notified':'在唯一会话告知行动结果','goal-report-prepared':'将学习成果整理成待批准报告',
@@ -38,7 +39,7 @@ export function brainTimeline(management,agent,input={}){
    else if(e.kind.startsWith('work-observation-')){id='work-observation:'+(d.batchId??Math.floor(e.time/3600000)*3600000);kind='memory';}
    else if(e.task_id){id=e.task_id.startsWith('schedule:')?(requestGroups.get(e.request_id)??e.round_id??e.task_id):'task:'+e.task_id;kind=e.task_id.startsWith('development:')?'memory':e.task_id.startsWith('schedule:')?'schedule':'autonomous';}
    else if(requestGroups.has(e.request_id)){id=requestGroups.get(e.request_id);kind=id.startsWith('chat:')?'chat':id.startsWith('schedule:')?'schedule':'autonomous';}
-   else if(e.kind.startsWith('persona-development-')||e.kind.startsWith('memory-lifecycle-')){id='memory-lifecycle:'+Math.floor(e.time/3600000)*3600000;kind='memory';}
+   else if(e.kind.startsWith('persona-development-')||e.kind.startsWith('memory-lifecycle-')){id=d.batchId?'memory-batch:'+d.batchId:'memory-event:'+e.id;kind='memory';}
    else if(['brain-wait','timer-wake'].includes(e.kind)){id='check:'+Math.floor(e.time/3600000)*3600000;kind='check';}
    else continue;
    const g=ensure(id,kind,e.time);if(e.kind.startsWith('work-observation-'))g.title='工作观察';if(kind==='autonomous'){g.taskId=e.task_id;g.title=taskNames[d.kind]??g.title??'自主活动';}
@@ -53,11 +54,15 @@ export function brainTimeline(management,agent,input={}){
    // A completed checkpoint can retain a previous suspension reason. Keep the
    // original suspension event, but do not label completion with that history.
    if(labels[e.kind])g.actions.push({id:e.id,time:e.time,label:labels[e.kind],detail:e.kind==='task-completed'?'':reasonLabel(d.reason??d.code??d.error??''),status:e.status,requestId:e.request_id});
+   if(e.kind.startsWith('persona-development-')||e.kind.startsWith('memory-lifecycle-')){
+     g.status=e.kind==='memory-lifecycle-batch-proposed'?'wait':e.kind==='memory-lifecycle-batch-failed'?'failed':'success';
+     if(kind==='memory')g.title=d.batchId?'整理记忆摘要':'维护记忆与人格记录';
+   }
    if(['task-completed','schedule-delivered','development-review-completed'].includes(e.kind))g.status='success';
    if(['task-ready','task-executing','schedule-executing'].includes(e.kind)||e.kind==='direction-selected'&&d.decision==='execute')g.status='running';
    if(['development-review-failed','development-review-interrupted','task-failed','autonomy-turn-ended','schedule-blocked','attempt-validation-rejected'].includes(e.kind))g.status='failed';
    if(['development-review-suspended','task-suspended','attempt-cancelled'].includes(e.kind))g.status='suspended';
-   if(['task-cancelled','learning-evidence-insufficient','autonomy-deferred'].includes(e.kind))g.status='wait';
+   if(['task-cancelled','learning-evidence-insufficient','autonomy-deferred','development-review-waiting-budget'].includes(e.kind))g.status='wait';
  }
  const rawMemories=db.prepare('SELECT id,type,payload,truth,refs,status,version,valid_from FROM memory_record WHERE agent=? AND valid_from>=? AND valid_from<=? ORDER BY valid_from LIMIT 1001').all(agent,from,to);
  for(const m of rawMemories.slice(0,1000)){

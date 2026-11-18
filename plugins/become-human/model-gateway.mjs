@@ -1,4 +1,5 @@
 import {strategyRequest} from './experience-strategy.mjs';
+import {modelFailureDiagnostic,saveModelFailure,clearModelFailure} from './model-failure.mjs';
 import {attachCurrentImages,estimateImageRequestCost,imageContentCount,assertImageModel} from './multimodal.mjs';
 import {nativeDialogueMessages} from './dialogue-frame.mjs';
 import {recordContext} from './context.mjs';
@@ -18,10 +19,12 @@ export async function modelRequest(agent,signal,{turn,epoch,lane,messages,admitt
   messages=strategyRequest(messages,strategyUses);
   recordContext(agent,messages,{taskId,turn,lane:compacting?'conversation-summary':reviewing?'conversation-review':styleRepair?'conversation-style-repair':learningReview?'learning-selection-review':lane});
   const ownerInputRevision=admittedIds.length?admittedIds.reduce((n,id)=>Math.max(n,j.db.prepare('SELECT rowid AS n FROM user_request WHERE agent=? AND message_id=?').get(agent.id,id)?.n??0),0):j.db.prepare('SELECT COALESCE(max(rowid),0) AS n FROM user_request WHERE agent=?').get(agent.id).n;
-  let rid,amount,usage,finish,text='',reasoningChars=0,dispatched=false,settled=false;
+  let rid,amount,usage,finish,text='',reasoningChars=0,dispatched=false,settled=false,route=config;
+  const streamCounts={text:0,reasoning:0,usage:0,finish:0,other:0};
   const requestSignal=signal;
   try{
     const prepared=await agent.ctx.llm.prepareCall(modelCallOptions(config),requestSignal);
+    route=prepared.config;
     assertImageModel(prepared.inputModalities,imageContentCount(messages));
     requestSignal.throwIfAborted();if(agent.desired().epoch!==epoch)throw failure('STALE_EPOCH');
     const b=store.budget(agent.id),outputReservation=modelOutputReservation(prepared.config,prepared.context);
@@ -33,6 +36,7 @@ export async function modelRequest(agent,signal,{turn,epoch,lane,messages,admitt
     if(strategyUses.length)f.experience.strategies.delivered(agent.id,strategyTask,rid);
     j.audit(agent.id,'dispatch',{attemptId:rid,turn,epoch,lane,budgetClass,taskId,provider:prepared.config.provider,model:prepared.config.model,reserved:amount,admittedIds});
     for await(const chunk of prepared.stream({...prepared.config,messages,signal:requestSignal})){
+      const category=({'text-delta':'text','reasoning-delta':'reasoning',usage:'usage',finish:'finish'})[chunk.type]??'other';streamCounts[category]++;
       if(chunk.type==='text-delta')text+=chunk.text;
       if(chunk.type==='reasoning-delta')reasoningChars+=chunk.text.length;
       if(chunk.type==='usage'){const u=chunk.usage;usage=u&&['inputTokens','outputTokens','cacheReadTokens','cacheWriteTokens'].every(k=>k.endsWith('Tokens')&&u[k]===undefined&&k.startsWith('cache')||Number.isFinite(u[k])&&u[k]>=0)?u:undefined;}
@@ -43,14 +47,21 @@ export async function modelRequest(agent,signal,{turn,epoch,lane,messages,admitt
     if(!text.trim())throw failure('EMPTY_MODEL_OUTPUT');
     const total=usage?usage.inputTokens+(usage.cacheReadTokens??0)+(usage.cacheWriteTokens??0)+usage.outputTokens:undefined;
     j.settle(rid,total);settled=true;
-    j.endAttempt(rid,{state:internal?'completed':lane==='foreground'?'generated':lane==='selection'?'selected':'executed',usage,usageConfidence:usage?'reported':'unknown',textChars:text.length,reasoningChars});
+    j.endAttempt(rid,{state:internal?'completed':lane==='foreground'?'generated':lane==='selection'?'selected':'executed',usage,usageConfidence:usage?'reported':'unknown',textChars:text.length,reasoningChars,responseText:text});
     j.put(agent.id,'lastUsage',usage??null);j.put(agent.id,'lastUsageConfidence',usage?'reported':'unknown');
+    clearModelFailure(j,agent.id,lane);
     return {rid,text:text.trim(),usage,reasoningChars,provider:prepared.config.provider,model:prepared.config.model,workMemoryRefs:messages.contextReport?.workMemoryRefs??[]};
   }catch(error){
     const code=signal.aborted?'USER_PREEMPTED':requestSignal.aborted?'REQUEST_TIMEOUT':error.code??error.message;
-    if(rid&&!settled){if(dispatched)j.settle(rid);else j.release(rid);}
+    const reportedTerminal=!!usage&&['stop','length','max-tokens'].includes(finish?.kind)&&!signal.aborted;
+    if(rid&&!settled){if(dispatched)j.settle(rid,reportedTerminal?usage.inputTokens+(usage.cacheReadTokens??0)+(usage.cacheWriteTokens??0)+usage.outputTokens:undefined);else j.release(rid);}
     const failureFacts={phase:dispatched?'stream':'prepare',...(finish?{streamFinish:['stop','length','max-tokens','error','aborted'].includes(finish.kind)?finish.kind:'other'}:{}),exceptionType:['TypeError','RangeError','SyntaxError','Error'].includes(error.name)?error.name:'ProviderError',missingAssistantSource:messages.filter(message=>message.role==='assistant'&&!message.source).length,...(Number.isInteger(error.status)&&error.status>=400&&error.status<=599?{httpStatus:error.status}:{})};
-    if(rid)j.endAttempt(rid,{state:signal.aborted?'cancelled':'failed',usage,usageConfidence:dispatched?'unknown':'not-dispatched',error:/^[A-Z_]{3,64}$/.test(code)?code:'MODEL_EXECUTION_FAILED',textChars:text.length,reasoningChars,failureFacts});
+    failureFacts.streamCounts=streamCounts;failureFacts.textChars=text.length;failureFacts.reasoningChars=reasoningChars;
+    if(!signal.aborted&&code!=='AUTONOMOUS_BUDGET_EXHAUSTED'){
+      failureFacts.diagnostic=modelFailureDiagnostic(finish?.failure??error,code);
+      saveModelFailure(j,agent.id,{at:Date.now(),attemptId:rid??null,lane,provider:route.provider,model:route.model,code:/^[A-Z_]{3,64}$/.test(code)?code:'MODEL_EXECUTION_FAILED',...failureFacts.diagnostic,streamFinish:failureFacts.streamFinish??null});
+    }
+    if(rid)j.endAttempt(rid,{state:signal.aborted?'cancelled':'failed',usage,usageConfidence:reportedTerminal?'reported':dispatched?'unknown':'not-dispatched',error:/^[A-Z_]{3,64}$/.test(code)?code:'MODEL_EXECUTION_FAILED',textChars:text.length,reasoningChars,failureFacts,responseText:text});
     else j.audit(agent.id,'model-preparation-rejected',{lane,taskId,code:/^[A-Z_]{3,64}$/.test(code)?code:'MODEL_EXECUTION_FAILED',failureFacts});
     throw Object.assign(failure(/^[A-Z_]{3,64}$/.test(code)?code:'MODEL_EXECUTION_FAILED'),code==='AUTONOMOUS_BUDGET_EXHAUSTED'&&Number.isSafeInteger(error.neededTokens)?{neededTokens:error.neededTokens}:{});
   }finally{f.tickets.delete(requestSignal);}

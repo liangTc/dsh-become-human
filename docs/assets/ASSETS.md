@@ -5,8 +5,11 @@
 | 文件 | 用途 | 来源 |
 | --- | --- | --- |
 | banner-pixel.png | GitHub 首页横幅，带 Beta / Work in progress 标记 | imagegen 内置工具生成 |
+| avatar-pixel-mature.png | 原始头像设计稿，保留作参考 | imagegen 内置工具，参考 banner-pixel.png 生成 |
+| avatar-pixel-transparent.png | 早期透明抠图稿，顶部裁切问题由 complete 版替代 | imagegen 内置工具移除原始头像背景 |
 | icon-pixel.svg | 插件与项目图标 | 项目原创可编辑 SVG |
-| architecture-pixel.svg | 唯一会话与事件循环架构 | 项目原创可编辑 SVG |
+| personality-extension-pixel.svg | 持续人格、事件循环、成长反馈与扩展入口 | 项目原创可编辑 SVG |
+| architecture-pixel.svg | 宿主管理、独立运行与唯一会话的部署结构 | 项目原创可编辑 SVG |
 | capabilities-pixel.svg | 功能概览 | 项目原创可编辑 SVG |
 
 ## 视觉方向与参考
@@ -18,6 +21,10 @@
 本目录原创素材随项目采用 Apache-2.0。游戏名称及商标归各自权利人所有；参考不表示该游戏、Quantic Dream、Sony 或 DeepSeek 对本项目的授权或背书。本目录不分发游戏原画、游戏标志或游戏截图。上游 IM 运行所需图标的来源及许可另见第三方声明。
 
 ## Banner 生成提示词
+
+2026-11-17 头像调整：使用成熟的仿生人肖像、短黑发、冰蓝轮廓光和面部细电路线，替换早期偏幼态的机器人方案。头像是产品视觉，不向人物配置或模型提示词注入固定姓名、性别、关系或性格。侧栏的新消息角标是独立界面状态。
+
+头像生成方式：内置 imagegen；不透明 PNG；参考文件 `banner-pixel.png`。提示词核心：`Use the supplied banner as the direct visual reference. One square close-up adult android portrait, short layered black hair, natural adult proportions, thoughtful eyes, thin cyan temple and cheek circuit seam, charcoal high collar. Mature cinematic pixel art, dark navy background, icy blue rim light, stepped edges and selective dithering. No cute mascot, chibi, toy robot, antenna, text or interface.`
 
 生成方式：内置 imagegen；不透明 PNG；项目文件为 `banner-pixel.png`。
 
@@ -36,3 +43,7 @@ Small footer: "Autonomous companion for DSH"
 Prominent small outlined status panel at upper left: "BETA / WORK IN PROGRESS"
 The project title must be the largest type, white tall condensed geometric sans with subtle pixel-stepped edges. All text fully in frame and spelled correctly. No other text, official game title or game logos, actor likenesses, watermarks, screenshots, Steam logo or UI. Keep the original project name and the beta label readable. Opaque background.
 ```
+
+透明版生成：内置 imagegen 编辑原始头像，transparent_background=true。提示词：Remove only the navy background; preserve the mature pixel android portrait and opaque hair and jacket. True RGBA alpha transparency outside the silhouette; no rectangular tile, matte, shadow or painted checkerboard. 页面不再添加圆角裁切或底板。
+
+当前头像为 `avatar-pixel-complete.png`：imagegen 内置工具编辑透明原图，补全头顶并缩小构图，头发及肩部均完整落在画布内。提示词核心：Reconstruct the complete crown; zoom out with transparent air above and on both sides; preserve mature pixel android identity; no subject touches canvas edges. True RGBA transparency.

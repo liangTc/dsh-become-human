@@ -1,0 +1,49 @@
+import React,{useEffect,useState} from 'react';
+export const contractVersion=2;
+const errors:Record<string,string>={AGENT_BUSY:'Human 正在处理消息或任务，请稍后再保存。',STALE_CONFIGURATION:'设置已有变化，请重新读取后再修改。',STALE_NOTE:'这份笔记已有新的批注，请重新打开。'};
+const format=(at:number)=>new Date(at).toLocaleString();
+function Settings({human,report}:any){
+ const [base,setBase]=useState<any>(null),[value,setValue]=useState<any>(null),[busy,setBusy]=useState(false);
+ const dirty=!!value&&JSON.stringify(value)!==JSON.stringify(base?.settings);
+ useEffect(()=>{human.setDirty?.(dirty);return ()=>human.setDirty?.(false);},[dirty,human.setDirty]);
+ const read=()=>human.call('learning.read',{kind:'settings'}).then((r:any)=>{setBase(r);setValue(r.settings);});
+ useEffect(()=>{let live=true;human.call('learning.read',{kind:'settings'}).then((r:any)=>{if(live){setBase(r);setValue(r.settings);}}).catch(report);return ()=>{live=false;};},[human.call]);
+ if(!value)return <p role="status">正在读取学习设置…</p>;
+ const patch=(key:string,v:any)=>setValue((old:any)=>({...old,[key]:v})),mode=!value.learningEnabled?'off':value.searchEnabled?'explore':'sources';
+ return <div>
+  <label>学习方式<select aria-label="学习方式" value={mode} onChange={e=>setValue({...value,learningEnabled:e.target.value!=='off',searchEnabled:e.target.value==='explore'})}><option value="off">关闭自主学习</option><option value="explore">按需要探索公开资料</option><option value="sources">只关注指定来源</option></select></label>
+  <p className="hint">有具体问题才学习。学完先留笔记，适合聊天时抛一个简短引子；你追问才展开，没有追问就减少该方向的分享。主动联系与额度仍在 Human 设置中统一管理。</p>
+  <details><summary>搜索与检查间隔</summary><div className="fields"><label>搜索服务<select value={value.searchProvider} onChange={e=>patch('searchProvider',e.target.value)}><option value="bing">Bing 公开搜索</option><option value="duckduckgo">DuckDuckGo 公开搜索</option><option value="searxng">自有 SearXNG</option></select></label>{value.searchProvider==='searxng'&&<label>服务地址<input value={value.searchEndpoint} onChange={e=>patch('searchEndpoint',e.target.value)} placeholder="https://search.example.com/"/></label>}<label>检查间隔（分钟）<input type="number" min="10" max="1440" value={value.sourceIntervalMs/60000} onChange={e=>patch('sourceIntervalMs',Number(e.target.value)*60000)}/></label></div><p className="hint">到时只会重新考虑是否值得学习，不保证每次执行。</p><label><span><input type="checkbox" checked={value.goalAutoActivateEnabled} onChange={e=>patch('goalAutoActivateEnabled',e.target.checked)}/> 自动激活低风险学习目标</span></label><p className="hint">仅影响学习建议，报告保存等写操作仍需单独批准。</p></details>
+  <details open={mode==='sources'||undefined}><summary>固定关注的来源 · {value.sources.length} 项</summary><p className="hint">可留空，最多 8 项。公开探索时不局限于这些来源。</p>{value.sources.map((source:any,i:number)=><section className="note" key={i}><div className="row"><strong>来源 {i+1}</strong><button onClick={()=>patch('sources',value.sources.filter((_:any,n:number)=>n!==i))}>移除</button></div>{[['title','名称'],['url','网页地址'],['topic','希望了解的问题']].map(([key,label])=><label key={key}>{label}<input value={source[key]} onChange={e=>patch('sources',value.sources.map((v:any,n:number)=>n===i?{...v,[key]:e.target.value}:v))}/></label>)}</section>)}<button disabled={value.sources.length>=8} onClick={()=>patch('sources',[...value.sources,{title:'',url:'',topic:''}])}>添加来源</button></details>
+  <div className="row"><button className="primary" disabled={!dirty||busy} onClick={async()=>{setBusy(true);try{const r=await human.call('learning.save',{operation:'settings',revision:base.revision,settings:value},`学习方式：${mode==='off'?'关闭自主学习':mode==='explore'?'按需要探索公开资料':'只关注指定来源'}\n检查间隔：${value.sourceIntervalMs/60000} 分钟\n固定来源：${value.sources.length} 项\n自动激活学习目标：${value.goalAutoActivateEnabled?'开启':'关闭'}`);setBase(r);setValue(r.settings);report(null,'学习设置已保存');}catch(e){report(e);}finally{setBusy(false);}}}>保存学习设置</button><button disabled={busy} onClick={()=>{if(!dirty||window.confirm('放弃尚未保存的学习设置？'))read().catch(report);}}>重新读取</button></div>
+ </div>;
+}
+function Note({human,note,onClose,report,onSaved}:any){
+ const [value,setValue]=useState<any>(null),[body,setBody]=useState(''),[busy,setBusy]=useState(false);
+ const dirty=!!value&&body!==(value.ownerRevision?.summary??'');
+ useEffect(()=>{human.setDirty?.(dirty);return ()=>human.setDirty?.(false);},[dirty,human.setDirty]);
+ useEffect(()=>{let live=true;human.call('learning.read',{kind:'note',noteId:note.id}).then((r:any)=>{if(live){setValue(r);setBody(r.ownerRevision?.summary??'');}}).catch(report);return ()=>{live=false;};},[human.call,note.id]);
+ const save=async(operation:string,extra:any)=>{setBusy(true);try{const r=await human.call('learning.save',{operation,noteId:note.id,...extra},`${value.title}\n${operation==='annotate'?'保存人工批注：'+extra.summary:extra.value==='useful'?'反馈：对我有用':extra.value==='not-now'?'反馈：暂时不想聊':'纠正并排队重学：'+extra.comment}`);setValue(r);setBody(r.ownerRevision?.summary??'');onSaved();report(null,'已保存');}catch(e){report(e);}finally{setBusy(false);}};
+ if(!value)return <p>正在读取笔记…</p>;
+ const intent=value.learningIntent;
+ return <section className="note-detail"><div className="row sticky"><h3>{value.title}</h3><button onClick={()=>{if(!dirty||window.confirm('放弃尚未保存的批注？'))onClose();}}>返回笔记列表</button></div><p className="prose">{value.summary}</p>{value.ownerRevision&&<aside><strong>你的批注</strong><p>{value.ownerRevision.summary}</p><small>人工批注保留原文，不替代来源证据。</small></aside>}
+ {intent&&<details><summary>为什么学习这件事</summary>{[['gap','当时的问题'],['selfBenefit','对 Human 的帮助'],['userBenefit','对你的可能帮助'],['expectedUse','计划怎么用']].map(([key,label])=>intent[key]&&<p key={key}><strong>{label}：</strong>{intent[key]}</p>)}</details>}
+ <details><summary>原始来源与近期批注</summary>{value.source?.url&&/^https?:\/\//.test(value.source.url)&&<a href={value.source.url} target="_blank" rel="noreferrer">{value.source.title||'打开原始来源'} ↗</a>}{value.history?.length?value.history.map((r:any)=><p key={r.version}>{format(r.changed)} · {r.data.summary}</p>):<p className="hint">尚无人工批注。</p>}</details>
+ {value.status==='active'?<><label>批注或纠正要求<textarea rows={4} maxLength={2000} value={body} onChange={e=>setBody(e.target.value)} placeholder="可以补充你的看法；需要重新学习时，说明哪里有误。"/></label><div className="row"><button disabled={busy||!body.trim()} onClick={()=>save('annotate',{expectedVersion:value.ownerRevision?.version??0,summary:body})}>保存批注</button><button disabled={busy} onClick={()=>save('feedback',{value:'useful',comment:body.slice(0,500)})}>对我有用</button><button disabled={busy} onClick={()=>save('feedback',{value:'not-now',comment:body.slice(0,500)})}>暂时不想聊</button><button disabled={busy||!body.trim()} onClick={()=>save('feedback',{value:'correction',comment:body.slice(0,500)})}>纠正并排队重学</button></div></>:<p className="hint">这份笔记已经纠正或归档，原记录保留供查阅。</p>}
+ </section>;
+}
+function Notes({human,report}:any){
+ const [offset,setOffset]=useState(0),[nonce,setNonce]=useState(0),[data,setData]=useState<any>(null),[note,setNote]=useState<any>(null);
+ useEffect(()=>{let live=true;human.call('learning.read',{kind:'notes',offset}).then((r:any)=>{if(live)setData(r);}).catch(report);return ()=>{live=false;};},[human.call,offset,nonce]);
+ if(note)return <Note {...{human,note,report}} onClose={()=>setNote(null)} onSaved={()=>setNonce(n=>n+1)}/>;
+ return <><div className="row"><p>{data?`共 ${data.total} 份笔记`:'正在读取笔记…'}</p><button onClick={()=>setNonce(n=>n+1)}>刷新笔记</button></div>{data?.items.map((n:any)=><article className="note" key={n.id}><h3>{n.title}</h3><small>{format(n.created)} · {n.status==='active'?'有效':'已纠正 / 归档'}</small><p>{n.summary}</p><button onClick={()=>setNote(n)}>查看笔记与反馈</button></article>)}{data&&!data.items.length&&<p>还没有学习笔记。有值得了解的问题时，Human 会按设置考虑学习。</p>}<div className="row"><button disabled={!offset} onClick={()=>setOffset(n=>Math.max(0,n-8))}>上一页</button><button disabled={!data||offset+8>=data.total} onClick={()=>setOffset(n=>n+8)}>下一页</button></div></>;
+}
+export default function Page({human}:any){
+ const [tab,setTab]=useState('settings'),[message,setMessage]=useState(''),[error,setError]=useState(false);
+ const report=(e:any,text='')=>{setError(!!e);setMessage(e?(errors[e.message]??e.message):text);};
+ return <section className="learning"><style>{`.learning{max-width:850px}.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:16px 0}.row h3{flex:1;margin:0}.tabs{border-bottom:1px solid #dae3e8;padding-bottom:12px}.tabs button[aria-selected=true],button.primary{background:#183e50;color:white}button{border:1px solid #b5c6cf;border-radius:8px;background:white}button:disabled{opacity:.5;cursor:default}label{display:flex;flex-direction:column;gap:6px;margin:16px 0;font-weight:600}input,select,textarea{border:1px solid #bdcbd3;border-radius:8px;padding:9px;color:inherit;background:white}details{border-top:1px solid #dae3e8;padding:16px 0}summary{cursor:pointer;font-weight:600}.hint,small{color:#65747d}.note{border:1px solid #dce5e9;border-radius:12px;padding:18px;margin:14px 0}.note p{overflow-wrap:anywhere}article.note p{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}.note h3{margin:0 0 6px}.prose{white-space:pre-wrap}.sticky{position:sticky;top:0;background:white;padding:10px 0;z-index:1}.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:15px}aside{border-left:3px solid #51818b;padding:4px 15px;background:#f3f8f9}p{overflow-wrap:anywhere}.error{color:#a63832}a{color:#28627c}`}</style>
+  <div className="row tabs" role="tablist" aria-label="学习插件页面">{[['settings','学习设置'],['notes','学习笔记']].map(([id,label])=><button role="tab" aria-selected={tab===id} key={id} onClick={()=>human.navigate?human.navigate(()=>{setTab(id);setMessage('');}):setTab(id)}>{label}</button>)}</div>
+  {message&&<p role={error?'alert':'status'} className={error?'error':''}>{message}</p>}
+  {tab==='settings'?<Settings {...{human,report}}/>:<Notes {...{human,report}}/>}
+ </section>;
+}

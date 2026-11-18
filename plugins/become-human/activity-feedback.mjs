@@ -13,6 +13,7 @@ export function drainActivityFeedback(factory,id,{limit=16,now=Date.now()}={}){
         factory.experience?.recordTask(id,task.id);
         factory.goals?.failed(id,task.id);
         factory.cognition?.reflectTask(id,task.id);
+        j.audit(id,'activity-result',{taskId:task.id,kind:task.kind,status:task.status,behaviorId:task.checkpoint?.behaviorId??null,noteId:task.checkpoint?.noteId??null});
       }
       db.prepare('DELETE FROM human_activity_feedback WHERE agent=? AND task=?').run(id,row.task);
     });completed++;}

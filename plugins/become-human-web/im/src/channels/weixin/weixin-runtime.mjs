@@ -125,6 +125,7 @@ export class WeixinRuntime {
   #replyTimeoutMs;
   #maxMessageChars;
   #startRetryDelaysMs;
+  #pollRetryDelaysMs;
   #status = createWeixinRuntimeStatus();
   #bridge = null;
   #abortController = null;
@@ -144,6 +145,7 @@ export class WeixinRuntime {
     replyTimeoutMs = 600_000,
     maxMessageChars = DEFAULT_WEIXIN_MAX_MESSAGE_CHARS,
     startRetryDelaysMs,
+    pollRetryDelaysMs = [2_000, 4_000, 10_000, 30_000],
   }) {
     if (!api || !config || !token || !harness || !state) {
       throw new TypeError('WeixinRuntime requires API, account, token, Harness, and state');
@@ -160,6 +162,8 @@ export class WeixinRuntime {
     this.#replyTimeoutMs = replyTimeoutMs;
     this.#maxMessageChars = maxMessageChars;
     this.#startRetryDelaysMs = startRetryDelays(startRetryDelaysMs);
+    this.#pollRetryDelaysMs = startRetryDelays(pollRetryDelaysMs);
+    if (!this.#pollRetryDelaysMs.length) throw new TypeError('pollRetryDelaysMs must not be empty');
   }
 
   get status() {
@@ -304,8 +308,14 @@ export class WeixinRuntime {
         });
         this.#status.lastError = failure.publicError.message;
         if (error instanceof WeixinApiError && error.code === 'stale-token') throw failure;
-        if (consecutiveFailures >= 3) throw failure;
-        await delay(Math.min(2_000 * (2 ** (consecutiveFailures - 1)), 10_000), signal);
+        if (!retryableStartError(error)) throw failure;
+        // Keep ownership of the poller during transient network/server trouble.
+        // A supervisor must not race it with notifyStop/notifyStart cycles.
+        this.#status.ready = false;
+        this.#status.weixinConnectionState = 'reconnecting';
+        this.#status.connectionError = failure.publicError;
+        const wait = this.#pollRetryDelaysMs[Math.min(consecutiveFailures - 1, this.#pollRetryDelaysMs.length - 1)];
+        await delay(wait, signal);
       }
     }
   }

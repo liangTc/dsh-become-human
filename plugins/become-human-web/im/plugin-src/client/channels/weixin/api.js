@@ -122,7 +122,7 @@ export function managementRequestError(cause, operation) {
   if (cause?.name === 'AbortError') return cause;
   const error = new Error('无法完成微信管理请求，请检查 DSH 连接后重新读取状态。');
   error.code = 'weixin-management-unreachable';
-  error.details = normalizeWeixinDiagnosticDetails({ operation, stage: 'management.request', occurredAt: new Date().toISOString() });
+  error.details = normalizeWeixinDiagnosticDetails({ ...cause?.details, operation, stage: 'management.request', occurredAt: new Date().toISOString() });
   return error;
 }
 

@@ -112,7 +112,7 @@ export class RemoteGateway {
     return null;
   }
   queueDelivery(row,event,state){
-    const prefix=event.kind==='user'?'[我 · '+(event.origin??'Web')+'] ':'[助手] ',p=event.presentation;
+    const prefix=event.kind==='user'?'[我 · '+(event.origin??'Web')+'] ':event.kind==='budget-request'?'[系统] ':'[助手] ',p=event.presentation;
     const parts=event.kind==='assistant'&&p?.kind==='chat-bubbles'&&Array.isArray(p.parts)&&p.parts.length>=2&&p.parts.length<=3&&p.parts.every(t=>typeof t==='string'&&t.trim()&&t.length<=1200)&&p.parts.join('').replace(/\s/gu,'')===event.text.replace(/\s/gu,'')&&Number.isSafeInteger(p.gapMs)&&p.gapMs>=300&&p.gapMs<=3000&&Number.isSafeInteger(p.ownerInputRevision)&&Number.isSafeInteger(p.pauseRevision)?p.parts:null;
     this.db.exec('BEGIN IMMEDIATE');
     try{
@@ -213,7 +213,9 @@ export class RemoteGateway {
           if(adapter.poll){const polled=await adapter.poll(row.config);if(!this.current(row))continue;for(const message of polled.messages??[]){if(!this.current(row))break;if(message.senderId!==row.config.ownerId)continue;const result=await this.receive(row.id,message);if(!this.current(row))break;if(result.refused||result.command)await adapter.send(row.config,result.refused?'本 Agent 只有一个会话，请在 Web 管理页面操作。':result.command==='status'?'状态：'+result.desired+'；唯一会话 '+result.sessionId:'已更新回复状态。');}if(polled.offset!==undefined&&this.current(row)){row.config.offset=polled.offset;this.db.prepare('UPDATE channel SET config=? WHERE id=?').run(this.seal(JSON.stringify(row.config)),row.id);}}
           const feed=await this.runtime.events(row.cursor);if(feed.sessionId!==row.session||!this.current(row))continue;
           for(const event of feed.events){
-            if(['user','assistant'].includes(event.kind)&&event.origin!==row.id)this.queueDelivery(row,event,state);
+            const budgetRequest=state.autonomy?.pendingBudgetRequest;
+            const budgetNotice=event.kind==='budget-request'&&budgetRequest?.status==='pending'&&budgetRequest.expiresAt>Date.now()&&event.event_key==='autonomy-budget-notice:'+budgetRequest.windowStart;
+            if((['user','assistant'].includes(event.kind)||budgetNotice)&&event.origin!==row.id)this.queueDelivery(row,event,state);
             else this.db.prepare('UPDATE channel SET cursor=? WHERE id=?').run(event.seq,row.id);
           }
           for(const item of this.db.prepare("SELECT * FROM delivery WHERE channel=? AND session=? AND state='pending' ORDER BY seq LIMIT 10").all(row.id,row.session)){

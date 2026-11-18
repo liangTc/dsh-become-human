@@ -45,7 +45,7 @@ export class PluginEvents {
       const id=randomUUID();this.db.prepare("INSERT INTO human_plugin_event VALUES(?,?,?,?,?,?,?,'pending',?,?)").run(id,agent,source,event.key,fingerprint,hash,JSON.stringify(body),now,event.expiresAt);
       this.journal.audit(agent,'plugin-event-received',{eventId:id,source,sourceVersion:body.sourceVersion,payloadDigest:hash,expiresAt:event.expiresAt});result={id,duplicate:false,status:'pending'};
     });
-    if(!result.duplicate)this.wake(agent);
+    if(!result.duplicate){if(this.journal.transactionDepth>0)queueMicrotask(()=>{try{if(this.db.prepare('SELECT 1 FROM human_plugin_event WHERE id=?').get(result.id)&&this.sources.get(source)===registration)this.wake(agent);}catch{}});else this.wake(agent);}
     return result;
   }
   entries(agent){

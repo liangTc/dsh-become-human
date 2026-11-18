@@ -73,15 +73,18 @@ export class RuntimeExtensions {
     signal.throwIfAborted();
     const list=await this.list(),claimed=list.items.filter(item=>item.registered&&(item.replacesBehaviors?.length||item.providesWorkflows?.length));
     signal.throwIfAborted();
+    const pluginClaims=list.items.filter(item=>item.registered&&item.pluginContract===1);
     const pageClaims=list.items.filter(item=>item.registered).flatMap(item=>(item.pages??[]).filter(page=>page.version===2&&item.nodes.some(node=>node.id===page.nodeId&&!node.disabled)).map(page=>({...page,key:item.name+':'+page.id})));
-    if(!claimed.length&&!pageClaims.length)return;
+    if(!claimed.length&&!pageClaims.length&&!pluginClaims.length)return;
     for(let attempt=0;attempt<11;attempt++){
       signal.throwIfAborted();const behaviors=await this.runtime.read({kind:'behavior-catalog',sessionId:ready.sessionId}),workflows=claimed.some(item=>item.providesWorkflows?.length)?await this.runtime.read({kind:'workflow-catalog',sessionId:ready.sessionId}):[];
       signal.throwIfAborted();
       const catalog=Array.isArray(behaviors)&&Array.isArray(workflows)?[...behaviors,...workflows]:null;
       const pageCatalog=pageClaims.length?await this.runtime.read({kind:'extension-page-catalog',sessionId:ready.sessionId}):[];
       const pagesReady=pageClaims.every(page=>pageCatalog.some(row=>row.key===page.key&&page.methods.every(method=>row.methods.some(m=>m.name===method.name&&m.mode===method.mode))));
-      if(pagesReady&&Array.isArray(catalog)&&claimed.every(item=>[...(item.replacesBehaviors??[]),...(item.providesWorkflows??[])].every(id=>catalog.filter(row=>row.id===id).length===(item.nodes.some(node=>!node.disabled)?1:0))))return;
+      const pluginCatalog=pluginClaims.length?await this.runtime.read({kind:'plugin-catalog',sessionId:ready.sessionId}):[];
+      const pluginsReady=pluginClaims.every(item=>pluginCatalog.filter(row=>row.owner===item.name).length===(item.nodes.some(node=>!node.disabled)?1:0));
+      if(pluginsReady&&pagesReady&&Array.isArray(catalog)&&claimed.every(item=>[...(item.replacesBehaviors??[]),...(item.providesWorkflows??[])].every(id=>catalog.filter(row=>row.id===id).length===(item.nodes.some(node=>!node.disabled)?1:0))))return;
       if(attempt<10)await new Promise(resolve=>setTimeout(resolve,100));
     }
     fail('EXTENSION_BEHAVIOR_REGISTRATION_FAILED');
@@ -129,7 +132,7 @@ export class RuntimeExtensions {
     const nodes=layers.flatMap(layer=>plain(layer)&&Object.keys(layer).length===1&&Array.isArray(layer.insert)?layer.insert:[layer]);
     if(!Array.isArray(nodes)||!nodes.length||nodes.length>64||nodes.some(n=>!plain(n)||typeof n.id!=='string'||!/^human-extension\.[a-z0-9][a-z0-9._-]{0,120}$/.test(n.id))||new Set(nodes.map(n=>n.id)).size!==nodes.length)fail('EXTENSION_NAMESPACE_REQUIRED');
     const pages=extensionPages(manifest,nodes);for(const page of pages)if(page.version===2)await pageClientAsset(this.profile,{...page,packageName:name});
-    return {name,version:manifest.version,description:typeof manifest.description==='string'?manifest.description.slice(0,300):'',replacesBehaviors:behaviorReplacementIds(manifest),providesWorkflows:workflowIds(manifest),pages,configEditors:extensionEditors(manifest,nodes),nodes:nodes.map(n=>({id:n.id,disabled:patch.find(p=>p.id===n.id)?.disabled??!!n.disabled,config:patch.find(p=>p.id===n.id)?.config??n.config??{}}))};
+    return {name,title:typeof manifest.dsh?.human?.plugin?.title==='string'?manifest.dsh.human.plugin.title.slice(0,64):name,pluginContract:manifest.dsh?.human?.plugin?.version??null,version:manifest.version,description:typeof manifest.description==='string'?manifest.description.slice(0,300):'',replacesBehaviors:behaviorReplacementIds(manifest),providesWorkflows:workflowIds(manifest),pages,configEditors:extensionEditors(manifest,nodes),nodes:nodes.map(n=>({id:n.id,disabled:patch.find(p=>p.id===n.id)?.disabled??!!n.disabled,config:patch.find(p=>p.id===n.id)?.config??n.config??{}}))};
   }
   async list(){
     const c=await this.configuration(),bundles=c.manifest.dsh?.profile?.bundles??[],names=[...new Set([...bundles,...this.jobs.map(j=>j.name).filter(name=>Object.hasOwn(c.manifest.dependencies??{},name))])].filter(editable),items=[];

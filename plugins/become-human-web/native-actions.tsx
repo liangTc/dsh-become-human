@@ -30,7 +30,7 @@ function ActionPreviewContent({api,action,ui,onChanged}:any){
   const run=(op:string,notice:string)=>api.run(async()=>{await api.control({op,actionId:action.id,expectedVersion:action.version,digest});setReviewedDigest('');onChanged();},notice);
   const copy=async(text:string)=>{try{if(!navigator.clipboard)throw new Error('CLIPBOARD_UNAVAILABLE');await navigator.clipboard.writeText(text);setCopied('已复制报告草稿。');}catch{setCopied('复制未完成，可在报告原文中选择并复制。');}};
   return <><h3>{action.title}</h3><Band>{labels[action.status]??action.status} · 版本 {action.version} · 创建 {time(action.created)}{action.expires?' · 到期 '+time(action.expires):''}</Band>
-    <p className="hn-note hn-mono" style={textStyle}>行动编号 {action.id}</p>
+
     {action.goal&&<p className="hn-note hn-mono" style={textStyle}>关联目标 {typeof action.goal==='string'?action.goal:action.goal.id??action.goal.goalId} {action.goal.stepId?'· 步骤 '+action.goal.stepId:''}</p>}
     <h3>本次准备写入的文件</h3><p className="hn-mono" style={textStyle}>{action.path}</p><p className="hn-note hn-mono" style={textStyle}>SHA-256 {digest||'—'} · {action.bytes??'—'} 字节</p>
     <h3>材料笔记编号</h3><div className="hn-note hn-mono" style={textStyle}>{(action.noteIds??[]).join('\n')||'—'}</div>

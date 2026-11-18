@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "package": "dsh-become-human-web",
-  "version": "0.7.0-beta.39",
+  "version": "0.7.0-beta.40",
   "upstream": {
     "name": "dsh-im",
     "version": "4.39.0",
@@ -30,7 +30,7 @@
   ],
   "host": {
     "file": "lib/index.js",
-    "sha256": "e705cec345fe6c0215c26a15c9a1d13ed778d36042b35af69612839104adf0b7",
+    "sha256": "88202f7012209601188c6de86729671d1f79a71a6047559df8b645a53fa83829",
     "inputs": [
       {
         "file": "im/node_modules/@larksuiteoapi/node-sdk/lib/index.js",
@@ -934,7 +934,7 @@
       },
       {
         "file": "im/plugin-src/host/channels/weixin/connection-supervisor.mjs",
-        "bytes": 4321
+        "bytes": 4406
       },
       {
         "file": "im/plugin-src/host/channels/weixin/index.mjs",
@@ -989,6 +989,10 @@
         "bytes": 5782
       },
       {
+        "file": "im/plugin-src/host/im-home.mjs",
+        "bytes": 669
+      },
+      {
         "file": "im/plugin-src/host/image-input-rpc.mjs",
         "bytes": 1274
       },
@@ -1034,7 +1038,7 @@
       },
       {
         "file": "im/plugin-src/host/single-entry.mjs",
-        "bytes": 958
+        "bytes": 934
       },
       {
         "file": "im/plugin-src/host/update-rpc.mjs",
@@ -1946,17 +1950,17 @@
       },
       {
         "file": "im/src/channels/weixin/weixin-controller.mjs",
-        "bytes": 27524
+        "bytes": 28708
       },
       {
         "file": "im/src/channels/weixin/weixin-runtime.mjs",
-        "bytes": 16279
+        "bytes": 16906
       }
     ]
   },
   "client": {
     "file": "../im-client.js",
-    "sha256": "42b548091d49a32617d77fed7f6fbd48a48e7949f9a318a724f8497a1bdf200a",
+    "sha256": "7b3e8d90cf5ae23849e8d78f3a33dc8dee0e2b9684c3e1613c7e6dbfb0f668b7",
     "inputs": [
       {
         "file": "im/node_modules/semver/classes/semver.js",
@@ -2208,7 +2212,7 @@
       },
       {
         "file": "im/plugin-src/client/channels/weixin/api.js",
-        "bytes": 11426
+        "bytes": 11445
       },
       {
         "file": "im/plugin-src/client/channels/weixin/connection-error.js",

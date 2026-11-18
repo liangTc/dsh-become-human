@@ -5,24 +5,26 @@
 
 # Become Human
 
-> **Release candidate: 0.7.0-beta.39.** [Download the test release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.39). See [release notes](https://github.com/liangTc/dsh-become-human/blob/main/docs/RELEASE_BETA39.md) for verification limits. [npm beta.39](https://www.npmjs.com/package/dsh-become-human-web/v/0.7.0-beta.39) is published and its downloaded archive has been verified.
+**A persistent personality. An extensible capacity to act.**
 
-> **beta.39 development source · Experimental and incomplete.** The core focuses on event selection, action execution, outcome feedback and growth. Learning is an optional behavior pack, disabled by default. This source includes extension management, custom React pages within Human and declared backend read/write methods; beta.39 is distributed as a test Release. See [core design](docs/CORE_DESIGN.md), [extension pages](docs/EXTENSION_PAGES.md) and [testing status](docs/TESTING_STATUS.md).
+A digital companion living in DSH: remembering shared experiences, developing its own tendencies, choosing actions in an event loop, and gaining capabilities through plugins.
 
-**A DSH agent that chooses actions in an event loop, remembers experiences and can grow through one persistent session.**
+> **Test release `0.7.0-beta.40` · Work in progress.** [GitHub Release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.40) · [npm package](https://www.npmjs.com/package/dsh-become-human-web/v/0.7.0-beta.40) · [Verification scope](docs/RELEASE_BETA40.md)
 
 [简体中文](README.md) · [Installation](docs/INSTALLATION.md) · [Usage](docs/USAGE.md) · [Configuration](docs/CONFIGURATION.md) · [Testing status](docs/TESTING_STATUS.md) · [Architecture](docs/ARCHITECTURE.md)
 
 > [!WARNING]
-> **Test release · Development is incomplete.** The current public test release is `0.7.0-beta.39` (GitHub Prerelease). Windows, Node.js 24+, and DSH `0.2.0-rc.2` are required. Complete acceptance and long-running reliability remain unverified, including the fresh-DSH native DeepSeek flow; see [testing status](docs/TESTING_STATUS.md).
+> **Test release · Development is incomplete.** The current public test release is `0.7.0-beta.40` (GitHub Prerelease). Windows, Node.js 24+, and DSH `0.2.0-rc.2` are required. Complete acceptance and long-running reliability remain unverified, including the fresh-DSH native DeepSeek flow; see [testing status](docs/TESTING_STATUS.md).
 
-This checkout contains **`0.7.0-beta.39` development source**, which also has a prebuilt GitHub Release and npm package. The beta.5 downloads below do not include later development changes.
+This checkout contains **`0.7.0-beta.40` development source**, which also has a prebuilt GitHub Release and npm package. The beta.5 downloads below do not include later development changes.
 
 | Version | Availability and status |
 | --- | --- |
-| `0.7.0-beta.39` | Current development source with local builds, upgrades and limited real-model/Web checks; available as a GitHub Prerelease and npm package |
+| `0.7.0-beta.40` | Current development source with local builds, upgrades and limited real-model/Web checks; available as a GitHub Prerelease and npm package |
 | `0.7.0-beta.5` | Historical test release, with a prebuilt bundle and SHA-256 file; see installation below |
 | `0.7.0-beta.4` | Historical test release; its package does not include beta.5 additions |
+
+**New in beta.40:** a dedicated plugin center with plugin-owned settings and React pages; `humanPlugins` v1 lifecycle hooks, managed timers and unified registrations. Optional learning 0.2.0 moves its settings and notes into its own page. Existing session and channel data are retained. See [the plugin contract](docs/PLUGIN_LIFECYCLE.md) and [release notes](docs/RELEASE_BETA40.md).
 
 ## What it does
 
@@ -30,33 +32,47 @@ Become Human adds an event loop to a persistent DSH conversation. It uses **the 
 
 DSH Web is the management surface. A paired phone is another channel into the same conversation. Persona configuration guides expression and topic selection; code handles scheduling, budgets, execution boundaries, and records. This project explores persistent, contextual agent behavior. It does not claim consciousness, genuine emotions, or verified long-term personality development.
 
-## Capabilities
+## Personality that persists across experiences
 
-<img src="docs/assets/capabilities-pixel.svg" alt="Pixel art capability map: persona, memory, autonomy, goals, messaging, and tools" width="100%">
+The configured persona is a starting point. Relationships, valid memories, current concerns and recorded outcomes inform later choices within the same main session.
+
+- **Personal choices:** agree, negotiate, decline or reconsider ordinary requests. Relationship state influences choices without granting tool permissions.
+- **Continuity:** recent dialogue, rolling summaries and long-term memory preserve context, with separate attribution for user statements, execution facts and model inferences.
+- **Traceable growth:** optional personality development can add interests, dispositions and habits when its evidence requirements are met. It is off by default; changes can be inspected and retracted. Base identity, relationship settings and permissions remain user-managed.
+- **Changing priorities:** take on a goal, attend to a concern or wait. A fixed profession and an endless task list are not required.
+
+## Capabilities that extend the same personality
+
+Extensions share the existing event loop, context and execution records instead of creating another conversational identity.
+
+| Extension point | Contribution |
+| --- | --- |
+| Events and behavior packs | New signals, actionable opportunities, execution methods and outcome feedback through `humanEvents` and `humanBehaviors` |
+| Tools | MCP services and authorized DSH session collaboration through scoped capability calls |
+| Skills | Task methods and conversational guidance; no implicit permission grants |
+| Pages and backend methods | Custom React or declarative pages inside Human, with declared backend read/write interfaces |
+
+Learning is one optional behavior pack, disabled by default. Chat and report handling still include internal compatibility paths; not every built-in flow is independently packaged. Third-party extensions must implement Human's contracts, and installed code is trusted local code rather than sandboxed code.
+
+[Behavior contracts and examples](docs/BEHAVIOR_API.md) · [Extension pages](docs/EXTENSION_PAGES.md) · [Architecture](docs/ARCHITECTURE.md)
+
+The loop is **events → opportunities → persona-informed choice or wait → execution → recorded outcomes → usable experience → the next choice**. Reflection and personality development have separate evidence checks: an action succeeding does not prove that a personality has grown.
+
+## Supporting capabilities
 
 | Area | Current implementation |
 | --- | --- |
-| Persona | Identity, relationship, interests, long-term direction, presets, and JSON configuration |
-| Memory | Evidence-linked memories, event overviews, learning notes, revision, and forgetting |
-| Autonomy | Timer and event checks, bounded topic selection and execution, waiting, and checkpoints |
-| Conversation | Input batching, short replies, message bubbles, proactive chat, and unanswered-message backoff |
-| Goals and schedules | Multiple-step goals, one-time reminders, recurring tasks, and progress tracking |
-| Artifacts | Full report previews, precise approval, managed file output, and receipts |
-| Messaging | Owner pairing and shared Web / IM messages through one main session |
-| Tools | A unified capability interface and bundled read-only MCP; beta.5 adds configurable MCP servers and scoped access to visible host DSH sessions |
-| Traceability | Activity timeline and event logs linked to tasks, artifacts, and memory changes |
-| Task board · beta.5 | Goals, steps, schedules, and results in a concise view; expand one node or the current page, with shared matters, self-state, and reviews in the same workspace |
-| Usage statistics · beta.5 | Rolling 24-hour and current-budget-window tokens, model requests, work categories, hourly trends, and model breakdowns |
-| Personality and memory maintenance · beta.5 | Optional evidence-linked personality drift and retraction; periodic memory consolidation, hot/cold tiers, source links, and batch restoration |
-| Model setup · beta.5 | DSH's native DeepSeek API Key adapter and third-party routes using host credential references |
-| Conversation continuity · development | Complete dialogue turns, evidence-linked rolling summaries, pending original turns, and relevant long-term memory; inspect coverage and compression usage |
-| Images and personal choices · development | Image input for confirmed vision models; agree, negotiate, decline, or reconsider ordinary requests without turning relationship scores into permissions |
-| Optional learning and work support · development | Learning requires its own behavior pack and is disabled by default; existing notes remain readable. Authorized DSH observation and conversational sharing follow configuration without forcing research tasks |
-| Behavior extensions · development | Event, opportunity, execution receipt and feedback contracts; Web installation, configuration, enable/disable, upgrade and removal, with experience and learning reference packs |
+| Conversation | Complete turns, rolling summaries, memory recall, input batching, short replies, message bubbles, proactive chat and unanswered-message backoff; images with confirmed vision models |
+| Memory and growth | Evidence-linked records, revision, forgetting, hot/cold tiers and optional reversible personality development |
+| Autonomous action | Event and timer checks, attention, model choice, waiting, checkpoints and outcome feedback |
+| Tasks and artifacts | Goals, substeps, schedules, task board, reviews, approved managed file output and receipts |
+| Visibility and cost | Activity timeline, event logs, autonomous budgets and usage by time window, work category and model |
+| Channels and models | Web plus one active IM binding share the main session; host credential references for model setup |
+| Extensions | Behavior packs, Skills, MCP, authorized DSH sessions, custom pages and backend methods; installation, configuration, enable/disable, upgrade and removal |
 
 DSH session writes are disabled by default and require scoped configuration and per-operation approval. Cancellation targets the specific turn returned by a session read and rejects stale requests after the task changes. Human does not provide browser tab or window control. Text Skills provide guidance; they do not grant arbitrary code execution or operating-system access.
 
-[Shared matters and reviews in the task board](docs/CHARACTER_BOARD.md) use the existing main session, IM binding, and execution lane. Manual focus does not start the driver; recording a goal or commitment does not dispatch it. Accepting a review does not grant permissions or retry failed work. The view shows concise intentions and evidence, not raw chain of thought or proof of consciousness. Additions marked beta.5 are included in this test package and still require separate acceptance checks.
+[Shared matters and reviews in the task board](docs/CHARACTER_BOARD.md) use the existing main session, IM binding, and execution lane. Manual focus does not start the driver; recording a goal or commitment does not dispatch it. Accepting a review does not grant permissions or retry failed work. The view shows concise intentions and evidence, not raw chain of thought or proof of consciousness. Implementation and verified quality are separate; see [testing status](docs/TESTING_STATUS.md).
 
 ### beta.12–beta.28 development progress
 
@@ -87,7 +103,7 @@ A manager bundle integrates with DSH Web. A separate runtime process owns the Hu
 Install the current test release into DSH Web:
 
 ```powershell
-npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add dsh-become-human-web@0.7.0-beta.39 --registry=https://registry.npmjs.org/
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add dsh-become-human-web@0.7.0-beta.40 --registry=https://registry.npmjs.org/
 ```
 
 The following beta.5 example is retained for historical reference.
@@ -101,9 +117,9 @@ Use the prebuilt bundle from the [v0.7.0-beta.5 prerelease](https://github.com/l
 npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./dsh-become-human-web-0.7.0-beta.5.tgz
 ```
 
-The current npm package is beta.39; the beta.5 download example above is historical. The Git repository and GitHub source ZIP omit generated bundles and cannot be installed directly as a prebuilt plugin. Developers can [build a `.tgz` from source](docs/INSTALLATION.md#从源码构建). The detailed guides are currently in Chinese.
+The current npm package is beta.40; the beta.5 download example above is historical. The Git repository and GitHub source ZIP omit generated bundles and cannot be installed directly as a prebuilt plugin. Developers can [build a `.tgz` from source](docs/INSTALLATION.md#从源码构建). The detailed guides are currently in Chinese.
 
-**Known beta.5 fresh-install issue:** initial Human creation can fail because of initialization order. The fix is in beta.6 development source, with no new public Release package yet. Read the [testing status](docs/TESTING_STATUS.md) before installing; existing-install upgrade checks do not establish clean-install success.
+**Known beta.5 fresh-install issue:** initial Human creation can fail because of initialization order. The fix is in beta.6 development source, and is included in this release. Read the [testing status](docs/TESTING_STATUS.md) before installing; existing-install upgrade checks do not establish clean-install success.
 
 Start DSH, open Human, and follow **existing model → persona and budget → create and start**. The plugin prepares its data directory, private profile, and available loopback port automatically. No separate runtime installation or YAML editing is required for a fresh setup. `beta.5` supports `llm-pi-ai` routes and DSH's native DeepSeek API Key adapter. Both resolve `apiKeyEnv` credential references without returning secrets to the browser. DeepSeek account authentication, inline keys, and arbitrary headers are not supported. See [model configuration](docs/CONFIGURATION.md#进程与模型配置).
 

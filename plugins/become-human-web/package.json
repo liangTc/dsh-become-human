@@ -1,9 +1,9 @@
 {
   "name": "dsh-become-human-web",
-  "version": "0.7.0-beta.39",
+  "version": "0.7.0-beta.40",
   "type": "module",
   "description": "DSH Web manager with an isolated, single-session autonomous runtime",
-  "icon": "./docs/assets/icon-pixel.svg",
+  "icon": "./docs/assets/avatar-pixel-complete.png",
   "main": "manager.mjs",
   "exports": {
     ".": "./manager.mjs",
@@ -102,7 +102,20 @@
     "extension-pages.mjs",
     "native-extension-pages.tsx",
     "extension-page-bridge.mjs",
-    "native-react-page.tsx"
+    "native-react-page.tsx",
+    "native-brand.tsx",
+    "unread-messages.mjs",
+    "native-model-alert.tsx",
+    "model-alerts.mjs",
+    "human-update.mjs",
+    "human-update-runtime.mjs",
+    "native-update.tsx",
+    "native-detail.tsx",
+    "native-conversation.tsx",
+    "native-records.tsx",
+    "record-presentation.mjs",
+    "native-management.css",
+    "native-model-record.tsx"
   ],
   "dsh": {
     "bundle": {
@@ -150,6 +163,7 @@
     "zod": "4.6.6"
   },
   "dependencies": {
+    "semver": "7.8.5",
     "@matrix-org/olm": "3.2.15",
     "@modelcontextprotocol/client": "2.4.0",
     "@tencent-connect/qqbot-nodejs": "1.0.4",

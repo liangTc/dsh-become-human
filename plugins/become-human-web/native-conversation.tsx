@@ -1,0 +1,19 @@
+import React,{useEffect,useState} from 'react';
+
+export function ConversationRecords({api,ui,taskId}:any){
+ const sessionId=api.snapshot.state?.sessionId,name=api.snapshot.state?.management?.profile?.name??'Human';
+ const [draft,setDraft]=useState(''),[query,setQuery]=useState(''),[role,setRole]=useState('all'),[pages,setPages]=useState<any[]>([{}]),[nonce,setNonce]=useState(0),[result,setResult]=useState<any>({loading:true,data:null,error:''});
+ const key=JSON.stringify([sessionId,taskId,query,role,pages.at(-1),nonce]);
+ useEffect(()=>{let live=true;setResult({loading:true,data:null,error:''});api.read({kind:'conversation-records',sessionId,taskId,query,role,limit:40,...pages.at(-1)}).then((data:any)=>{if(data.sessionId!==sessionId)throw Error('STALE_SESSION');if(live)setResult({loading:false,data,error:''});}).catch((error:any)=>{if(live)setResult({loading:false,data:null,error:ui.errorText?.(error.message)??error.message});});return()=>{live=false;};},[api,key]);
+ const {Button,Input,Select,SavedImage}=ui,items=result.data?.items??[],reset=()=>{setPages([{}]);setNonce(n=>n+1);};
+ return <section className="hn-conversation-records" aria-label={taskId?'关联会话记录':'完整会话记录'}>
+  <p className="hn-note">{taskId?'仅显示与本任务有明确关联、已写入会话的消息，不会把同期其他聊天混入。':'按页浏览当前会话已保存的全部消息。筛选不会删除记录；未投递的模型输出不属于会话消息。'}</p>
+  <form className="hn-record-search" onSubmit={event=>{event.preventDefault();setQuery(draft.trim());reset();}}><Input aria-label="搜索会话记录" type="search" maxLength={160} placeholder="搜索消息内容" value={draft} onChange={setDraft}/><Select aria-label="筛选发言人" value={role} options={[["all","全部发言人"],["user","我"],["assistant",name],["system","系统记录"]]} onChange={(value:string)=>{setRole(value);reset();}}/><Button type="submit" disabled={result.loading}>搜索</Button><Button onClick={()=>{setDraft('');setQuery('');setRole('all');reset();}}>重置</Button></form>
+  <div className="hn-row hn-between hn-history-pager"><span className="hn-note">第 {pages.length} 页 · 每页最多 40 条 · 页内按时间正序</span><div className="hn-row"><Button disabled={result.loading||!result.data?.hasMore} onClick={()=>setPages(old=>[...old.map(cursor=>({...cursor,ceiling:result.data.ceiling})),{before:result.data.nextBefore,ceiling:result.data.ceiling}])}>更早一页</Button><Button disabled={result.loading||pages.length===1} onClick={()=>setPages(old=>old.slice(0,-1))}>较新一页</Button><Button disabled={result.loading} onClick={reset}>回到最新</Button></div></div>
+  {result.loading?<p role="status">正在读取会话记录…</p>:result.error?<div role="alert"><p>{result.error}</p><Button onClick={()=>setNonce(n=>n+1)}>重新读取</Button></div>:!items.length?<p className="hn-record-empty">{taskId?'没有匹配的已发布消息。任务可能选择等待、只产生内部结果，或旧记录未保留关联。':'没有符合筛选条件的消息。'}</p>:<ol className="hn-transcript">{items.map((message:any)=>{
+   const role=message.kind==='user'?'user':message.kind==='assistant'?'assistant':'system',origin=message.origin==='web'?'网页':message.origin==='agent'?'Human':message.origin==='system'?'系统':/weixin|wechat/i.test(message.origin??'')?'微信':'手机 / 其他入口';
+   return <li key={message.seq} className={'hn-transcript-message hn-transcript-'+role}><header><strong>{role==='user'?'我':role==='assistant'?name:'系统记录'}</strong><span>{origin}</span><time dateTime={new Date(message.created).toISOString()}>{new Date(message.created).toLocaleString('zh-CN',{hour12:false})}</time></header><p className="hn-record-text">{message.text}</p>{message.attachments?.length>0&&<div className="hn-message-images">{message.attachments.map((attachment:any)=>SavedImage?<SavedImage key={attachment.id} {...{api,ui,attachment,sessionId}}/>:<span key={attachment.id}>{attachment.name??'图片附件'}</span>)}</div>}{message.replyTo?.length>0&&<p className="hn-note">回复 {message.replyTo.length} 条输入{message.replyTo.length>1?'（连续输入合并处理）':''}</p>}</li>;
+  })}</ol>}
+ </section>;
+}
+export default function ConversationHistory({api,ui,onClose}:any){return <ui.Detail title="会话记录" onClose={onClose}><ConversationRecords {...{api,ui}}/></ui.Detail>;}

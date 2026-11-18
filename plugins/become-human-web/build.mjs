@@ -21,7 +21,7 @@ await fs.writeFile(path.join(root,'runtime-bundle/client.js'),client);
 const patch=(await fs.readFile(path.join(source,'cordis.patch.yml'),'utf8')).replaceAll('name: dsh-become-human/storage','name: dsh-become-human-web/storage').replaceAll('name: dsh-become-human/upload-guard','name: dsh-become-human-web/upload-guard').replace('name: dsh-become-human\n','name: dsh-become-human-runtime\n');
 await fs.writeFile(path.join(root,'runtime-bundle/cordis.patch.yml'),patch);
 const require=createRequire(import.meta.url),esbuild=require('esbuild');
-const bundle=await esbuild.build({absWorkingDir:root,preserveSymlinks:true,entryPoints:['native-client.tsx'],bundle:true,format:'cjs',platform:'browser',target:['chrome100'],external:['react','react-dom','@deepseek-ai/*'],loader:{'.css':'text'},write:false,logLevel:'warning'});
+const bundle=await esbuild.build({absWorkingDir:root,preserveSymlinks:true,entryPoints:['native-client.tsx'],bundle:true,format:'cjs',platform:'browser',target:['chrome100'],external:['react','react-dom','@deepseek-ai/*'],loader:{'.css':'text','.png':'dataurl'},write:false,logLevel:'warning'});
 const im=await fs.readFile(path.join(root,'im-client.js'),'utf8'),begin=im.indexOf('var module={exports:{}},exports=module.exports;'),end=im.lastIndexOf('return module.exports;}});');
 if(begin<0||end<begin)throw new Error('IM_CLIENT_FACTORY_CONTRACT_CHANGED');
 const imBody=im.slice(begin,end).replace('ctx.effect(() => installSessionChannelLogos(), "im-settings: Session channel logos");','');

@@ -1,6 +1,6 @@
 {
   "name": "dsh-become-human",
-  "version": "0.7.0-beta.39",
+  "version": "0.7.0-beta.40",
   "type": "module",
   "description": "Bounded autonomous Agent Web integration for DSH 0.2.0-rc.2",
   "main": "index.mjs",
@@ -137,7 +137,12 @@
     "learning-pack.mjs",
     "activity-outcome.mjs",
     "activity-feedback.mjs",
-    "extension-page-rpc.mjs"
+    "extension-page-rpc.mjs",
+    "model-failure.mjs",
+    "conversation-records.mjs",
+    "model-records.mjs",
+    "plugin-lifecycle.mjs",
+    "learning-management.mjs"
   ],
   "dsh": {
     "client": {

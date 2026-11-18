@@ -99,7 +99,7 @@ export async function runDevelopmentReview(agent,parentSignal){
     job={id:'development:'+randomUUID(),status:'ready',basis,created:now,updated:now,personaEnabled:personaDue&&evidence.length>0,batchId:batch?.batchId??null,baseFingerprint:batch?.baseFingerprint??null};
     j.put(id,'developmentReview',job);
   }
-  const epoch=agent.desired().epoch;
+  const epoch=agent.desired().epoch,budgetModelKey=hash(f.management.options(id,'executor'));
   let prepared,response,segment,started,deadlineSignal,entered=false;
   const turn=(agent.ctx.sessionProjections.stateOf(agent.session,'turnBoundary')?.lastTurn??0)+1;
   const save=(status,extra={})=>{job={...job,status,...extra,updated:Date.now()};j.put(id,'developmentReview',job);};
@@ -107,9 +107,9 @@ export async function runDevelopmentReview(agent,parentSignal){
     parentSignal.throwIfAborted();prepared=inputFor(agent,job);
     const messages=[{role:'system',content:[{type:'text',text:policy}]},{role:'user',content:[{type:'text',text:JSON.stringify(prepared.input)}]}];
     const inputBytes=Buffer.byteLength(JSON.stringify(messages),'utf8')+256;
-    const cost=requestCost(messages,f.management.options(id,'executor'));
+    const cost=Math.max(requestCost(messages,f.management.options(id,'executor')),job.neededModel===budgetModelKey&&Number.isSafeInteger(job.neededTokens)?job.neededTokens:0);
     if(!quotaAllows(f.autonomy.budget(id),{tokens:cost,requests:1,roundId:job.id})){
-      save('waiting-budget',{neededTokens:cost});j.put(id,'autonomyWait','autonomous-budget');return false;
+      save('waiting-budget',{neededTokens:cost,neededModel:budgetModelKey});f.autonomy.requestBudget(id,job.id,{tokens:cost,requests:1});j.put(id,'autonomyWait','autonomous-budget');return false;
     }
     const maxMs=settings.roundTimeoutMs-roundDuration(j.safety,id,job.id);if(maxMs<=0)fail('AUTONOMOUS_ROUND_TIMEOUT');
     Object.defineProperty(messages,'contextReport',{value:{version:2,lane:'executor',kind:'development-review',time:now,budget:null,localInputLimit:false,estimatedInput:inputBytes,required:inputBytes,estimate:'utf8-bytes-plus-framing',memoryRefs:prepared.batch?.data.items.map(item=>({id:item.id,version:item.version}))??[],basis:job.basis,counts:{memory:prepared.batch?.data.items.length??0,personaEvidence:prepared.growth.length}},enumerable:false});
@@ -139,7 +139,12 @@ export async function runDevelopmentReview(agent,parentSignal){
   }catch(error){
     const code=parentSignal.aborted?'USER_PREEMPTED':deadlineSignal?.aborted?'AUTONOMOUS_ROUND_TIMEOUT':/^[A-Z_]{3,64}$/u.test(error.code??error.message)?error.code??error.message:'DEVELOPMENT_REVIEW_FAILED';
     if(parentSignal.aborted){save('suspended',{error:code});j.audit(id,'development-review-suspended',{taskId:job.id,reason:code});}
-    else if(code==='AUTONOMOUS_BUDGET_EXHAUSTED')save('waiting-budget',{error:code});
+    else if(code==='AUTONOMOUS_BUDGET_EXHAUSTED'){
+      save('waiting-budget',{error:code,neededModel:budgetModelKey,neededTokens:Number.isSafeInteger(error.neededTokens)?error.neededTokens:job.neededTokens??null});
+      j.put(id,'autonomyWait','autonomous-budget');
+      f.autonomy.requestBudget(id,job.id,{tokens:job.neededTokens??0,requests:1,basis:'includes-next-host-resolved-request'});
+      j.audit(id,'development-review-waiting-budget',{taskId:job.id,batchId:job.batchId,neededTokens:job.neededTokens,lane:'executor'});
+    }
     else{
       save('failed',{error:code,manualRetryRequired:true});
       if(job.batchId)f.memoryLifecycle.failBatch?.(id,job.batchId,code);
