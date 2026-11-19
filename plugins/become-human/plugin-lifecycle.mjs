@@ -1,5 +1,7 @@
 import {createHash} from 'node:crypto';
 import {scheduledRule,occurrence} from './scheduled-tasks.mjs';
+import {quietUntil} from './quiet-hours.mjs';
+import {pluginEventPolicy} from './plugin-events.mjs';
 
 const ownerName=/^(?:@[a-z0-9._-]+\/)?[a-z0-9][a-z0-9._-]{0,120}$/;
 export const pluginResourceId=(owner,id)=>'p.'+hash(owner).slice(0,16)+':'+id;
@@ -44,11 +46,17 @@ export class HumanPlugins {
         if(d.schedules!==undefined&&(!Array.isArray(d.schedules)||d.schedules.length>32))throw Error('PLUGIN_SCHEDULE_INVALID');
         for(const schedule of d.schedules??[]){
           if(!localName.test(schedule.id)||entry.schedules.includes(schedule.id)||!entry.events.has(schedule.source))throw Error('PLUGIN_SCHEDULE_INVALID');
-          const definition=json({source:schedule.source,payload:schedule.payload??{},title:schedule.title,rule:schedule.rule}),digest=hash(definition),prior=this.db.prepare('SELECT * FROM human_plugin_schedule WHERE agent=? AND owner=? AND id=?').get(id,owner,schedule.id);
+          const missedPolicy=schedule.missedPolicy===undefined?'latest':schedule.missedPolicy;
+          if(!['latest','all'].includes(missedPolicy))throw Error('PLUGIN_SCHEDULE_INVALID');
+          // Omit the default from the digest so existing clocks and one-shot
+          // completion receipts survive an upgrade or an explicit "latest".
+          const definition=json({source:schedule.source,payload:schedule.payload??{},title:schedule.title,rule:schedule.rule,...(missedPolicy==='all'?{missedPolicy}:{})}),digest=hash(definition),prior=this.db.prepare('SELECT * FROM human_plugin_schedule WHERE agent=? AND owner=? AND id=?').get(id,owner,schedule.id);
           // Same definition resumes the durable clock, including one-shot done.
           if(!prior||JSON.parse(prior.definition).digest!==digest){
             const rule=scheduledRule(schedule.id,{title:schedule.title,prompt:schedule.title,rule:schedule.rule},this.now());
             this.db.prepare("INSERT INTO human_plugin_schedule VALUES(?,?,?,?,?,?,'pending',NULL) ON CONFLICT(agent,owner,id) DO UPDATE SET definition=excluded.definition,rule=excluded.rule,due=excluded.due,status='pending',error=NULL").run(id,owner,schedule.id,JSON.stringify({...definition,digest}),JSON.stringify(rule),Date.parse(rule.scheduledAt));
+          }else if(prior.status==='held'&&prior.error==='PLUGIN_EVENT_QUEUE_FULL'){
+            this.db.prepare("UPDATE human_plugin_schedule SET status='pending',due=? WHERE agent=? AND owner=? AND id=?").run(this.now(),id,owner,schedule.id);
           }
           entry.schedules.push(schedule.id);
         }
@@ -81,15 +89,31 @@ export class HumanPlugins {
       const key='plugin-cursor:'+entry.owner,cursor=this.journal.value(id,key,ceiling),rows=this.db.prepare('SELECT seq,kind,data FROM audit WHERE agent=? AND seq>? AND seq<=? ORDER BY seq LIMIT 200').all(id,cursor,ceiling);
       if(rows.length)this.journal.transaction(()=>{for(const row of rows){const phase=lifecyclePhase(row.kind);if(phase)this.invoke(entry,phase,{id:'audit:'+row.seq,phase,kind:row.kind,...JSON.parse(row.data)});}this.journal.put(id,key,rows.at(-1).seq);});
     }
-    if(this.journal.value(id,'autonomyPaused',false)||this.journal.value(id,'autonomyError',null)||!this.factory.autonomy.settings(id).enabled)return;
+    const settings=this.factory.autonomy.settings(id),now=this.now();
+    if(this.journal.value(id,'autonomyPaused',false)||this.journal.value(id,'autonomyError',null)||!settings.enabled||quietUntil(settings,now)!==null)return;
     for(const entry of this.entries.values())for(const scheduleId of entry.schedules){
       const row=this.db.prepare("SELECT * FROM human_plugin_schedule WHERE agent=? AND owner=? AND id=? AND status='pending' AND due<=?").get(id,entry.owner,scheduleId,this.now());if(!row)continue;
       try{this.journal.transaction(()=>{
-        const definition=JSON.parse(row.definition),decision=occurrence({...row,due_at:row.due},this.now()),source=entry.events.get(definition.source);
-        source.publish({key:'schedule:'+scheduleId+':'+definition.digest.slice(0,12)+':'+Date.parse(decision.occurrenceAt),occurredAt:Math.max(Date.parse(decision.occurrenceAt),this.now()-6*86400000),expiresAt:Math.max(Date.parse(decision.occurrenceAt),this.now()-6*86400000)+7*86400000,payload:definition.payload});
-        const next=decision.nextScheduledAt;this.db.prepare('UPDATE human_plugin_schedule SET rule=?,due=?,status=?,error=NULL WHERE agent=? AND owner=? AND id=?').run(JSON.stringify({...JSON.parse(row.rule),...(next?{scheduledAt:next}:{})}),next?Date.parse(next):row.due,next?'pending':'completed',id,entry.owner,scheduleId);
-        this.journal.audit(id,'plugin-schedule-triggered',{owner:entry.owner,scheduleId,occurrenceAt:decision.occurrenceAt,nextAt:next??null});
-      });}catch(error){const code=/^[A-Z_]{3,80}$/.test(error.message)?error.message:'PLUGIN_SCHEDULE_FAILED';this.db.prepare("UPDATE human_plugin_schedule SET status='held',error=? WHERE agent=? AND owner=? AND id=?").run(code,id,entry.owner,scheduleId);this.journal.audit(id,'plugin-schedule-held',{owner:entry.owner,scheduleId,code});}
+        const definition=JSON.parse(row.definition),rule=JSON.parse(row.rule);
+        const oldest=now-pluginEventPolicy.maxLifetimeMs;
+        const checkAt=definition.missedPolicy==='all'?Math.max(Date.parse(rule.scheduledAt),oldest):now;
+        const decision=occurrence(row,checkAt),at=Date.parse(decision.occurrenceAt),next=decision.nextScheduledAt;
+        if(at>oldest){
+          entry.events.get(definition.source).publish({key:'schedule:'+scheduleId+':'+definition.digest.slice(0,12)+':'+at,occurredAt:at,expiresAt:at+pluginEventPolicy.maxLifetimeMs,payload:definition.payload});
+        }
+        this.db.prepare('UPDATE human_plugin_schedule SET rule=?,due=?,status=?,error=NULL WHERE agent=? AND owner=? AND id=?').run(JSON.stringify({...rule,...(next?{scheduledAt:next}:{})}),next?Date.parse(next):at,next?'pending':'completed',id,entry.owner,scheduleId);
+        this.journal.audit(id,at>oldest?'plugin-schedule-triggered':'plugin-schedule-expired',{owner:entry.owner,scheduleId,occurrenceAt:decision.occurrenceAt,nextAt:next??null});
+      });}catch(error){
+        const code=/^[A-Z_]{3,80}$/.test(error.message)?error.message:'PLUGIN_SCHEDULE_FAILED';
+        if(code==='PLUGIN_EVENT_QUEUE_FULL'){
+          // Keep rule.scheduledAt intact. Only the next admission check moves.
+          this.db.prepare('UPDATE human_plugin_schedule SET due=?,error=? WHERE agent=? AND owner=? AND id=?').run(now+60000,code,id,entry.owner,scheduleId);
+          if(row.error!==code)this.journal.audit(id,'plugin-schedule-deferred',{owner:entry.owner,scheduleId,code});
+        }else{
+          this.db.prepare("UPDATE human_plugin_schedule SET status='held',error=? WHERE agent=? AND owner=? AND id=?").run(code,id,entry.owner,scheduleId);
+          this.journal.audit(id,'plugin-schedule-held',{owner:entry.owner,scheduleId,code});
+        }
+      }
     }
   }
   catalog(){const id=this.getSession();return [...this.entries.values()].map(e=>({owner:e.owner,title:e.title,description:e.description,counts:e.counts,hooks:Object.keys(e.hooks),held:[...e.held],schedules:this.db.prepare('SELECT id,rule,due,status,error FROM human_plugin_schedule WHERE agent=? AND owner=?').all(id,e.owner).filter(r=>e.schedules.includes(r.id)).map(r=>({id:r.id,title:JSON.parse(r.rule).title,nextAt:r.status==='pending'?r.due:null,status:r.status,error:r.error}))}));}

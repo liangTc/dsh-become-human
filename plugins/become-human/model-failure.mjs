@@ -24,6 +24,8 @@ export function modelFailureDiagnostic(failure,localCode='MODEL_EXECUTION_FAILED
   if(localCode==='EMPTY_MODEL_OUTPUT'){category='empty';summary='模型结束了请求，但没有返回可用正文。';suggestion='检查模型与接口协议是否兼容、服务商是否只返回了推理内容；这不是笔记证据检查失败。';}
   else if(localCode==='OUTPUT_LIMIT'){category='output-limit';summary='模型因输出长度限制而结束。';suggestion='核对服务商的输出限制和本次任务长度。';}
   else if(localCode==='INVALID_TASK_OUTPUT'){category='validation';summary='模型已返回内容，但结果未通过任务格式或证据校验。';suggestion='在任务日志查看具体校验原因；这与模型下线、余额不足或空正文是不同的问题。';}
+  else if(localCode==='INVALID_CONVERSATION_REVIEW'){category='review-protocol';summary='回复检查返回了无法解析的检查结果，没有取得有效结论。';suggestion='检查调用的原始返回与接口兼容性；无法解析不等于回复内容不合格。';}
+  else if(/stream ended without finish_reason|stream.{0,40}(?:premature|incomplete)|unexpected end of (?:stream|sse)/.test(text)){category='incomplete-stream';summary='模型响应流未完整结束，未收到有效的完成标记。';suggestion='供应商有生成记录不代表客户端已收到完整结果。请核对代理或兼容接口是否完整转发流式正文和 finish_reason；本地无法据此确认是供应商、代理还是传输中断。';}
   else if(/(?:model.{0,80}(?:retired|deprecated|decommissioned|discontinued|no longer available)|模型.{0,30}(?:下线|停用|废弃))/.test(text)){category='model-retired';summary='上游报告模型已停用或下线。';suggestion='在模型设置重新读取可用模型，并选择仍受支持的型号。';}
   else if(/model_not_found|invalid_model|model_disabled|(?:model.{0,80}(?:not found|does not exist|not exist|unavailable|not available|not supported|disabled))|模型.{0,30}(?:不存在|不可用|不支持)/.test(text)){category='model-unavailable';summary='上游报告模型不存在、不可用或当前账户无权访问。';suggestion='核对模型名称、可用模型列表及账户权限；不能仅据此认定模型过期。';}
   else if(status===401||/invalid_credential|missing_credential|unauthorized|invalid api.?key|(?:token|credential).{0,20}expired/.test(text)){category='authentication';summary='模型凭据无效、缺失或已过期。';suggestion='在 DSH 中更新该服务商的凭据，再核对 Human 的模型选择。';}
@@ -37,7 +39,41 @@ export function modelFailureDiagnostic(failure,localCode='MODEL_EXECUTION_FAILED
   else if(/fetch failed|network|econn|enotfound|socket|certificate/.test(text)){category='network';summary='连接模型服务时发生网络错误。';suggestion='检查网络、DNS、代理和证书配置。';}
   return {category,summary,suggestion,...status?{httpStatus:status}:{},...code?{upstreamCode:code}:{},upstreamMessage:safeProviderMessage(raw)};
 }
-export function saveModelFailure(journal,id,entry){
-  const rows=journal.value(id,'modelFailures',{});journal.put(id,'modelFailures',{...rows,[entry.lane??'foreground']:entry});
+export function modelFailureStage(entry){
+  return ({'conversation-review':'回复检查','conversation-summary':'对话摘要','conversation-style-repair':'回复调整','learning-selection-review':'学习选题检查'})[entry.purpose]
+    ??({foreground:'对话生成',selection:'自主选题',executor:'自主执行',development:'记忆与人格整理'})[entry.lane]??'模型调用';
+}
+// Old persisted alerts can be explained using their saved evidence without
+// rewriting the historical attempt or manufacturing a new failure event.
+export function explainModelFailure(entry){
+  const diagnostic=modelFailureDiagnostic({message:entry.upstreamMessage,status:entry.httpStatus,code:entry.upstreamCode},entry.code);
+  const result={...entry,...(!entry.category||entry.category==='unknown'?diagnostic:{})};
+  if(entry.purpose==='conversation-review')result.summary=(entry.disposition==='degraded'?'回复检查暂不可用，本轮改用基础校验继续处理已生成回复。':'回复检查未完成，已生成的回复尚未投递。')+result.summary;
+  return result;
+}
+const nonFailures=new Set(['USER_PREEMPTED','USER_STOPPED','ABORTED','STALE_EPOCH','STALE_RESPONSE','AUTONOMOUS_BUDGET_EXHAUSTED']);
+export function modelFailureNotification(entry){
+  const detail=explainModelFailure(entry),safe=value=>safeProviderMessage(value).slice(0,180);
+  const code=/^[A-Z_]{3,64}$/.test(entry.code??'')?entry.code:'MODEL_EXECUTION_FAILED';
+  const at=new Date(entry.at);
+  return ['模型调用异常 · '+modelFailureStage(entry),safeProviderMessage(detail.summary),
+    '模型：'+(safe(entry.provider)||'未记录服务商')+' / '+(safe(entry.model)||'未记录模型'),
+    '错误：'+code+(detail.httpStatus?' · HTTP '+detail.httpStatus:''),
+    ...(detail.upstreamMessage?['说明：'+safeProviderMessage(detail.upstreamMessage)]:[]),
+    safeProviderMessage(detail.suggestion),
+    ...(Number.isFinite(at.getTime())?['时间：'+at.toISOString()]:[]),
+    '会话与记忆已保留。可在 Web 的日志中查看本次调用。'].filter(Boolean).join('\n');
+}
+export function saveModelFailure(journal,id,entry,{notify=true}={}){
+  if(nonFailures.has(entry.code))return;
+  const save=()=>{
+    const rows=journal.value(id,'modelFailures',{});journal.put(id,'modelFailures',{...rows,[entry.lane??'foreground']:entry});
+    if(!notify)return;
+    // An attempt is a stable identity across polling and restarts. Preparation
+    // failures have no attempt yet, so use the failure occurrence's identity.
+    const identity=entry.attemptId??'prepare:'+JSON.stringify([entry.at,entry.lane,entry.purpose,entry.code]);
+    journal.publish?.(id,modelFailureNotification(entry),'model-error','model-error:'+identity,entry.at);
+  };
+  if(journal.transaction)journal.transaction(save);else save();
 }
 export function clearModelFailure(journal,id,lane){const rows={...journal.value(id,'modelFailures',{})};if(rows[lane]){delete rows[lane];journal.put(id,'modelFailures',rows);}}

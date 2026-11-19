@@ -1,4 +1,5 @@
 import {createHash} from 'node:crypto';
+import {quietUntil} from './quiet-hours.mjs';
 import {topicMemorySnapshot,repeatedLongTermTopic,commitTopicMemory} from './topic-memory.mjs';
 export {topicMemorySnapshot,topicMemoryPolicy} from './topic-memory.mjs';
 
@@ -31,9 +32,7 @@ export function socialStatus(journal,domain,id,input,now=Date.now(),ownerOverrid
   const backoffFactor=2**Math.min(unanswered,4),effectiveIntervalMs=Math.min(86400000,s.socialIntervalMs*backoffFactor);
   const lastContactAt=journal.value(id,'lastAutonomousContact',0),gapAt=lastContactAt+s.socialMinGapMs;
   const cadenceAt=Math.max(lastChatAt,ownerAt)+effectiveIntervalMs;
-  const local=new Date(now+s.timeZoneOffsetMinutes*60000),hour=local.getUTCHours();
-  const quiet=s.quietStart===s.quietEnd?false:s.quietStart<s.quietEnd?hour>=s.quietStart&&hour<s.quietEnd:hour>=s.quietStart||hour<s.quietEnd;
-  const quietEndAt=quiet?Date.UTC(local.getUTCFullYear(),local.getUTCMonth(),local.getUTCDate()+(s.quietStart>s.quietEnd&&hour>=s.quietStart?1:0),s.quietEnd)-s.timeZoneOffsetMinutes*60000:0;
+  const quietEndAt=quietUntil(s,now),quiet=quietEndAt!==null;
   const recallableOwner=!!owner&&domain.sourceUsable(id,owner.id);
   const topicMemory=topicMemorySnapshot(journal,domain,id,now,owner),continuing=topicMemory.topics.some(t=>t.continuationAllowed);
   const choices=topics.filter(t=>(t.key!=='open-thread'||recallableOwner)&&(t.key==='open-thread'&&continuing||!history.some(c=>c.topicKey===t.key&&now-c.at<s.socialTopicCooldownMs)));

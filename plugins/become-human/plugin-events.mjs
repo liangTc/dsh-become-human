@@ -1,6 +1,7 @@
 import {createHash,randomUUID} from 'node:crypto';
 import {assertCapabilitySchema,validateCapabilityInput,plain} from './capability-schema.mjs';
 import {attentionWindow} from './attention-window.mjs';
+import {quietUntil} from './quiet-hours.mjs';
 
 const canonical=x=>Array.isArray(x)?x.map(canonical):plain(x)?Object.fromEntries(Object.keys(x).sort().map(k=>[k,canonical(x[k])])):x;
 const digest=x=>createHash('sha256').update(JSON.stringify(canonical(x))).digest('hex');
@@ -88,6 +89,8 @@ export class PluginEvents {
 
 export function wakeForPluginEvent(factory,id){
   const j=factory.journal,now=Date.now(),agent=[...factory.handles].map(h=>h.agent).find(a=>a?.id===id);
-  if(!agent?.ready||agent.closed||agent.active||agent.desired().desired!=='running'||!factory.autonomy.settings(id).enabled||j.value(id,'autonomyPaused',false)||j.value(id,'autonomyError',null)||now-j.value(id,'pluginEventLastWake',0)<pluginEventPolicy.wakeCooldownMs)return;
+  if(!agent?.ready||agent.closed||agent.active||agent.desired().desired!=='running')return;
+  const settings=factory.autonomy.settings(id);
+  if(!settings.enabled||quietUntil(settings,now)!==null||j.value(id,'autonomyPaused',false)||j.value(id,'autonomyError',null)||now-j.value(id,'pluginEventLastWake',0)<pluginEventPolicy.wakeCooldownMs)return;
   j.put(id,'pluginEventLastWake',now);j.audit(id,'plugin-event-wake',{});agent.wake=true;agent.pump();
 }

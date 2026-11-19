@@ -17,6 +17,17 @@ function rejectedLearningField(text,diagnostic){
   return {field,text:value.slice(0,800),hash:key(value),truncated:value.length>800,unverified:true,purpose:'output-validation-diagnostic-only'};
 }
 
+function rejectInsufficientEvidence(agent,task,response,reason){
+  const {journal:j,autonomy:store}=agent.factory,id=agent.id,cp={...task.checkpoint},source=cp.source;
+  delete cp.learningDraft;
+  j.endAttempt(response.rid,{state:'evidence-insufficient',usage:response.usage,usageConfidence:response.usage?'reported':'unknown',textChars:response.text.length,reasoningChars:response.reasoningChars});
+  j.audit(id,'learning-evidence-insufficient',{taskId:task.id,attemptId:response.rid,sourceDigest:source.digest,code:reason});
+  if(task.kind==='research'&&cp.discovery&&(cp.researchReads??0)<cp.discovery.results.length){
+    cp.rejectedSources=[...(cp.rejectedSources??[]),{url:source.url,digest:source.digest,reason}].slice(-6);cp.source=null;store.update(task.id,'suspended',cp);
+  }else{store.defer(id,task,'INSUFFICIENT_SOURCE_EVIDENCE',store.settings(id).sourceIntervalMs);store.update(task.id,'failed',{...cp,reason:'INSUFFICIENT_SOURCE_EVIDENCE',failureCategory:'source-insufficient'});}
+  j.put(id,'autonomyWait','insufficient-source-evidence');j.put(id,'autonomyPhase','waiting');
+}
+
 async function finishDeepLearning(agent,task,response,signal,{turn,epoch,modelRequest,valid,phase,rejectInsufficientEvidence}){
   const f=agent.factory,j=f.journal,store=f.autonomy,id=agent.id,settings=store.settings(id);
         let result;
@@ -65,6 +76,7 @@ export function learningOpportunitySnapshot(agent,{settings,now}){
 export function learningExecutionContext(ctx,guard){
   const {agent,signal,epoch}=ctx,f=agent.factory,j=f.journal,store=f.autonomy,id=agent.id;
   const settings=()=>store.settings(id);
+  const reject=ctx.rejectInsufficientEvidence??rejectInsufficientEvidence;
   const valid=()=>guard();
   return Object.freeze({
     get task(){return structuredClone(ctx.task);},get response(){return ctx.response;},set response(value){ctx.response=value;},signal,valid,
@@ -78,7 +90,7 @@ export function learningExecutionContext(ctx,guard){
     discover:async()=>{valid();const task=await ctx.discoverSource(agent,signal,ctx.task,settings(),epoch);valid();if(task)ctx.task=task;return !!task;},
     cachedDraft:()=>{valid();return f.learningSelectionReview&&ctx.task.checkpoint.source?cachedLearningDraft(ctx.task):null;},
     executeModel:async()=>{valid();const response=await ctx.executeModel(ctx.task);ctx.response=response;valid();return response;},
-    rejectInsufficient:reason=>{valid();ctx.rejectInsufficientEvidence(agent,ctx.task,ctx.response,reason);},
-    commitValidated:async()=>{valid();await finishDeepLearning(agent,ctx.task,ctx.response,signal,{...ctx,valid});valid();}
+    rejectInsufficient:reason=>{valid();reject(agent,ctx.task,ctx.response,reason);},
+    commitValidated:async()=>{valid();await finishDeepLearning(agent,ctx.task,ctx.response,signal,{...ctx,valid,rejectInsufficientEvidence:reject});valid();}
   });
 }

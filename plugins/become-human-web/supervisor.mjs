@@ -76,7 +76,7 @@ export class RuntimeSupervisor {
       const link=path.join(profile,'node_modules',name);
       try{await fs.symlink(target,link,'junction');}catch(e){if(e.code!=='EEXIST')throw e;const existing=await fs.lstat(link);if(!existing.isSymbolicLink())throw new Error('PROFILE_PACKAGE_CONFLICT');if(await fs.realpath(link)!==await fs.realpath(target)){await fs.unlink(link);await fs.symlink(target,link,'junction');}}
     }
-    const patch=[{id:'attachment-local',config:runtimeAttachmentLimits},{id:'llm-pi-ai',config:{providers:safeProviders}},{id:'llm-deepseek',name:'@deepseek-ai/dsh-llm-deepseek-api-key',disabled:!safeNativeProviders['deepseek-official'],config:safeNativeProviders['deepseek-official']??{}},{id:'agent-default-model',config:{provider:providerId,model:modelId}},{id:'become-human',config:{provider:providerId,model:modelId,allowedRoutes:this.allowedRoutes,modelCapabilities:this.modelCapabilities,tokenBudget:c.tokenBudget,localQuotaEnabled:false,budgetRound:c.budgetRound,maxCycles:c.maxCycles,intervalMs:c.intervalMs,interactiveOnly:c.interactiveOnly}},...['hmr','session-title-llm','session-log-deepseek','session-log-download','plugin-package-inventory-deepseek','desktop-product-telemetry','product-analytics','session-telemetry-otel','ui-settings-account','account-controller'].map(id=>({id,disabled:true}))];
+    const patch=[{id:'attachment-local',config:runtimeAttachmentLimits},{id:'llm-pi-ai',config:{providers:safeProviders}},{id:'llm-deepseek',name:'@deepseek-ai/dsh-llm-deepseek-api-key',disabled:!safeNativeProviders['deepseek-official'],config:safeNativeProviders['deepseek-official']??{}},{id:'agent-default-model',config:{provider:providerId,model:modelId}},{id:'become-human',config:{provider:providerId,model:modelId,allowedRoutes:this.allowedRoutes,modelCapabilities:this.modelCapabilities,...(c.legacyQuietHours?{legacyQuietHours:c.legacyQuietHours}:{}),tokenBudget:c.tokenBudget,localQuotaEnabled:false,budgetRound:c.budgetRound,maxCycles:c.maxCycles,intervalMs:c.intervalMs,interactiveOnly:c.interactiveOnly}},...['hmr','session-title-llm','session-log-deepseek','session-log-download','plugin-package-inventory-deepseek','desktop-product-telemetry','product-analytics','session-telemetry-otel','ui-settings-account','account-controller'].map(id=>({id,disabled:true}))];
     await prepareRuntimeProfile(profile,patch);await fs.writeFile(path.join(c.runtimeHome,'runtime-selection.json'),JSON.stringify({provider:providerId,model:modelId,apiKeyEnv:provider.apiKeyEnv,apiKeyEnvs:[...new Set([...Object.values(safeProviders),...Object.values(safeNativeProviders)].map(p=>p.apiKeyEnv))]}));
     this.selection={provider:providerId,model:modelId};
   }
@@ -135,15 +135,21 @@ export class RuntimeSupervisor {
     if(!this.cookie||!this.child||this.child.exitCode!==null)throw new Error('WORKER_UNAVAILABLE');
     const child=this.child,cookie=this.cookie;
     return workerRequest({base:this.base,cookie,resource,body,
-      timeoutMs:resource==='read'&&body?.kind==='identity'?4000:resource==='state'||resource==='read'&&['behavior-catalog','workflow-catalog','extension-page-catalog'].includes(body?.kind)?10000:45000,
+      timeoutMs:resource==='read'&&body?.kind==='identity'?4000:resource==='state'||resource==='read'&&['behavior-catalog','workflow-catalog','extension-page-catalog','chat-state','runtime-status'].includes(body?.kind)?10000:45000,
       sameWorker:()=>this.child===child&&this.cookie===cookie&&child.exitCode===null&&child.signalCode==null,
       onFailure:details=>{if(details.status>=400&&details.status<500)return;if(this.lastRequestError?.code!==details.code)this.recordLifecycle('worker-request-failed',details);this.lastRequestError={at:Date.now(),...details};},
       onRecovered:()=>{if(this.lastRequestError){this.recordLifecycle('worker-request-recovered',{operation:resource.split('?')[0]});this.lastRequestError=null;}}
     });
   }
-  state(){return this.request('state');}
+  state(mode='full'){return mode==='full'?this.request('state'):this.read({kind:mode});}
   control(body){return this.request('control',body);}
   read(body){return this.request('read',body);}
   events(after=0){return this.request('events?after='+after);}
-  async close(){this.closed=true;this.recordLifecycle('runtime-stop-requested');if(this.cookie)await this.control({op:'pause'}).catch(error=>{this.recordLifecycle('runtime-pause-on-close-failed',{code:safeOperationCode(error,'WORKER_PAUSE_FAILED')});});if(!await this.stopChild(this.child)){this.lastError='WORKER_STOP_TIMEOUT';this.lastErrorAt=Date.now();this.recordLifecycle('worker-stop-timeout',{code:this.lastError});throw new Error(this.lastError);}this.cookie=null;this.recordLifecycle('runtime-stopped');this.releaseRuntimeLease();}
+  async close({idleState}={}){
+    if(idleState)await this.control({op:'maintenance-pause-if-idle',sessionId:idleState.sessionId,expectedEpoch:idleState.cancelEpoch});
+    this.closed=true;this.recordLifecycle('runtime-stop-requested');
+    if(!idleState&&this.cookie)await this.control({op:'pause'}).catch(error=>{this.recordLifecycle('runtime-pause-on-close-failed',{code:safeOperationCode(error,'WORKER_PAUSE_FAILED')});});
+    if(!await this.stopChild(this.child)){this.lastError='WORKER_STOP_TIMEOUT';this.lastErrorAt=Date.now();this.recordLifecycle('worker-stop-timeout',{code:this.lastError});throw new Error(this.lastError);}
+    this.cookie=null;this.recordLifecycle('runtime-stopped');this.releaseRuntimeLease();
+  }
 }

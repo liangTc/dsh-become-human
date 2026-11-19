@@ -5,6 +5,10 @@ import {EventLog} from './runtime/event-log.mjs';
 import {safeOperationCode} from './operations-log.mjs';
 const digest=text=>createHash('sha256').update(text).digest('hex');
 const idOk=value=>typeof value==='string'&&/^[a-zA-Z0-9._:-]{2,64}$/.test(value);
+function matchesBudgetNotice(request,event){
+  if(!request||request.status!=='pending'||request.expiresAt<=Date.now()||event?.kind!=='budget-request')return false;
+  return event.event_key===(request.noticeKey??'autonomy-budget-notice:'+request.windowStart);
+}
 export class RemoteGateway {
   constructor(file,runtime,{seal,unseal}={}){
     this.runtime=runtime;this.adapters=new Map();this.busy=false;this.closed=false;this.receiving=Promise.resolve();this.controls=Promise.resolve();this.replyBusy=false;this.lastError=null;
@@ -17,6 +21,7 @@ export class RemoteGateway {
       CREATE TABLE IF NOT EXISTS delivery_confirmation(channel TEXT,session TEXT,seq INTEGER,version INTEGER NOT NULL,outcome TEXT NOT NULL,confirmed_at INTEGER NOT NULL,PRIMARY KEY(channel,session,seq));
       CREATE TABLE IF NOT EXISTS preference(key TEXT PRIMARY KEY,value TEXT);`);
     if(!this.db.prepare('PRAGMA table_info(inbound)').all().some(c=>c.name==='kind'))this.db.exec("ALTER TABLE inbound ADD COLUMN kind TEXT NOT NULL DEFAULT 'message'");
+    if(!this.db.prepare('PRAGMA table_info(delivery)').all().some(c=>c.name==='kind'))this.db.exec('ALTER TABLE delivery ADD COLUMN kind TEXT');
     this.events=new EventLog(this.db,'m');
     this.blockWake('cold-start');
     for(const row of this.db.prepare("SELECT channel,session,seq FROM delivery WHERE state='sending'").all())this.events.append(row.session,crypto.randomUUID(),'delivery-unknown',{channel:row.channel,messageSeq:row.seq,status:'unknown',origin:row.channel,reason:'restart-during-send'});
@@ -30,14 +35,14 @@ export class RemoteGateway {
   blockWake(reason){const value={blocked:true,reason,at:Date.now()};this.wakeBlockMemory=value;this.preference('wake-blocked',value);return value;}
   allowWake(reason){const value={blocked:false,reason,at:Date.now()};this.preference('wake-blocked',value);this.wakeBlockMemory=value;return value;}
   queueControl(work){const current=this.controls.catch(()=>{}).then(work);this.controls=current;return current;}
-  async controlRuntime(input,{automatic=false}={}){
+  async controlRuntime(input,{automatic=false,maintenanceRestore=false}={}){
     return this.queueControl(async()=>{
-      if(this.maintenance)throw new Error('EXTENSION_OPERATION_BUSY');
+      if(this.maintenance&&!(maintenanceRestore&&input.op==='start'))throw new Error('EXTENSION_OPERATION_BUSY');
       if(this.closed)throw new Error('REMOTE_CLOSED');
       if(automatic&&(this.wakeBlock().blocked||!this.preference('reply-enabled')))return null;
       const result=await this.runtime.control(input);
       if(input.op==='pause')this.blockWake('user-pause');
-      else if(!automatic&&['start','once'].includes(input.op))this.allowWake('manual-resume');
+      else if(!automatic&&!maintenanceRestore&&['start','once'].includes(input.op))this.allowWake('manual-resume');
       return result;
     });
   }
@@ -45,7 +50,7 @@ export class RemoteGateway {
     return this.queueControl(async()=>{
       if(this.maintenance)throw new Error('EXTENSION_OPERATION_BUSY');
       if(this.closed)throw new Error('REMOTE_CLOSED');
-      const state=await this.runtime.state();if(state.retiring)throw new Error('SESSION_RETIRING');
+      const state=await this.runtime.state('runtime-status');if(state.retiring)throw new Error('SESSION_RETIRING');
       if(state.desired==='paused'&&state.driveMode==='continuous'&&state.cycleLimit===null)await this.runtime.control({op:'start',sessionId:state.sessionId,expectedEpoch:state.cancelEpoch});
       this.allowWake('manual-resume');
       return {command:'resumed'};
@@ -57,7 +62,12 @@ export class RemoteGateway {
       return this.runtime.state();
     });
   }
-  async stopRuntime(){return this.queueControl(async()=>{this.blockWake('runtime-stop');await this.runtime.close();return {desired:'paused',status:'stopped'};});}
+  async stopRuntime({idleState,keepWakePreference=false}={}){return this.queueControl(async()=>{
+    if(!idleState)this.blockWake('runtime-stop');
+    await this.runtime.close({idleState});
+    if(idleState&&!keepWakePreference)this.blockWake('runtime-stop');
+    return {desired:'paused',status:'stopped'};
+  });}
   recordError(error,{operation='remote-tick',channel}={}){
     const code=safeOperationCode(error,'REMOTE_OPERATION_FAILED'),providerCode=error?.details?.providerCode??error?.providerCode,reason=error?.reason,next={at:Date.now(),code,operation,...(channel?{channel}:{}),...(typeof reason==='string'&&/^[A-Z][A-Z0-9_]{2,64}$/.test(reason)?{reason}:{}),...(typeof providerCode==='number'&&Number.isFinite(providerCode)||typeof providerCode==='string'&&/^-?\d{1,8}$/.test(providerCode)?{providerCode}:{} )},prior=this.lastError;
     this.lastError=next;try{this.preference('last-remote-error',next);}catch(storageError){this.runtime.recordLifecycle?.('remote-error-store-failed',{code:safeOperationCode(storageError,'REMOTE_ERROR_STORE_FAILED'),originalCode:code});}
@@ -69,7 +79,7 @@ export class RemoteGateway {
     return {channel:row.channel,sessionId:row.session,seq:row.seq,state:row.state,receipt:parse(row.receipt),parts:this.db.prepare('SELECT part,state,receipt,sent_at FROM delivery_part WHERE channel=? AND session=? AND seq=? ORDER BY part').all(row.channel,row.session,row.seq).map(p=>({part:p.part,state:p.state,receipt:parse(p.receipt),sentAt:p.sent_at})),version:confirmation?.version??0,confirmation:confirmation?{outcome:confirmation.outcome,at:confirmation.confirmed_at,version:confirmation.version}:null};
   }
   async deliveryReview(input){
-    const current=await this.runtime.state();if(!input.sessionId||input.sessionId!==current.sessionId)throw new Error('STALE_SESSION');if(current.retiring)throw new Error('SESSION_RETIRING');
+    const current=await this.runtime.state('runtime-status');if(!input.sessionId||input.sessionId!==current.sessionId)throw new Error('STALE_SESSION');if(current.retiring)throw new Error('SESSION_RETIRING');
     const limit=input.limit??25,offset=input.offset??0,resolution=input.resolution??'unresolved';
     if(!Number.isSafeInteger(limit)||limit<1||limit>100||!Number.isSafeInteger(offset)||offset<0||offset>1000000||!['unresolved','all','received','not-received'].includes(resolution)||input.channel!==undefined&&!idOk(input.channel))throw new Error('INVALID_DELIVERY_QUERY');
     const where=["d.session=?","d.state IN ('unknown','rejected')"],params=[current.sessionId];if(input.channel!==undefined){where.push('d.channel=?');params.push(input.channel);}if(resolution==='unresolved')where.push('c.version IS NULL');else if(resolution!=='all'){where.push('c.outcome=?');params.push(resolution);}
@@ -81,7 +91,7 @@ export class RemoteGateway {
     return this.queueControl(async()=>{
       if(this.closed)throw new Error('REMOTE_CLOSED');
       if(!idOk(input.channel)||!Number.isSafeInteger(input.seq)||input.seq<1||!Number.isSafeInteger(input.expectedVersion)||input.expectedVersion<0||!['received','not-received'].includes(input.outcome))throw new Error('INVALID_DELIVERY_CONFIRMATION');
-      const current=await this.runtime.state();if(!input.sessionId||input.sessionId!==current.sessionId)throw new Error('STALE_SESSION');if(current.retiring)throw new Error('SESSION_RETIRING');
+      const current=await this.runtime.state('runtime-status');if(!input.sessionId||input.sessionId!==current.sessionId)throw new Error('STALE_SESSION');if(current.retiring)throw new Error('SESSION_RETIRING');
       this.db.exec('BEGIN IMMEDIATE');try{
         const row=this.db.prepare('SELECT channel,session,seq,state,receipt FROM delivery WHERE channel=? AND session=? AND seq=?').get(input.channel,current.sessionId,input.seq);if(!row)throw new Error('DELIVERY_NOT_FOUND');if(!['unknown','rejected'].includes(row.state))throw new Error('DELIVERY_NOT_REVIEWABLE');
         const item=this.confirmationItem(row);if(input.expectedVersion!==item.version){if(item.confirmation?.outcome===input.outcome&&input.expectedVersion===item.version-1){this.db.exec('COMMIT');return item;}throw new Error('STALE_DELIVERY_CONFIRMATION');}
@@ -112,17 +122,17 @@ export class RemoteGateway {
     return null;
   }
   queueDelivery(row,event,state){
-    const prefix=event.kind==='user'?'[我 · '+(event.origin??'Web')+'] ':event.kind==='budget-request'?'[系统] ':'[助手] ',p=event.presentation;
+    const prefix=event.kind==='user'?'[我 · '+(event.origin??'Web')+'] ':['budget-request','model-error'].includes(event.kind)?'[系统] ':'[助手] ',p=event.presentation;
     const parts=event.kind==='assistant'&&p?.kind==='chat-bubbles'&&Array.isArray(p.parts)&&p.parts.length>=2&&p.parts.length<=3&&p.parts.every(t=>typeof t==='string'&&t.trim()&&t.length<=1200)&&p.parts.join('').replace(/\s/gu,'')===event.text.replace(/\s/gu,'')&&Number.isSafeInteger(p.gapMs)&&p.gapMs>=300&&p.gapMs<=3000&&Number.isSafeInteger(p.ownerInputRevision)&&Number.isSafeInteger(p.pauseRevision)?p.parts:null;
     this.db.exec('BEGIN IMMEDIATE');
     try{
-      const inserted=this.db.prepare("INSERT OR IGNORE INTO delivery VALUES(?,?,?,?,'pending',NULL)").run(row.id,row.session,event.seq,this.seal(prefix+event.text));
+      const inserted=this.db.prepare("INSERT OR IGNORE INTO delivery(channel,session,seq,payload,state,receipt,kind) VALUES(?,?,?,?,'pending',NULL,?)").run(row.id,row.session,event.seq,this.seal(prefix+event.text),event.kind);
       if(inserted.changes&&parts)parts.forEach((text,index)=>this.db.prepare("INSERT INTO delivery_part VALUES(?,?,?,?,?,'pending',NULL,?,?,?,?,?,?,?,NULL)").run(row.id,row.session,event.seq,index,this.seal(text),index?Date.now()+p.gapMs:Date.now(),p.gapMs,row.config.bindingGeneration??0,p.ownerInputRevision,p.pauseRevision,p.autonomous?1:0,digest(text)));
       this.db.prepare('UPDATE channel SET cursor=? WHERE id=?').run(event.seq,row.id);this.db.exec('COMMIT');
     }catch(error){this.db.exec('ROLLBACK');throw error;}
   }
   async sendPart(row,adapter,item,part){
-    let fresh=await this.runtime.state();const guard=this.partGuard(row,item,part,fresh);if(guard){this.discardParts(item,guard);return;}
+    let fresh=await this.runtime.state('runtime-status');const guard=this.partGuard(row,item,part,fresh);if(guard){this.discardParts(item,guard);return;}
     if(fresh.desired==='paused'&&fresh.stopReason!=='cycle-limit')return;
     const previous=this.db.prepare("SELECT max(sent_at) AS n FROM delivery_part WHERE channel=? AND session=? AND seq=? AND state='sent'").get(row.id,row.session,item.seq).n;
     if(Date.now()<Math.max(part.due_at,previous===null?0:previous+part.gap_ms))return;
@@ -139,7 +149,7 @@ export class RemoteGateway {
       const delivery=error.definitelyRejected?'rejected':'unknown';this.db.prepare('UPDATE delivery_part SET state=?,receipt=?,payload=NULL WHERE channel=? AND session=? AND seq=? AND part=? AND binding_generation=?').run(delivery,JSON.stringify({code:error.code??'DELIVERY_UNKNOWN'}),row.id,row.session,item.seq,part.part,part.binding_generation);
       this.events.append(row.session,crypto.randomUUID(),'delivery-part-'+delivery,{origin:row.id,messageSeq:item.seq,part:part.part,status:delivery==='rejected'?'failed':'unknown',code:error.code??'DELIVERY_UNKNOWN'});
     }
-    this.summarizeParts(item);fresh=await this.runtime.state();const after=this.partGuard(row,item,part,fresh);if(after)this.discardParts(item,after);
+    this.summarizeParts(item);fresh=await this.runtime.state('runtime-status');const after=this.partGuard(row,item,part,fresh);if(after)this.discardParts(item,after);
     const final=this.db.prepare('SELECT state FROM delivery WHERE channel=? AND session=? AND seq=?').get(row.id,row.session,item.seq);if(final?.state==='sent')this.events.append(row.session,crypto.randomUUID(),'delivery-sent',{origin:row.id,messageSeq:item.seq,status:'success',segmented:true});
   }
   async save(input){
@@ -148,7 +158,7 @@ export class RemoteGateway {
     if(input.kind==='telegram'&&(!/^\d+:[a-zA-Z0-9_-]+$/.test(config.token??'')||!/^\d{1,20}$/.test(config.ownerId??'')))throw new Error('INVALID_CHANNEL');
     if(input.kind==='dsh-im'&&(!idOk(config.botId)||typeof config.targetId!=='string'||!config.targetId.trim()||config.targetId.length>128))throw new Error('INVALID_CHANNEL');
     if(!['telegram','dsh-im'].includes(input.kind)){const adapter=this.adapters.get(input.kind);if(typeof adapter.validate!=='function')throw new Error('CHANNEL_VALIDATION_REQUIRED');await adapter.validate(config);}
-    const state=await this.runtime.state();const last=state.messages.at(-1)?.seq??0;
+    const state=await this.runtime.state('runtime-status');const last=state.latestSeq??state.messages?.at(-1)?.seq??0;
     config.bindingGeneration=Number(this.preference('binding-generation')||0)+1;
     this.db.exec('BEGIN IMMEDIATE');
     try{
@@ -187,9 +197,9 @@ export class RemoteGateway {
       if(['/new','/session','/clear','/delete','/forget'].some(command=>text===command||text.startsWith(command+' ')))return commitCommand({refused:'SINGLE_SESSION_COMMAND_DISABLED'});
       if(text==='/pause'){await this.controlRuntime({op:'pause'});return commitCommand({command:'paused'});}
       if(text==='/resume')return commitCommand(await this.resumeRuntime());
-      const state=await this.runtime.state();if(state.retiring)throw new Error('SESSION_RETIRING');
+      const state=await this.runtime.state('runtime-status');if(state.retiring)throw new Error('SESSION_RETIRING');
       if(!this.current(row))throw new Error('CHANNEL_REPLACED');
-      if(text==='/status')return commitCommand({command:'status',sessionId:state.sessionId,desired:state.desired});
+      if(text==='/status')return commitCommand({command:'status',sessionId:state.sessionId,desired:state.desired,description:state.run?.text??state.desired});
       if(!prior)this.db.prepare("INSERT INTO inbound(channel,message,hash,request_id,status,kind) VALUES(?,?,?,?,'pending','message')").run(channelId,message,hash,requestId);
       await this.runtime.control({op:'message',requestId,text,...(attachments.length?{attachments}:{}),sessionId:state.sessionId,target:envelope.target==='next-step'?'next-step':'next-turn',origin:channelId});
       this.db.prepare("UPDATE inbound SET status='committed' WHERE channel=? AND message=?").run(channelId,message);
@@ -202,34 +212,59 @@ export class RemoteGateway {
   async tick(){
     if(this.busy||this.closed||this.runtime.closed)return;this.busy=true;
     try{
-      const state=await this.runtime.state();if(state.retiring){this.db.prepare('UPDATE delivery_part SET payload=NULL').run();this.db.prepare('UPDATE delivery SET payload=NULL').run();return;}this.db.prepare('DELETE FROM human_event WHERE agent<>?').run(state.sessionId);this.db.prepare('DELETE FROM delivery_confirmation WHERE session<>?').run(state.sessionId);const retention=state.management?.data;if(retention?.logRetentionEnabled&&Date.now()-(this.lastPrune??0)>3600000){this.events.prune(state.sessionId,retention.logRetentionDays);this.lastPrune=Date.now();}
+      const state=await this.runtime.state('runtime-status');if(state.retiring){this.db.prepare('UPDATE delivery_part SET payload=NULL').run();this.db.prepare('UPDATE delivery SET payload=NULL').run();return;}this.db.prepare('DELETE FROM human_event WHERE agent<>?').run(state.sessionId);this.db.prepare('DELETE FROM delivery_confirmation WHERE session<>?').run(state.sessionId);const retention=state.management?.data;if(retention?.logRetentionEnabled&&Date.now()-(this.lastPrune??0)>3600000){this.events.prune(state.sessionId,retention.logRetentionDays);this.lastPrune=Date.now();}
       for(const item of this.db.prepare("SELECT DISTINCT channel,session,seq FROM delivery_part WHERE session<>? AND state='pending'").all(state.sessionId))this.discardParts(item,'SESSION_CHANGED');
       this.db.prepare('UPDATE delivery_part SET payload=NULL WHERE session<>?').run(state.sessionId);
       this.db.prepare("UPDATE delivery SET payload=NULL,state='discarded' WHERE session<>? AND payload IS NOT NULL").run(state.sessionId);
       for(const base of this.db.prepare('SELECT id FROM channel WHERE enabled=1').all()){
         const row=this.channel(base.id),adapter=this.adapters.get(row.kind);if(!adapter)continue;
         try{
-          if(row.session!==state.sessionId){row.session=state.sessionId;row.cursor=state.messages.at(-1)?.seq??0;this.db.prepare('UPDATE channel SET session=?,cursor=? WHERE id=?').run(row.session,row.cursor,row.id);}
-          if(adapter.poll){const polled=await adapter.poll(row.config);if(!this.current(row))continue;for(const message of polled.messages??[]){if(!this.current(row))break;if(message.senderId!==row.config.ownerId)continue;const result=await this.receive(row.id,message);if(!this.current(row))break;if(result.refused||result.command)await adapter.send(row.config,result.refused?'本 Agent 只有一个会话，请在 Web 管理页面操作。':result.command==='status'?'状态：'+result.desired+'；唯一会话 '+result.sessionId:'已更新回复状态。');}if(polled.offset!==undefined&&this.current(row)){row.config.offset=polled.offset;this.db.prepare('UPDATE channel SET config=? WHERE id=?').run(this.seal(JSON.stringify(row.config)),row.id);}}
+          if(row.session!==state.sessionId){row.session=state.sessionId;row.cursor=state.latestSeq??state.messages?.at(-1)?.seq??0;this.db.prepare('UPDATE channel SET session=?,cursor=? WHERE id=?').run(row.session,row.cursor,row.id);}
+          if(adapter.poll){const polled=await adapter.poll(row.config);if(!this.current(row))continue;for(const message of polled.messages??[]){if(!this.current(row))break;if(message.senderId!==row.config.ownerId)continue;const result=await this.receive(row.id,message);if(!this.current(row))break;if(result.refused||result.command)await adapter.send(row.config,result.refused?'本 Agent 只有一个会话，请在 Web 管理页面操作。':result.command==='status'?'状态：'+result.description+'；唯一会话 '+result.sessionId:'已更新回复状态。');}if(polled.offset!==undefined&&this.current(row)){row.config.offset=polled.offset;this.db.prepare('UPDATE channel SET config=? WHERE id=?').run(this.seal(JSON.stringify(row.config)),row.id);}}
           const feed=await this.runtime.events(row.cursor);if(feed.sessionId!==row.session||!this.current(row))continue;
           for(const event of feed.events){
             const budgetRequest=state.autonomy?.pendingBudgetRequest;
-            const budgetNotice=event.kind==='budget-request'&&budgetRequest?.status==='pending'&&budgetRequest.expiresAt>Date.now()&&event.event_key==='autonomy-budget-notice:'+budgetRequest.windowStart;
-            if((['user','assistant'].includes(event.kind)||budgetNotice)&&event.origin!==row.id)this.queueDelivery(row,event,state);
+            let budgetNotice=matchesBudgetNotice(budgetRequest,event);
+            if(event.kind==='budget-request'&&!budgetNotice){
+              // The approval can be created while the channel poll is in
+              // flight. Check before permanently advancing the outbox cursor.
+              const fresh=await this.runtime.state('runtime-status');
+              if(fresh.retiring||fresh.sessionId!==row.session||!this.current(row))break;
+              budgetNotice=matchesBudgetNotice(fresh.autonomy?.pendingBudgetRequest,event);
+            }
+            const modelNotice=event.kind==='model-error'&&event.event_key?.startsWith('model-error:');
+            if((['user','assistant'].includes(event.kind)||budgetNotice||modelNotice)&&event.origin!==row.id)this.queueDelivery(row,event,state);
             else this.db.prepare('UPDATE channel SET cursor=? WHERE id=?').run(event.seq,row.id);
           }
-          for(const item of this.db.prepare("SELECT * FROM delivery WHERE channel=? AND session=? AND state='pending' ORDER BY seq LIMIT 10").all(row.id,row.session)){
+          // A paused or delayed chat bubble must not hide the error that caused
+          // the pause. Normal message order is unchanged within its own lane.
+          for(const item of this.db.prepare("SELECT * FROM delivery WHERE channel=? AND session=? AND state='pending' ORDER BY CASE WHEN kind='model-error' THEN 0 ELSE 1 END,seq LIMIT 10").all(row.id,row.session)){
             const part=this.db.prepare("SELECT * FROM delivery_part WHERE channel=? AND session=? AND seq=? AND state='pending' ORDER BY part LIMIT 1").get(row.id,row.session,item.seq);
             if(part){await this.sendPart(row,adapter,item,part);break;}
-            const fresh=await this.runtime.state();if(fresh.retiring||fresh.sessionId!==item.session||!this.current(row))break;
+            const fresh=await this.runtime.state('runtime-status');if(fresh.retiring||fresh.sessionId!==item.session||!this.current(row))break;
+            if(item.kind==='budget-request'){
+              const pending=fresh.autonomy?.pendingBudgetRequest;
+              let valid=pending?.status==='pending'&&pending.expiresAt>Date.now();
+              if(valid&&pending.noticeSeq===undefined){
+                const feed=await this.runtime.events(item.seq-1);
+                if(!this.current(row))break;
+                valid=feed.sessionId===item.session&&matchesBudgetNotice(pending,feed.events.find(event=>event.seq===item.seq));
+              }else if(valid)valid=pending.noticeSeq===item.seq;
+              if(!valid){
+                this.db.prepare("UPDATE delivery SET state='discarded',payload=NULL,receipt=? WHERE channel=? AND session=? AND seq=?").run(JSON.stringify({code:'BUDGET_REQUEST_NO_LONGER_PENDING'}),row.id,row.session,item.seq);continue;
+              }
+            }
             this.db.prepare("UPDATE delivery SET state='sending' WHERE channel=? AND session=? AND seq=?").run(row.id,row.session,item.seq);
-            try{const result=await adapter.send(row.config,this.unseal(item.payload));if(result?.accepted!==true&&result?.sent!==true)throw new Error('DELIVERY_NOT_CONFIRMED');this.db.prepare("UPDATE delivery SET state='sent',receipt=?,payload=NULL WHERE channel=? AND session=? AND seq=?").run(JSON.stringify(result),row.id,row.session,item.seq);this.events.append(row.session,crypto.randomUUID(),'delivery-sent',{origin:row.id,messageSeq:item.seq,status:'success'});}
+            try{
+              const notice=item.kind==='budget-request'&&fresh.autonomy.pendingBudgetRequest.noticeText;
+              const result=await adapter.send(row.config,notice?'[系统] '+notice:this.unseal(item.payload));
+              if(result?.accepted!==true&&result?.sent!==true)throw new Error('DELIVERY_NOT_CONFIRMED');this.db.prepare("UPDATE delivery SET state='sent',receipt=?,payload=NULL WHERE channel=? AND session=? AND seq=?").run(JSON.stringify(result),row.id,row.session,item.seq);this.events.append(row.session,crypto.randomUUID(),'delivery-sent',{origin:row.id,messageSeq:item.seq,status:'success'});}
             catch(error){this.recordError(error,{operation:'delivery-send',channel:row.id});const delivery=error.definitelyRejected?'rejected':'unknown';this.db.prepare("UPDATE delivery SET state=?,receipt=? WHERE channel=? AND session=? AND seq=?").run(delivery,JSON.stringify({code:error.code??'DELIVERY_UNKNOWN'}),row.id,row.session,item.seq);this.events.append(row.session,crypto.randomUUID(),'delivery-'+delivery,{origin:row.id,messageSeq:item.seq,status:delivery==='rejected'?'failed':'unknown',code:error.code??'DELIVERY_UNKNOWN'});}
           }
           if(this.current(row))this.db.prepare('UPDATE channel SET error=NULL WHERE id=?').run(row.id);
         }catch(error){const failure=this.recordError(error,{operation:'channel-tick',channel:row.id});if(this.current(row))this.db.prepare('UPDATE channel SET error=? WHERE id=?').run(failure.code,row.id);}
       }
-      const fresh=await this.runtime.state();
+      const fresh=await this.runtime.state('runtime-status');
       if(fresh.inbox===0)this.preference('remote-wake',false);
       if(!this.closed&&!this.wakeBlock().blocked&&this.preference('remote-wake')&&this.preference('reply-enabled')&&!fresh.agentBusy&&fresh.desired==='paused'&&fresh.inbox>0&&fresh.canThink&&!['error','budget'].includes(fresh.stopReason))await this.controlRuntime({op:'once',sessionId:fresh.sessionId,expectedEpoch:fresh.cancelEpoch},{automatic:true});
     }finally{this.busy=false;}

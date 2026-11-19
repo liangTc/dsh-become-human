@@ -3,7 +3,7 @@ import {SourceConfig,SourceStatuses} from './native-source-config';
 import {validateEditorEntries} from './extension-config.mjs';
 import {useDraftGuard} from './native-shell';
 const states:any={queued:'等待处理',running:'正在应用',completed:'已完成',failed:'失败，需要处理',interrupted:'已中断，请核对'};
-const statusText=(job:any)=>job.recovery?.status==='restored'?'操作未完成，已恢复':states[job.status]??job.status;
+const statusText=(job:any)=>job.status==='running'&&job.waitingForIdle?'等待当前对话或任务结束':job.recovery?.status==='restored'?'操作未完成，已恢复':states[job.status]??job.status;
 const errors:any={EXTENSION_PAGE_INVALID:'扩展页面声明不符合 v1 格式，未加载。',EXTENSION_BEHAVIOR_REGISTRATION_FAILED:'扩展没有按声明接管行为，安装未完成；请查看下方恢复结果。',INVALID_RUNTIME_BEHAVIOR_OVERRIDE:'扩展声明了不支持的内置行为替换，请使用兼容版本。',RUNTIME_BEHAVIOR_OVERRIDE_CONFLICT:'同一个内置行为只能由一个扩展接管，请先移除旧替换包。',EXTENSION_RECOVERY_REQUIRED:'上次扩展操作尚未恢复，请先处理下方恢复提示。',EXTENSION_RECOVERY_CONFLICT:'配置在失败后又发生变化，为避免覆盖你的修改，本次没有恢复。',EXTENSION_RECOVERY_LOCK_REQUIRED:'缺少依赖锁定文件，无法准备可靠恢复；请先修复后台依赖环境。',EXTENSION_RECOVERY_CHANGED:'恢复快照已变化，未覆盖当前文件。',EXTENSION_RECOVERY_INSPECTION_REQUIRED:'中断时的文件状态未确认，需要人工核对后再恢复。',EXTENSION_SOURCE_CONFIG_INVALID:'请填写完整名称和公开地址；间隔为 1–1440 分钟，每个节点最多八个来源。',EXTENSION_SOURCE_ID_CONFLICT:'来源标识与其他已启用来源重复，请在高级配置中修改。',SOURCE_URL_NOT_ALLOWED:'地址不可用，请使用不含凭据的公开网址。',EXTENSION_EDITOR_INVALID:'扩展的配置表单声明有误，请联系扩展作者。',EXTENSION_SOURCE_INVALID:'请输入带明确版本的包名，或本机 .tgz 安装包的完整路径。',EXTENSION_ARCHIVE_REQUIRED:'本机安装包需要是 .tgz 文件。',EXTENSION_ARCHIVE_INVALID:'安装包无法解析或含不支持的文件，请重新打包。',EXTENSION_PACKAGE_UNSUPPORTED:'需要包含 DSH bundle 的 Human 扩展包。',EXTENSION_PACKAGE_PROTECTED:'不能在这里修改宿主或 Human 基础组件。',EXTENSION_NAMESPACE_REQUIRED:'扩展节点需要使用 human-extension. 名称，避免覆盖 Human 基础设置。',EXTENSION_NODE_CONFLICT:'扩展节点名称与已安装扩展重复，请更换扩展或修正节点名称。',EXTENSION_OPERATION_BUSY:'另一项扩展操作正在进行，请等待。',EXTENSION_CONFIGURATION_CHANGED:'扩展配置已变化，请刷新后重新提交。',EXTENSION_CLI_FAILED:'包管理器未完成安装，请检查包名、版本、网络和 DSH 插件诊断。',EXTENSION_INSTALL_INTERRUPTED:'操作中断，结果未确认。请核对安装列表，不要直接重复提交。',EXTENSION_CONFIGURATION_INVALID:'请保留本扩展的全部节点，只修改其配置或启用状态。'};
 export default function Extensions({api,ui,s,embedded=false,selected=null,catalog,onReload}:any){
  const {Button,Field,Input,Text,Check,Band,OptionalSection}=ui;
@@ -24,7 +24,7 @@ export default function Extensions({api,ui,s,embedded=false,selected=null,catalo
  return <section className="hn-extensions" aria-label="Human 行为扩展">
   {!embedded&&<h3>行为扩展</h3>}{!selected&&<p className="hn-note">安装后可为 Human 增加动作、事件和专属页面。</p>}
   {selected&&(error||loadError)&&<p className="hn-error" role="alert">{error||loadError}</p>}
-  {!selected&&<><Band>安装、更新或修改配置时会短暂停止后台，成功后恢复此前状态。失败时尝试恢复安装前的依赖和配置，自主活动保持暂停。恢复不回退聊天、记忆或扩展已经执行的外部操作。扩展是本机代码，只安装你信任的来源。</Band>
+  {!selected&&<><Band>扩展会等当前对话或任务结束，再短暂重启后台。成功后沿用原来的聊天、自主活动和手机回复设置。安装失败时会尝试恢复此前的依赖和配置，并暂停运行。请只安装你信任的扩展。</Band>
   {(error||loadError)&&<p className="hn-error" role="alert">{error||loadError}</p>}
   {blocked&&<Band><p>上次扩展操作需要恢复：{blocked.name}</p><p>{blocked.canRecover?'恢复安装前的依赖与配置，后台启动后保持暂停。':'操作中断，当前文件状态未确认；请先人工核对，不要重复安装或强行启动。'}</p>{blocked.canRecover&&<Button disabled={busy} onClick={()=>submit({action:'recover',operationId:blocked.id})}>恢复安装前状态</Button>}</Band>}
   <div className="hn-fields"><Field label="扩展安装来源" wide hint="示例：dsh-human-example@1.0.0，或服务器本机 .tgz 文件的完整路径。再次安装同名包即更新。"><Input aria-label="扩展安装来源" value={source} onChange={(v:string)=>{setSource(v);identity.current=null;}} placeholder="包名@版本 / 本机安装包路径"/></Field></div>

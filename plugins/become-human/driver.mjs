@@ -2,6 +2,7 @@ import {HumanPlugins} from './plugin-lifecycle.mjs';
 // DSH Web test driver. No tools; bounded text-only provider calls. Experimental, pinned ABI.
 import {logSafe} from './model-records.mjs';
 import {DatabaseSync} from 'node:sqlite';
+import {createHash} from 'node:crypto';
 import {modelFailureDiagnostic,saveModelFailure,clearModelFailure} from './model-failure.mjs';
 import {Service,createScope,agentEvents,z,createAssistantMessage,interruptedTurnClosers} from './api.mjs';
 import {DomainMemory} from './domain.mjs';
@@ -18,6 +19,7 @@ import {MemoryLifecycle} from './memory-lifecycle.mjs';
 import {runDevelopmentReview} from './development-runtime.mjs';
 import {WorkObservation} from './work-observation.mjs';
 import {runWorkObservation} from './work-observation-runtime.mjs';
+import {quietUntil} from './quiet-hours.mjs';
 import {runAutonomyTurn} from './autonomy.mjs';
 import {drainActivityFeedback} from './activity-feedback.mjs';
 import {LearningPack} from './learning-pack.mjs';
@@ -67,6 +69,31 @@ export class ControlJournal {
     this.db.exec('CREATE UNIQUE INDEX IF NOT EXISTS outbox_event ON outbox(agent,event_key)');
     this.db.exec('CREATE INDEX IF NOT EXISTS outbox_agent_kind_time ON outbox(agent,kind,created DESC,seq DESC)');
     this.db.exec('CREATE INDEX IF NOT EXISTS attempt_agent_started ON attempt(agent,started)');
+    this.db.exec(`CREATE INDEX IF NOT EXISTS attempt_turn_presentation ON attempt(agent,turn,started DESC,
+      json_extract(request,'$.lane'),json_extract(request,'$.taskId'),json_extract(request,'$.ownerInputRevision'),
+      json_extract(request,'$.pauseRevision'),json_extract(request,'$.admittedIds'))`);
+    this.db.exec('CREATE INDEX IF NOT EXISTS user_request_agent_message ON user_request(agent,message_id)');
+    // Keep only admitted message IDs in this index. Existing databases build it once.
+    // State polling must never load historical model prompts to find a retry candidate.
+    this.db.exec(`CREATE INDEX IF NOT EXISTS attempt_owner_retry_main ON attempt
+      (agent,started DESC,state,json_type(request,'$.lane'),json_extract(request,'$.admittedIds'))
+      WHERE json_array_length(request,'$.admittedIds')>0 AND json_extract(request,'$.purpose') IS NOT 'conversation-review';
+      DROP INDEX IF EXISTS attempt_owner_retry`);
+    if(!this.value('__system__','ownerReplyReceiptBackfill',false))this.transaction(()=>{
+      // Older local command replies can have no model attempt. Published origins
+      // retain their input IDs after the response stage has discarded its payload.
+      this.db.exec(`INSERT OR IGNORE INTO metadata(agent,key,value)
+        SELECT m.agent,'owner-replied:'||i.value,'true' FROM metadata m,json_each(m.value,'$.inputIds') i
+        WHERE m.key GLOB 'dialogue-origin:*' AND i.type='text';
+        INSERT OR IGNORE INTO metadata(agent,key,value)
+        SELECT a.agent,'owner-replied:'||i.value,'true' FROM response_stage r JOIN attempt a ON a.id=r.id
+        JOIN json_each(a.request,'$.admittedIds') i WHERE r.state='committed' AND i.type='text';
+        INSERT OR IGNORE INTO metadata(agent,key,value)
+        SELECT m.agent,'owner-replied:'||i.value,'true' FROM metadata m
+        JOIN outbox o ON o.agent=m.agent AND o.event_key='assistant:'||substr(m.key,16)
+        JOIN json_each(m.value) i WHERE m.key GLOB 'local-admitted:*' AND i.type='text'`);
+      this.put('__system__','ownerReplyReceiptBackfill',true);
+    });
     this.auditSequence=Math.max(this.db.prepare('SELECT max(seq) AS n FROM audit').get().n??0,this.value('__system__','auditSequence',0));
     this.events=new EventLog(this.db);
     const cursor=this.db.prepare("SELECT max(CAST(substr(id,5) AS INTEGER)) AS n FROM human_event WHERE id LIKE 'r:a:%'").get().n??0;
@@ -122,6 +149,24 @@ export class ControlJournal {
     finally{this.transactionDepth--;}
   }
   beginAttempt(id,rid,turn,epoch,request){this.db.prepare("INSERT OR IGNORE INTO attempt(id,agent,turn,epoch,state,request,started,trigger) VALUES(?,?,?,?,'prepared',?,?,?)").run(rid,id,turn,epoch,JSON.stringify(request),Date.now(),request?.purpose==='conversation-summary'?'conversation-summary':request?.admittedIds?.length?'new-input':'autonomous-tick');}
+  retryInputIds(agent,usable){
+    const completed=new Set();
+    const rows=this.db.prepare(`SELECT state,json_type(request,'$.lane') AS laneType,json_extract(request,'$.admittedIds') AS ids
+      FROM attempt INDEXED BY attempt_owner_retry_main WHERE agent=? AND json_array_length(request,'$.admittedIds')>0
+      AND json_extract(request,'$.purpose') IS NOT 'conversation-review'
+      ORDER BY started DESC,rowid DESC`).iterate(agent);
+    for(const row of rows){
+      const ids=JSON.parse(row.ids);
+      // Pre-lane histories have no intermediate tool/review steps. Modern
+      // turns can complete several calls before they publish a single reply.
+      if(!row.laneType&&['completed','wait'].includes(row.state)){for(const id of ids)completed.add(id);}
+      else if(['failed','cancelled','output-limit','interrupted'].includes(row.state)){
+        const eligible=ids.filter(id=>!completed.has(id)&&!this.value(agent,'owner-replied:'+id,false)&&usable(id));
+        if(eligible.length)return eligible;
+      }
+    }
+    return [];
+  }
   longRunStats(id){
     const baseline=this.value(id,'longRunBaseline',null);if(!baseline)return null;
     const groups=this.db.prepare("SELECT trigger,state,count(*) AS calls,sum(CASE WHEN usage_confidence='reported' THEN COALESCE(json_extract(usage,'$.totalTokens'),0) ELSE 0 END) AS reportedTokens,max(ended) AS lastEnded FROM attempt WHERE agent=? AND started>=? GROUP BY trigger,state").all(id,baseline.startedAt);
@@ -183,8 +228,9 @@ export class ControlJournal {
         this.put(row.agent,'lastAutonomousContact',Math.max(this.value(row.agent,'lastAutonomousContact',0),committed.contactAt));
       }
       if(payload.ownerBatch&&this.value(row.agent,'ownerBatch',null)?.id===payload.ownerBatch.id)this.put(row.agent,'ownerBatch',null);
+      const a=this.db.prepare('SELECT request FROM attempt WHERE id=?').get(rid),request=a?JSON.parse(a.request):{},messageId=payload.data?.message?.id,localInputs=messageId?this.value(row.agent,'local-admitted:'+messageId,[]):[],inputIds=payload.ownerBatch?.inputIds??request.admittedIds??localInputs;
+      if(Array.isArray(inputIds))for(const id of inputIds)if(typeof id==='string')this.put(row.agent,'owner-replied:'+id,true);
       if(row.kind==='MESSAGE'){
-        const a=this.db.prepare('SELECT request FROM attempt WHERE id=?').get(rid),request=a?JSON.parse(a.request):{},messageId=payload.data?.message?.id,localInputs=this.value(row.agent,'local-admitted:'+messageId,[]),inputIds=payload.ownerBatch?.inputIds??request.admittedIds??localInputs;
         // The native reply is durable before recording this relationship. Keep
         // the whole input batch for reconstruction after restart or compaction.
         if(messageId&&Array.isArray(inputIds)&&inputIds.every(key=>typeof key==='string')&&(inputIds.length||request.lane||payload.autonomyCommit||payload.reminderCommit))this.put(row.agent,'dialogue-origin:'+messageId,{inputIds,lane:inputIds.length?'foreground':'autonomous',turn:row.turn,attemptId:rid});
@@ -224,11 +270,22 @@ export class ControlJournal {
   }
   reconcile(session){
     this.assertAdmitted(session.id);
-    const id=session.id,events=session.snapshotEvents(),pending=new Map(),delivered=[];
+    const id=session.id,saved=this.value(id,'outboxProjection',null);
+    // The native log is append-only and exposes a half-open range API. Keep
+    // compatibility with older session adapters that only expose a full snapshot.
+    const snapshot=Number.isSafeInteger(session.seq)?null:session.snapshotEvents();
+    const end=snapshot?.length??session.seq;
+    const range=(from,to)=>snapshot?snapshot.slice(from,to):session.snapshotEvents(from,to);
+    const fingerprint=event=>createHash('sha256').update(JSON.stringify(event)).digest('hex');
+    const resume=saved?.offset>0&&saved.offset<=end&&fingerprint(range(saved.offset-1,saved.offset)[0])===saved.tail;
+    if(resume&&saved.offset===end)return;
+    const events=range(resume?saved.offset:0,end),delivered=[];
+    // Previously queued items already have outbox keys. Reserve their places
+    // so inserts and removals in this suffix preserve each lane's indices.
+    const lists={'next-step':new Array(resume?saved.nextStep:0),'next-turn':new Array(resume?saved.nextTurn:0)};
     const textOf=m=>m.content.filter(c=>c.type==='text').map(c=>c.text).join('');
     for(const e of events){
       if(e.type==='agent/inbox/spliced'){
-        const lists=pending.get('lists')??{'next-step':[],'next-turn':[]};pending.set('lists',lists);
         lists[e.data.target].splice(e.data.start,e.data.removedCount??0,...e.data.inserted);
       }
       if(e.type==='user/message')delivered.push({key:'user:'+e.data.id,kind:'user',text:textOf(e.data),time:e.time});
@@ -239,12 +296,13 @@ export class ControlJournal {
         delivered.push({key:'status:'+e.seq,kind:'status',text:label,time:e.time});
       }
     }
-    const lists=pending.get('lists');if(lists)for(const m of [...lists['next-step'],...lists['next-turn']])if(m.role==='user')delivered.push({key:'user:'+m.id,kind:'user',text:textOf(m)});
+    for(const lane of Object.values(lists))lane.forEach(m=>{if(m.role==='user')delivered.push({key:'user:'+m.id,kind:'user',text:textOf(m)});});
     this.transaction(()=>{
       for(const row of delivered)this.publish(id,row.text,row.kind,row.key,row.time??Date.now());
       const assistants=delivered.filter(r=>r.kind==='assistant');
-      this.put(id,'successes',assistants.length);
+      if(!resume||assistants.length)this.put(id,'successes',(resume?this.value(id,'successes',0):0)+assistants.length);
       if(assistants.length)this.put(id,'memory',assistants.at(-1).text.slice(0,300));
+      this.put(id,'outboxProjection',end?{offset:end,tail:fingerprint(events.at(-1)),nextStep:lists['next-step'].length,nextTurn:lists['next-turn'].length}:null);
     });
   }
   close(){this.db.exec('PRAGMA wal_checkpoint(TRUNCATE)');this.db.close();}
@@ -339,8 +397,9 @@ export class HumanAgent {
     });
   }
   async flush(){if(!await this.ctx.sessions.flush(this.session))throw new Error('No durability listener');}
-  async control(desired){
+  async control(desired,{manualCheck=false}={}){
     this.assertLive();this.factory.journal.set(this.id,desired);
+    this.manualCheck=manualCheck;
     this.factory.journal.audit(this.id,'control',{desired,epoch:this.desired().epoch});
     clearTimeout(this.timer);this.timer=undefined;
     if(desired==='running'){
@@ -355,6 +414,8 @@ export class HumanAgent {
   due(now=Date.now()){
     if(!this.ready||this.closed||this.desired().desired!=='running')return;
     if(now<this.desired().next_tick)return;
+    const resumeAt=quietUntil(this.factory.autonomy.settings(this.id),now);
+    if(resumeAt!==null){this.factory.journal.tickAt(this.id,resumeAt);return;}
     // Coalesce missed ticks, never replay every elapsed interval after sleep.
     this.factory.journal.audit(this.id,'timer-wake',{scheduledAt:this.desired().next_tick,lateMs:Math.max(0,now-this.desired().next_tick)});
     this.factory.journal.tickAt(this.id,now+this.factory.config.intervalMs);
@@ -362,7 +423,11 @@ export class HumanAgent {
   }
   arm(){
     if(this.timer||!this.ready||this.closed||this.desired().desired!=='running')return;
-    this.timer=this.ctx.agents.withoutInitiator(()=>setTimeout(()=>{this.timer=undefined;this.due();this.arm();},this.factory.config.intervalMs));
+    const now=Date.now(),stored=this.desired().next_tick,settings=this.factory.autonomy.settings(this.id);
+    const candidate=Math.max(now,stored||now+this.factory.config.intervalMs);
+    const next=quietUntil(settings,now)??quietUntil(settings,candidate)??(stored||candidate);
+    if(next!==stored)this.factory.journal.tickAt(this.id,next);
+    this.timer=this.ctx.agents.withoutInitiator(()=>setTimeout(()=>{this.timer=undefined;this.due();this.arm();},Math.max(1,next-now)));
   }
   armReminder(){
     clearTimeout(this.reminderTimer);this.reminderTimer=undefined;
@@ -394,11 +459,13 @@ export class HumanAgent {
   }
   async drive(signal){
     const reminderOnly=this.reminderWake;this.reminderWake=false;
+    const manualCheck=this.manualCheck;this.manualCheck=false;
     if(!this.inbox.nextTurn.length&&!this.inbox.nextStep.length&&pendingOwnerCommand(this))return runAutonomyTurn(this,signal);
     if(this.factory.reminders&&!this.inbox.nextTurn.length&&!this.inbox.nextStep.length){const reminder=this.factory.reminders.due(this.id);if(reminder)return runReminderTurn(this,signal,reminder);}
     if(!this.inbox.nextTurn.length&&!this.inbox.nextStep.length){const action=nextActionWork(this);if(action)return runActionTurn(this,signal,action);}
     if(reminderOnly&&!this.inbox.nextTurn.length&&!this.inbox.nextStep.length)return;
     const ownerPending=this.inbox.nextTurn.length||this.inbox.nextStep.length;
+    if(!ownerPending&&!manualCheck&&quietUntil(this.factory.autonomy.settings(this.id))!==null)return;
     if(!ownerPending&&this.factory.journal.value(this.id,'remaining',0)===null&&await runWorkObservation(this,signal))return;
     if(!ownerPending&&this.factory.journal.value(this.id,'remaining',0)===null&&await runDevelopmentReview(this,signal))return;
     if(this.factory.autonomy.settings(this.id).enabled||this.factory.config.interactiveOnly&&ownerPending)return runAutonomyTurn(this,signal);

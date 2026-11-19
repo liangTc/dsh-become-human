@@ -13,12 +13,33 @@ export class BehaviorRegistry {
   register(id,descriptor){
     if(typeof id!=='string'||!/^[a-z][a-z0-9._:-]{0,159}$/u.test(id)||this.providers.has(id)||!plain(descriptor)||!Number.isSafeInteger(descriptor.version)||descriptor.version<1||typeof descriptor.execute!=='function')fail('INVALID_BEHAVIOR');
     assertCapabilitySchema(descriptor.inputSchema);
+    if(descriptor.readyToResume!==undefined&&typeof descriptor.readyToResume!=='function')fail('INVALID_BEHAVIOR');
     const definition=Object.freeze({id,version:descriptor.version,title:text(descriptor.title,120),description:text(descriptor.description,1000),inputSchema:structuredClone(descriptor.inputSchema)});
     const provider={...descriptor,definition,fingerprint:hash(definition)};
     this.providers.set(id,provider);
     return ()=>{if(this.providers.get(id)===provider)this.providers.delete(id);};
   }
   available(agent,id){const p=this.providers.get(id);return !!p&&p.available?.(agent)!==false;}
+  readyToResume(agent,task,now){
+    const cp=task.checkpoint,p=this.providers.get(cp.behaviorId);
+    if(!p)return false;
+    if(!p.readyToResume||cp.behaviorResult?.status!=='waiting')return true;
+    try{
+      const ready=p.readyToResume(agent,{taskId:task.id,now,input:structuredClone(cp.plan?.input),result:structuredClone(cp.behaviorResult)});
+      if(typeof ready!=='boolean'){
+        if(typeof ready?.then==='function')Promise.resolve(ready).catch(()=>{});
+        fail('INVALID_BEHAVIOR_READINESS');
+      }
+      return ready;
+    }catch(error){
+      const code=/^[A-Z_]{3,80}$/.test(error?.message)?error.message:'BEHAVIOR_READINESS_FAILED';
+      const j=agent.factory.journal,key='behavior-readiness-error:'+task.id;
+      if(j.value(agent.id,key,null)!==code){
+        j.put(agent.id,key,code);j.audit(agent.id,'behavior-provider-held',{taskId:task.id,behaviorId:cp.behaviorId,code});
+      }
+      return false;
+    }
+  }
   definition(agent,id){const p=this.providers.get(id);return this.available(agent,id)?{...structuredClone(p.definition),fingerprint:p.fingerprint}:null;}
   validate(agent,id,input,fingerprint){const p=this.providers.get(id);if(!this.available(agent,id))fail('BEHAVIOR_UNAVAILABLE');if(fingerprint&&p.fingerprint!==fingerprint)fail('BEHAVIOR_DEFINITION_CHANGED');return validateCapabilityInput(p.definition.inputSchema,input);}
   eventReferences(agent,id,input){

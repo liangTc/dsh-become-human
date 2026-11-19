@@ -9,18 +9,19 @@
 
 A digital companion living in DSH: remembering shared experiences, developing its own tendencies, choosing actions in an event loop, and gaining capabilities through plugins.
 
-> **Test release `0.7.0-beta.40` · Work in progress.** [GitHub Release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.40) · [npm package](https://www.npmjs.com/package/dsh-become-human-web/v/0.7.0-beta.40) · [Verification scope](docs/RELEASE_BETA40.md)
+> **Test release `0.7.0-beta.41` · Work in progress.** [GitHub Release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.41) · [npm package](https://www.npmjs.com/package/dsh-become-human-web/v/0.7.0-beta.41) · [Verification scope](docs/RELEASE_BETA41.md)
 
 [简体中文](README.md) · [Installation](docs/INSTALLATION.md) · [Usage](docs/USAGE.md) · [Configuration](docs/CONFIGURATION.md) · [Testing status](docs/TESTING_STATUS.md) · [Architecture](docs/ARCHITECTURE.md)
 
 > [!WARNING]
-> **Test release · Development is incomplete.** The current public test release is `0.7.0-beta.40` (GitHub Prerelease). Windows, Node.js 24+, and DSH `0.2.0-rc.2` are required. Complete acceptance and long-running reliability remain unverified, including the fresh-DSH native DeepSeek flow; see [testing status](docs/TESTING_STATUS.md).
+> **Test release · Development is incomplete.** The current public test release is `0.7.0-beta.41` (GitHub Prerelease). Windows, Node.js 24+, and DSH `0.2.0-rc.2` are required. Complete acceptance and long-running reliability remain unverified, including the fresh-DSH native DeepSeek flow; see [testing status](docs/TESTING_STATUS.md).
 
-This checkout contains **`0.7.0-beta.40` development source**, which also has a prebuilt GitHub Release and npm package. The beta.5 downloads below do not include later development changes.
+The 0.7.0-beta.41 prerelease fixes duplicate replies after an explicit retry, conversation memory, rolling budgets, extension recovery and daylight-saving handling for quiet hours.
 
 | Version | Availability and status |
 | --- | --- |
-| `0.7.0-beta.40` | Current development source with local builds, upgrades and limited real-model/Web checks; available as a GitHub Prerelease and npm package |
+| `0.7.0-beta.41` | Current test release on npm and GitHub. The upgrade from beta.40 was checked with the DSH CLI and Chrome. |
+| `0.7.0-beta.40` | Published test release with local builds, upgrades and limited real-model/Web checks; available as a GitHub Prerelease and npm package |
 | `0.7.0-beta.5` | Historical test release, with a prebuilt bundle and SHA-256 file; see installation below |
 | `0.7.0-beta.4` | Historical test release; its package does not include beta.5 additions |
 
@@ -103,21 +104,21 @@ A manager bundle integrates with DSH Web. A separate runtime process owns the Hu
 Install the current test release into DSH Web:
 
 ```powershell
-npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add dsh-become-human-web@0.7.0-beta.40 --registry=https://registry.npmjs.org/
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add dsh-become-human-web@0.7.0-beta.41 --registry=https://registry.npmjs.org/
 ```
 
-The following beta.5 example is retained for historical reference.
+To install from a downloaded tarball, use the matching release files:
 
-Use the prebuilt bundle from the [v0.7.0-beta.5 prerelease](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.5). One `.tgz` installs both the Web plugin and its bundled runtime:
+Use the prebuilt bundle from the [v0.7.0-beta.41 prerelease](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.41). One `.tgz` installs both the Web plugin and its bundled runtime:
 
-1. Download the [installation package](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.5/dsh-become-human-web-0.7.0-beta.5.tgz) and its [SHA-256 file](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.5/dsh-become-human-web-0.7.0-beta.5.tgz.sha256).
+1. Download the [installation package](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.41/dsh-become-human-web-0.7.0-beta.41.tgz) and its [SHA-256 file](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.41/dsh-become-human-web-0.7.0-beta.41.tgz.sha256).
 2. Verify the checksum as described in the [installation guide](docs/INSTALLATION.md#使用预构建包推荐), then run this from your download directory:
 
 ```powershell
-npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./dsh-become-human-web-0.7.0-beta.5.tgz
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./dsh-become-human-web-0.7.0-beta.41.tgz
 ```
 
-The current npm package is beta.40; the beta.5 download example above is historical. The Git repository and GitHub source ZIP omit generated bundles and cannot be installed directly as a prebuilt plugin. Developers can [build a `.tgz` from source](docs/INSTALLATION.md#从源码构建). The detailed guides are currently in Chinese.
+The current npm package is beta.41; the tarball above contains the same plugin. The Git repository and GitHub source ZIP omit generated bundles and cannot be installed directly as a prebuilt plugin. Developers can [build a `.tgz` from source](docs/INSTALLATION.md#从源码构建). The detailed guides are currently in Chinese.
 
 **Known beta.5 fresh-install issue:** initial Human creation can fail because of initialization order. The fix is in beta.6 development source, and is included in this release. Read the [testing status](docs/TESTING_STATUS.md) before installing; existing-install upgrade checks do not establish clean-install success.
 

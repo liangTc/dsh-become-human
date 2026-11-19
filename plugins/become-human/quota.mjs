@@ -1,4 +1,11 @@
 const DAY=86400000;
+export function signedBudgetTime(ledger,agent){
+  if(ledger?.latestBudgetTime)return ledger.latestBudgetTime(agent);
+  const ids=ledger?.autonomyAgents?.(agent)??new Set([agent]);
+  let latest=0;
+  for(const entry of ledger?.budget?.entries?.values()??[])if(ids.has(entry.agent))latest=Math.max(latest,entry.created??0);
+  return latest;
+}
 export function quotaWindow(policy,now){
   let start,end;
   if(policy.budgetWindow==='rolling-day'){start=now-DAY;end=null;}

@@ -35,18 +35,45 @@ export class SafetyLedger {
     for(const [i,row] of this.rows.entries()){
       if(row.seq!==i+1||row.previous!==previous||row.hash!==this.mac({seq:row.seq,id:row.id,kind:row.kind,request_hash:row.request_hash,data:row.data,previous:row.previous}))throw new Error('BLOCKED_CONTROL_HISTORY');previous=row.hash;
     }
-    this.budget={legacyUsed:0,base:0,round:null,allowance:0,localQuotaEnabled:true,entries:new Map()};
+    this.budget={legacyUsed:0,base:0,round:null,allowance:0,localQuotaEnabled:true,entries:new Map(),dispatched:new Set()};
+    // Derive all read indexes from the verified chain, including pre-index ledgers.
+    this.policies=new Map();this.grants=new Map();this.revokedGrants=new Map();this.retirements=[];
     for(const row of this.rows){const data=JSON.parse(row.data);
+      if(row.kind==='autonomy-policy')this.policies.set(data.agent,row.data);
+      if(row.kind==='autonomy-grant'){
+        if(!this.grants.has(data.agent))this.grants.set(data.agent,[]);
+        this.grants.get(data.agent).push(data);
+      }
+      if(row.kind==='autonomy-grant-revoke'){
+        if(!this.revokedGrants.has(data.agent))this.revokedGrants.set(data.agent,new Set());
+        this.revokedGrants.get(data.agent).add(data.id);
+      }
+      if(row.kind==='retire')this.retirements.push({oldId:data.oldId,newId:data.newId});
       if(row.kind==='budget-initial')Object.assign(this.budget,{legacyUsed:data.used,base:data.used,round:data.round,allowance:data.allowance});
       if(row.kind==='budget-round')Object.assign(this.budget,{base:data.base,round:data.round,allowance:data.allowance});
       if(row.kind==='budget-reserve')this.budget.entries.set(data.rid,{rid:data.rid,amount:data.amount,status:'prepared',agent:data.agent,budgetClass:data.budgetClass??'legacy',created:data.created??0,roundId:data.roundId});
-      if(row.kind==='budget-dispatch'&&this.budget.entries.has(data.rid))this.budget.entries.get(data.rid).status='dispatched';
+      if(row.kind==='budget-dispatch'){
+        this.budget.dispatched.add(data.rid);
+        if(this.budget.entries.has(data.rid))this.budget.entries.get(data.rid).status='dispatched';
+      }
       if(row.kind==='budget-settle'&&this.budget.entries.has(data.rid))Object.assign(this.budget.entries.get(data.rid),{amount:data.amount,status:'settled'});
       if(row.kind==='budget-release'&&this.budget.entries.has(data.rid))Object.assign(this.budget.entries.get(data.rid),{amount:0,status:'released'});
       if(row.kind==='quota-policy')this.budget.localQuotaEnabled=data.enabled;
     }
+    this.indexBudgetEntries();
   }
-  used(){return this.budget.legacyUsed+[...this.budget.entries.values()].reduce((n,r)=>n+r.amount,0);}
+  indexBudgetEntries(){
+    this.latestEntryTimes=new Map();this.autonomousByTime=new Map();this.totalUsed=this.budget.legacyUsed;
+    for(const entry of this.budget.entries.values()){
+      this.totalUsed+=entry.amount;
+      this.latestEntryTimes.set(entry.agent,Math.max(this.latestEntryTimes.get(entry.agent)??0,entry.created));
+      if(entry.budgetClass!=='autonomous'||entry.status==='released')continue;
+      if(!this.autonomousByTime.has(entry.agent))this.autonomousByTime.set(entry.agent,[]);
+      this.autonomousByTime.get(entry.agent).push(entry);
+    }
+    for(const entries of this.autonomousByTime.values())entries.sort((a,b)=>a.created-b.created);
+  }
+  used(){return this.totalUsed;}
   appendSync(id,kind,data){
     const requestHash=hash({kind,data}),prior=this.rows.find(r=>r.id===id);if(prior){if(prior.request_hash!==requestHash)throw new Error('REQUEST_ID_CONFLICT');return prior;}
     const body={seq:this.rows.length+1,id,kind,request_hash:requestHash,data:JSON.stringify(data),previous:this.rows.at(-1)?.hash??''};
@@ -62,10 +89,30 @@ export class SafetyLedger {
     await this.anchor();
   }
   async configureLocalQuota(enabled){if(typeof enabled!=='boolean')throw new Error('INVALID_QUOTA_POLICY');if(this.budget.localQuotaEnabled!==enabled)this.appendSync('quota:'+crypto.randomUUID(),'quota-policy',{enabled});await this.anchor();}
-  autonomyPolicy(agent){return this.rows.filter(r=>r.kind==='autonomy-policy').map(r=>JSON.parse(r.data)).findLast(p=>p.agent===agent)?.settings;}
-  autonomyAgents(agent){const ids=new Set([agent]);for(const row of [...this.rows].reverse())if(row.kind==='retire'){const data=JSON.parse(row.data);if(ids.has(data.newId))ids.add(data.oldId);}return ids;}
-  autonomyEntries(agent,start){const ids=this.autonomyAgents(agent);return [...this.budget.entries.values()].filter(e=>ids.has(e.agent)&&e.budgetClass==='autonomous'&&e.created>=start&&e.status!=='released');}
-  autonomyGrants(agent,now){const revoked=new Set(this.rows.filter(r=>r.kind==='autonomy-grant-revoke').map(r=>JSON.parse(r.data)).filter(g=>g.agent===agent).map(g=>g.id));return this.rows.filter(r=>r.kind==='autonomy-grant').map(r=>JSON.parse(r.data)).filter(g=>g.agent===agent&&!revoked.has(g.id)&&g.created<=now&&g.expires>now);}
+  autonomyPolicy(agent){const data=this.policies.get(agent);return data?JSON.parse(data).settings:undefined;}
+  autonomyAgents(agent){
+    const ids=new Set([agent]);
+    for(let i=this.retirements.length-1;i>=0;i--){const row=this.retirements[i];if(ids.has(row.newId))ids.add(row.oldId);}
+    return ids;
+  }
+  latestBudgetTime(agent){
+    let latest=0;for(const id of this.autonomyAgents(agent))latest=Math.max(latest,this.latestEntryTimes.get(id)??0);
+    return latest;
+  }
+  autonomyEntries(agent,start){
+    const result=[];
+    for(const id of this.autonomyAgents(agent)){
+      const entries=this.autonomousByTime.get(id)??[];
+      let low=0,high=entries.length;
+      while(low<high){const mid=Math.floor((low+high)/2);if(entries[mid].created<start)low=mid+1;else high=mid;}
+      for(let i=low;i<entries.length;i++)result.push(entries[i]);
+    }
+    return result;
+  }
+  autonomyGrants(agent,now){
+    const revoked=this.revokedGrants.get(agent);
+    return (this.grants.get(agent)??[]).filter(g=>!revoked?.has(g.id)&&g.created<=now&&g.expires>now).map(g=>({...g}));
+  }
   reserveBudget(rid,agent,amount,options={}){
     const budgetClass=options.budgetClass??'legacy',created=options.created??Date.now();
     if(!['legacy','autonomous','foreground'].includes(budgetClass))throw new Error('INVALID_BUDGET_CLASS');
@@ -81,8 +128,8 @@ export class SafetyLedger {
   settleBudget(rid,actual){if(actual!==undefined&&(!Number.isSafeInteger(actual)||actual<0))throw new Error('INVALID_REPORTED_USAGE');const row=this.budget.entries.get(rid);if(!row||row.status==='released')return;const amount=actual===undefined?row.amount:row.status==='settled'?Math.max(row.amount,actual):actual;if(row.status==='settled'&&row.amount===amount)return;this.appendSync('settle:'+rid+':'+amount,'budget-settle',{rid,amount});}
   releaseBudget(rid){const row=this.budget.entries.get(rid);if(row?.status!=='prepared')return;this.appendSync('release:'+rid,'budget-release',{rid});}
   async anchor(){const last=this.rows.at(-1);await atomic(path.join(this.root,'anchor.json'),JSON.stringify({id:this.id,keyId:this.mac('key-identity'),seq:this.rows.length,hash:last?.hash??''}));}
-  assert(id){if(this.blocked||this.rows.some(r=>r.kind==='retire'&&JSON.parse(r.data).oldId===id))throw new Error(this.blocked?'BLOCKED_CONTROL_HISTORY':'SESSION_RETIRED');}
-  retired(id){return this.rows.some(r=>r.kind==='retire'&&JSON.parse(r.data).oldId===id);}
+  assert(id){if(this.blocked||this.retired(id))throw new Error(this.blocked?'BLOCKED_CONTROL_HISTORY':'SESSION_RETIRED');}
+  retired(id){return this.retirements.some(r=>r.oldId===id);}
   async prepare(id,kind,data){
     const row=this.appendSync(id,kind,data);try{await this.anchor();}catch{this.blocked=true;throw new Error('CONTROL_ANCHOR_FAILED');}return row;
   }

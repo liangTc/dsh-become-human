@@ -2,11 +2,8 @@ import {createHash} from 'node:crypto';
 import {syncCapabilityBehaviors,behaviorTaskReady} from './capability-behaviors.mjs';
 import {choiceOpportunity,checkpointForOpportunity} from './behavior-selection.mjs';
 import {boardCandidate,matterAllowed} from './cognition-runtime.mjs';
-import {learningPolicyVersion} from './learning-policy.mjs';
-import {routeDisposition} from './learning-engagement.mjs';
-import {learningKinds,LearningPack} from './learning-pack.mjs';
+import {isLearningActivity,learningCheckpointPolicy,resetLearningPlan,selectionSchemaVersion,LearningPack} from './learning-pack.mjs';
 import {collectContactOpportunities,careQuestion} from './contact-opportunities.mjs';
-import {ownerAttributionRisk} from './learning.mjs';
 import {socialStatus,socialCandidate} from './social.mjs';
 const key=value=>createHash('sha256').update(value).digest('hex');
 
@@ -26,7 +23,7 @@ function holdUnavailableBehavior(agent,task){
 // Selection, execution and delivery remain under the driver's single lane.
 // Includes the context schema and full active profile so cached plans from an
 // older hidden persona are reselected without retrying failed tasks.
-export const selectionMemoryKey=(agent,kind)=>key(JSON.stringify({learningPolicyVersion,relationship:agent.factory.relationship?.context(agent.id)??null,persona:agent.factory.autonomy.persona(agent.id),developmentVersion:agent.factory.personaDevelopment?.snapshot(agent.id).version??null,cognitionRevision:agent.factory.cognition?.selectionRevision(agent.id)??null,workMemoryRefs:['chat','care'].includes(kind)?agent.factory.workObservation?.context(agent.id,{limit:2}).map(row=>[row.id,row.version])??[]:[],memories:agent.factory.domain.list(agent.id,{limit:20}).map(m=>({id:m.id,version:m.version}))}));
+export const selectionMemoryKey=(agent,kind)=>key(JSON.stringify({learningPolicyVersion:selectionSchemaVersion(kind),relationship:agent.factory.relationship?.context(agent.id)??null,persona:agent.factory.autonomy.persona(agent.id),developmentVersion:agent.factory.personaDevelopment?.snapshot(agent.id).version??null,cognitionRevision:agent.factory.cognition?.selectionRevision(agent.id)??null,workMemoryRefs:['chat','care'].includes(kind)?agent.factory.workObservation?.context(agent.id,{limit:2}).map(row=>[row.id,row.version])??[]:[],memories:agent.factory.domain.list(agent.id,{limit:20}).map(m=>({id:m.id,version:m.version}))}));
 
 export async function candidate(agent,signal,settings,now=Date.now()){
   const store=agent.factory.autonomy,j=agent.factory.journal,id=agent.id,pack=agent.factory.learningPack??new LearningPack();
@@ -35,31 +32,48 @@ export async function candidate(agent,signal,settings,now=Date.now()){
   const lastUserEvent=agent.session.snapshotEvents().findLast(e=>e.type==='user/message'),lastUser=lastUserEvent?{id:lastUserEvent.data.id,time:lastUserEvent.time}:null;
   const anchor=lastUser?.id??'initial:'+store.persona(id,'selection').version,social=socialStatus(j,agent.factory.domain,id,settings,now,lastUser),chat=socialCandidate(j,agent.factory.domain,id,settings,now,lastUser);
   const userTime=lastUser?.time??j.value(id,'autonomyActivatedAt',now),contactReady=!store.quiet(settings,now)&&now-Math.max(j.value(id,'lastAutonomousContact',0),userTime)>=settings.contactCooldownMs&&(!settings.socialEnabled||social.canContact);
-  const pending=(store.pendingTasks?.(id)??[store.pending(id)].filter(Boolean)).find(row=>!holdUnavailableBehavior(agent,store.getTask(row.id))&&!pack.hold(agent,store.getTask(row.id),settings));
-  if(pending){
-    const task=store.getTask(pending.id),learning=['research','learn-ai'].includes(task.kind),note=task.checkpoint.noteId?store.note(id,task.checkpoint.noteId):null;
-    const allowed=task.kind==='behavior-choice'?false:task.kind==='behavior'?agent.factory.behaviors?.available(agent,task.checkpoint.behaviorId):task.kind==='research'?settings.learningEnabled&&settings.searchEnabled:task.kind==='learn-ai'?settings.learningEnabled&&(settings.sources.some(s=>s.url===(task.checkpoint.sourceSpec?.url??task.checkpoint.source?.requestedUrl))||settings.searchEnabled&&!!task.checkpoint.source?.discovery):task.kind==='write-report'?true:settings.proactiveEnabled;
-    const changed=!allowed||(task.checkpoint.pluginEventIds?.length&&!agent.factory.pluginEvents?.valid(id,task.checkpoint.pluginEventIds))||!matterAllowed(agent,task)||agent.factory.goals&&!agent.factory.goals.taskAllowed(id,task)||task.persona_version!==store.persona(id,'selection').version||task.checkpoint.noteId&&(!note||note.feedback?.value==='not-now'||j.value(id,'learning-shared:'+note.id,false))||task.kind==='care'&&task.checkpoint.anchor!==anchor||task.kind==='chat'&&(!settings.socialEnabled||task.checkpoint.anchor!==social.anchor)||task.checkpoint.correction&&store.correction(id,task.checkpoint.sourceSpec?.url??task.checkpoint.source?.requestedUrl??task.checkpoint.source?.url)?.revision!==task.checkpoint.correction.revision;
-    const outreach=task.kind==='share-insight'&&note?routeDisposition(j,agent.factory.domain,id,(note.data.researchQuestion??'')+' '+note.data.title,now):null;
-    if(changed||task.kind==='share-insight'&&(!store.offerableNote(id,note)||outreach?.cooldownUntil>now))store.update(task.id,'cancelled',{...task.checkpoint,reason:'context-or-behavior-changed'});
-    else if(!store.deferred(id,task.checkpoint,now)&&(task.kind==='behavior'?behaviorTaskReady(agent,task):learning||task.kind==='write-report'||(task.kind==='chat'?social.ready:contactReady))){
-      const memoryKey=selectionMemoryKey(agent,task.kind);
-      // Once a capability has been submitted, preserve its exact input and
-      // idempotency key across owner input and approval. Never re-plan it.
-      const unsupportedPlan=task.kind==='share-insight'&&task.checkpoint.plan&&ownerAttributionRisk(task.checkpoint.plan.question+' '+task.checkpoint.plan.value);
-      const missingSearchQuery=task.kind==='research'&&!task.checkpoint.source&&task.checkpoint.plan&&typeof task.checkpoint.plan.searchQuery!=='string';
-      const socialChanged=task.kind==='chat'&&chat&&key(JSON.stringify(task.checkpoint.social))!==key(JSON.stringify(chat.social));
-      if(task.kind!=='behavior'&&(task.checkpoint.memoryKey!==memoryKey||unsupportedPlan||missingSearchQuery||socialChanged)){const checkpoint={...task.checkpoint,memoryKey,...(task.kind==='care'?{candidate:{...task.checkpoint.candidate,question:careQuestion}}:{}),...(task.kind==='chat'&&chat?{social:chat.social}:{})};delete checkpoint.plan;delete checkpoint.learningDraft;if(task.kind==='research'){delete checkpoint.discovery;delete checkpoint.researchReads;checkpoint.source=null;}store.update(task.id,'ready',checkpoint);j.audit(id,'autonomy-plan-invalidated',{taskId:task.id,reason:unsupportedPlan?'unsupported-owner-attribution':'selection-context-changed'});}
-      return {task:store.getTask(task.id)};
+  const after=j.value(id,'pendingTaskCursor',null);
+  const rows=store.pendingTasks?.(id,{after,limit:32})??[store.pending(id)].filter(Boolean);
+  const personaVersion=rows.length?store.persona(id,'selection').version:null;
+  for(const row of rows){
+    let task=store.getTask(row.id);
+    if(holdUnavailableBehavior(agent,task)||pack.hold(agent,task,settings))continue;
+    if(task.checkpoint.learningHold||task.checkpoint.behaviorHold)task=store.getTask(row.id);
+    const cp=task.checkpoint,policy=learningCheckpointPolicy(agent,task,{settings,now,contactReady});
+    const allowed=policy?policy.allowed:task.kind==='write-report'||task.kind==='behavior'||task.kind==='care'&&settings.proactiveEnabled&&cp.anchor===anchor||task.kind==='chat'&&settings.proactiveEnabled&&settings.socialEnabled&&cp.anchor===social.anchor;
+    if(!allowed||task.persona_version!==personaVersion||!matterAllowed(agent,task)||agent.factory.goals&&!agent.factory.goals.taskAllowed(id,task)||cp.pluginEventIds?.length&&!agent.factory.pluginEvents?.valid(id,cp.pluginEventIds)){
+      store.update(task.id,'cancelled',{...cp,reason:'context-or-behavior-changed'});continue;
     }
+    if(store.deferred(id,cp,now))continue;
+    let ready=policy?.ready;
+    if(!policy){
+      if(task.kind==='behavior')ready=behaviorTaskReady(agent,task)&&agent.factory.behaviors.readyToResume?.(agent,task,now)!==false;
+      else ready=task.kind==='write-report'||(task.kind==='chat'?social.ready:contactReady);
+    }
+    if(!ready)continue;
+    // A submitted capability must keep its exact input and idempotency key.
+    if(task.kind!=='behavior'){
+      const memoryKey=selectionMemoryKey(agent,task.kind),socialChanged=task.kind==='chat'&&chat&&key(JSON.stringify(cp.social))!==key(JSON.stringify(chat.social));
+      if(cp.memoryKey!==memoryKey||policy?.replan||socialChanged){
+        const checkpoint={...cp,memoryKey};delete checkpoint.plan;
+        if(task.kind==='care')checkpoint.candidate={...cp.candidate,question:careQuestion};
+        if(task.kind==='chat'&&chat)checkpoint.social=chat.social;
+        resetLearningPlan(task.kind,checkpoint);
+        store.update(task.id,'ready',checkpoint);
+        j.audit(id,'autonomy-plan-invalidated',{taskId:task.id,reason:policy?.replan??'selection-context-changed'});
+      }
+    }
+    if(rows.length>1)j.put(id,'pendingTaskCursor',row);
+    return {task:store.getTask(task.id)};
   }
+  if(rows.length===32)j.put(id,'pendingTaskCursor',rows.at(-1));
   agent.factory.plugins?.selection({id:'selection:'+now,phase:'selection',now});
   const opportunities=[];
-  const offer=next=>{if(next&&(!(learningKinds.has(next.kind)||next.kind==='share-insight')||pack.available(settings))&&!store.deferred(id,checkpointForOpportunity(next),now))opportunities.push(next);};
+  const offer=next=>{if(next&&(!isLearningActivity(next.kind)||pack.available(settings))&&!store.deferred(id,checkpointForOpportunity(next),now))opportunities.push(next);};
   offer(chat);offer(agent.factory.goals?.candidate(id,settings,now));offer(boardCandidate(agent,settings,{chat,now}));
   // Build opportunities without network access. Only the chosen source is
   // fetched, after a model decision and current budget/permission checks.
-  pack.collect(agent,{settings,now,offer});
+  pack.collect(agent,{settings,now,offer,contactReady});
   collectContactOpportunities(agent,{settings,now,offer,contactReady,anchor});
   // One scheduler scan advances event visibility, even when a provider has no
   // useful action. Read-only status queries never change this cursor.

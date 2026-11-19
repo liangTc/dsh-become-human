@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {readSourceModelConfiguration} from './supervisor.mjs';
 import {getPresetConfig} from './runtime/preset-config.mjs';
+import {defaultQuietHours,zoneOffsetMinutes} from './runtime/quiet-hours.mjs';
 
 const fail=code=>{throw new Error(code);};
 const profileName=value=>typeof value==='string'&&/^[a-zA-Z0-9_-]+$/.test(value);
@@ -15,20 +16,21 @@ function cliProfile(){
 }
 function currentOffset(timeZone){
  try{
-  const now=new Date(),formatter=new Intl.DateTimeFormat('en-US',{timeZone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'});
-  const parts=Object.fromEntries(formatter.formatToParts(now).filter(part=>part.type!=='literal').map(part=>[part.type,Number(part.value)]));
-  const offset=Math.round((Date.UTC(parts.year,parts.month-1,parts.day,parts.hour,parts.minute,parts.second)-Math.floor(now.getTime()/1000)*1000)/60000);
-  if(!Number.isInteger(offset)||offset < -720||offset > 840)fail('INVALID_SETUP_TIMEZONE');return offset;
- }catch{fail('INVALID_SETUP_TIMEZONE');}
+  const offset=zoneOffsetMinutes(timeZone,Date.now());
+  if(offset>=-720&&offset<=840)return offset;
+ }catch{}
+ fail('INVALID_SETUP_TIMEZONE');
 }
 function validatedInput(input){
- const allowed=['op','sessionId','requestId','expectedRevision','provider','model','personaPreset','budgetPreset','ownerName','timeZone','startAutonomy'];
+ const allowed=['op','sessionId','requestId','expectedRevision','provider','model','personaPreset','budgetPreset','ownerName','timeZone','startAutonomy','quietStart','quietEnd'];
  if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).some(key=>!allowed.includes(key)))fail('INVALID_SETUP_REQUEST');
  if(typeof input.requestId!=='string'||!/^[a-zA-Z0-9._:-]{8,128}$/.test(input.requestId)||!Number.isSafeInteger(input.expectedRevision)||input.expectedRevision<1)fail('INVALID_SETUP_REQUEST');
  for(const key of ['provider','model'])if(typeof input[key]!=='string'||!input[key].trim()||input[key].length>256)fail('INVALID_SETUP_REQUEST');
  if(typeof input.personaPreset!=='string'||typeof input.budgetPreset!=='string'||typeof input.ownerName!=='string'||input.ownerName.length>80||typeof input.timeZone!=='string'||input.timeZone.length>100||typeof input.startAutonomy!=='boolean')fail('INVALID_SETUP_REQUEST');
  currentOffset(input.timeZone);
- return {requestId:input.requestId,provider:input.provider,model:input.model,personaPreset:input.personaPreset,budgetPreset:input.budgetPreset,ownerName:input.ownerName.trim(),timeZone:input.timeZone,startAutonomy:input.startAutonomy};
+ const {quietStart=defaultQuietHours.quietStart,quietEnd=defaultQuietHours.quietEnd}=input;
+ if(![quietStart,quietEnd].every(hour=>Number.isInteger(hour)&&hour>=0&&hour<24))fail('INVALID_SETUP_REQUEST');
+ return {requestId:input.requestId,provider:input.provider,model:input.model,personaPreset:input.personaPreset,budgetPreset:input.budgetPreset,ownerName:input.ownerName.trim(),timeZone:input.timeZone,startAutonomy:input.startAutonomy,quietStart,quietEnd};
 }
 
 /** First-run state belongs to the manager, never to the user's profile patch. */
@@ -48,6 +50,10 @@ export class HumanOnboarding {
   const sourceHome=config.sourceHome??profileContext?.home??process.env.DSH_HOME;
   const sourceProfile=config.sourceProfile??profileContext?.name??cliProfile();
   instance.config={...config,sourceHome,sourceProfile,runtimeHome:config.runtimeHome??path.join(root,'runtime-home'),runtimeProfile:config.runtimeProfile??'become-human-runtime',provider:config.provider??stored?.input?.provider,model:config.model??stored?.input?.model};
+  if(stored?.phase==='complete'&&stored.sessionId&&Number.isSafeInteger(stored.completedAt)){
+   const zone=stored.input.timeZone;
+   instance.config.legacyQuietHours={sessionId:stored.sessionId,zone,offset:zoneOffsetMinutes(zone,stored.completedAt)};
+  }
   instance.originalSelection={provider:config.provider,model:config.model};
   instance.saved=stored;
   const identityFile=path.join(instance.config.runtimeHome,'become-human/agent.json');let identity=null,identityPresent=false;
@@ -140,7 +146,7 @@ export class HumanOnboarding {
     await this.persist({...this.saved,steps:{...this.saved.steps,persona:true}});state=await this.runtime.state();
    }
    if(!this.saved.steps.autonomy){
-    const settings={...budget,timeZoneOffsetMinutes:currentOffset(selection.timeZone),enabled:selection.startAutonomy,learningEnabled:false,proactiveEnabled:selection.startAutonomy,socialEnabled:selection.startAutonomy,searchEnabled:false,wakeIntervalMs:this.config.intervalMs};
+    const settings={...budget,quietStart:selection.quietStart,quietEnd:selection.quietEnd,quietTimeZone:selection.timeZone,timeZoneOffsetMinutes:currentOffset(selection.timeZone),enabled:selection.startAutonomy,learningEnabled:false,proactiveEnabled:selection.startAutonomy,socialEnabled:selection.startAutonomy,searchEnabled:false,wakeIntervalMs:this.config.intervalMs};
     if(Object.keys(settings).some(key=>settings[key]!==state.autonomy.settings[key]))await this.runtime.control({op:'autonomy-configure',sessionId:state.sessionId,expectedRevision:state.management.revision,settings});
     await this.persist({...this.saved,steps:{...this.saved.steps,autonomy:true}});state=await this.runtime.state();
    }

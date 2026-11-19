@@ -2,9 +2,11 @@ import React,{useEffect,useRef,useState} from 'react';
 import personaCatalog from './runtime/presets/personas.json';
 import budgetCatalog from './runtime/presets/autonomy-budgets.json';
 import css from './native-onboarding.css';
+import {QuietHours,quietRange} from './native-quiet-hours';
+import {defaultQuietHours} from './runtime/quiet-hours.mjs';
 
 type Route={provider:string;model:string;providerLabel?:string;modelLabel?:string;adapter?:'deepseek-native'|'pi-ai';credentialReady:boolean};
-type Choices={provider:string;model:string;personaPreset:string;budgetPreset:string;ownerName:string;timeZone:string;startAutonomy:boolean};
+type Choices={provider:string;model:string;personaPreset:string;budgetPreset:string;ownerName:string;timeZone:string;startAutonomy:boolean;quietStart:number;quietEnd:number};
 const personas=personaCatalog.presets,budgets=budgetCatalog.presets;
 const steps=['选择模型','人物与额度','确认并启动'];
 const routeKey=(value:{provider:string;model:string})=>JSON.stringify([value.provider,value.model]);
@@ -13,7 +15,7 @@ const browserTimeZone=()=>{try{return Intl.DateTimeFormat().resolvedOptions().ti
 const validTimeZone=(value:string)=>{try{new Intl.DateTimeFormat('zh-CN',{timeZone:value}).format();return !!value.trim();}catch{return false;}};
 const initialChoices=(setup:any):Choices=>{
  const selected=setup.pending??setup.defaultRoute??setup.models?.find((route:Route)=>route.credentialReady)??{};
- return {provider:selected.provider??'',model:selected.model??'',personaPreset:setup.pending?.personaPreset??'zhiqiu',budgetPreset:setup.pending?.budgetPreset??'low',ownerName:setup.pending?.ownerName??'',timeZone:setup.pending?.timeZone??browserTimeZone(),startAutonomy:setup.pending?.startAutonomy===true};
+ return {provider:selected.provider??'',model:selected.model??'',personaPreset:setup.pending?.personaPreset??'zhiqiu',budgetPreset:setup.pending?.budgetPreset??'low',ownerName:setup.pending?.ownerName??'',timeZone:setup.pending?.timeZone??browserTimeZone(),quietStart:setup.pending?.quietStart??defaultQuietHours.quietStart,quietEnd:setup.pending?.quietEnd??defaultQuietHours.quietEnd,startAutonomy:setup.pending?.startAutonomy===true};
 };
 const number=(value:number)=>value.toLocaleString('zh-CN');
 
@@ -78,13 +80,14 @@ export default function Onboarding({api,s,busy,ui,error='',transportError=''}:an
     {step===1&&<fieldset disabled={disabled} className="hn-onboarding-fieldset">
      <legend>选择人物</legend><div className="hn-onboarding-choices">{personas.map(item=><label key={item.id} className={'hn-onboarding-choice'+(choices.personaPreset===item.id?' hn-onboarding-choice-selected':'')}><input type="radio" name="human-onboarding-persona" value={item.id} checked={choices.personaPreset===item.id} onChange={()=>patch('personaPreset',item.id)}/><div><strong>{item.name}</strong><p>{item.description}</p></div></label>)}</div>
      <details className="hn-onboarding-preview"><summary>查看{persona.config.name}的人物设定</summary><dl>{[['name','名字'],['role','角色与关系'],['corePrompt','核心人格'],['interests','兴趣'],['goals','长期方向']].map(([key,label])=><div key={key}><dt>{label}</dt><dd>{(persona.config as any)[key]}</dd></div>)}</dl></details>
-     <div className="hn-fields"><Field label="希望 Human 怎样称呼你 · 可选" hint="稍后可以在“人格与关系”中补充资料。"><Input value={choices.ownerName} onChange={(value:string)=>patch('ownerName',value)} maxLength={64} autoComplete="nickname" placeholder="例如：阿天"/></Field><Field label="你的时区" hint="默认使用浏览器时区，按创建时的 UTC 偏移保存。夏令时切换后需在设置中校正。"><Input value={choices.timeZone} onChange={(value:string)=>patch('timeZone',value)} maxLength={100} spellCheck={false} placeholder="Asia/Shanghai"/></Field></div>
+     <div className="hn-fields"><Field label="希望 Human 怎样称呼你 · 可选" hint="稍后可以在“人格与关系”中补充资料。"><Input value={choices.ownerName} onChange={(value:string)=>patch('ownerName',value)} maxLength={64} autoComplete="nickname" placeholder="例如：阿天"/></Field><Field label="你的时区" hint="安静时段跟随所选地区的当地时间，自动适配夏令时。"><Input value={choices.timeZone} onChange={(value:string)=>patch('timeZone',value)} maxLength={100} spellCheck={false} placeholder="Asia/Shanghai"/></Field></div>
+     <QuietHours start={choices.quietStart} end={choices.quietEnd} patch={patch} Select={Select}/>
      <h3>自主额度</h3><p className="hn-help">先从低额度开始。额度只限制自主活动，主人主动聊天单独计量。</p><div className="hn-onboarding-budgets">{budgets.map(item=><label key={item.id} className={'hn-onboarding-choice'+(choices.budgetPreset===item.id?' hn-onboarding-choice-selected':'')}><input type="radio" name="human-onboarding-budget" value={item.id} checked={choices.budgetPreset===item.id} onChange={()=>patch('budgetPreset',item.id)}/><div><strong>{item.name}{item.id==='low'&&<small>推荐起步</small>}</strong><p>{item.description}</p></div></label>)}</div>
      <p className="hn-help">预留 token 用于保守控制调用开销，不等同于供应商实际账单。创建后仍可自行配置上限。</p>
     </fieldset>}
     {step===2&&<>
-     <dl className="hn-onboarding-summary"><div><dt>模型</dt><dd>{route?(route.providerLabel||route.provider)+' / '+(route.modelLabel||route.model):choices.provider+' / '+choices.model}</dd></div>{route&&<div><dt>模型来源</dt><dd>{routeSource(route)}</dd></div>}<div><dt>人物</dt><dd>{persona.name}</dd></div><div><dt>你的称呼</dt><dd>{choices.ownerName.trim()||'稍后填写'}</dd></div><div><dt>时区</dt><dd>{choices.timeZone}</dd></div><div><dt>自主额度</dt><dd>{budget.name} · 每个本地自然日 {number(budget.config.tokenLimit)} 预留 token / {budget.config.requestLimit} 次请求 / {budget.config.roundLimit} 轮</dd></div></dl>
-     <Check label="同时开启自主活动和主动交流（学习另行选装）" value={choices.startAutonomy} onChange={(value:boolean)=>patch('startAutonomy',value)} disabled={disabled||locked}/><p className="hn-help">{choices.startAutonomy?'启动后按当前检查间隔判断是否有值得做的事，模型调用使用上面选择的自主额度。':'创建后先开启聊天，自主行为保持关闭；你可以稍后在“自主行为”中开启。'}</p>
+     <dl className="hn-onboarding-summary"><div><dt>模型</dt><dd>{route?(route.providerLabel||route.provider)+' / '+(route.modelLabel||route.model):choices.provider+' / '+choices.model}</dd></div>{route&&<div><dt>模型来源</dt><dd>{routeSource(route)}</dd></div>}<div><dt>人物</dt><dd>{persona.name}</dd></div><div><dt>你的称呼</dt><dd>{choices.ownerName.trim()||'稍后填写'}</dd></div><div><dt>时区</dt><dd>{choices.timeZone}</dd></div><div><dt>安静时段</dt><dd>{quietRange(choices.quietStart,choices.quietEnd)}</dd></div><div><dt>自主额度</dt><dd>{budget.name} · 每个本地自然日 {number(budget.config.tokenLimit)} 预留 token / {budget.config.requestLimit} 次请求 / {budget.config.roundLimit} 轮</dd></div></dl>
+     <Check label="同时开启自主活动和主动交流（学习另行选装）" value={choices.startAutonomy} onChange={(value:boolean)=>patch('startAutonomy',value)} disabled={disabled||locked}/><p className="hn-help">{choices.startAutonomy?'启动后在安静时段以外，按检查间隔判断是否有值得做的事，模型调用使用上面选择的自主额度。':'创建后先开启聊天，自主行为保持关闭；你可以稍后在“自主行为”中开启。'}</p>
      <Band>点击后会创建唯一会话，自动准备并启动后台。网页和之后绑定的手机共享该会话；关闭浏览器页面后，只要 DSH 服务仍在运行，Human 就可以继续工作。</Band>
      {stale&&<div className="hn-notice hn-error" role="alert">环境或模型列表已更新，请核对最新信息后再启动。<Button disabled={disabled} onClick={()=>{setReviewRevision(setup.revision);setValidation('');}}>使用最新检查结果</Button></div>}
      {!supported&&<Band>当前运行环境未通过检查，请返回第一步处理。</Band>}

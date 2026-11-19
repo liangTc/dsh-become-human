@@ -59,10 +59,10 @@ export async function modelRequest(agent,signal,{turn,epoch,lane,messages,admitt
     failureFacts.streamCounts=streamCounts;failureFacts.textChars=text.length;failureFacts.reasoningChars=reasoningChars;
     if(!signal.aborted&&code!=='AUTONOMOUS_BUDGET_EXHAUSTED'){
       failureFacts.diagnostic=modelFailureDiagnostic(finish?.failure??error,code);
-      saveModelFailure(j,agent.id,{at:Date.now(),attemptId:rid??null,lane,provider:route.provider,model:route.model,code:/^[A-Z_]{3,64}$/.test(code)?code:'MODEL_EXECUTION_FAILED',...failureFacts.diagnostic,streamFinish:failureFacts.streamFinish??null});
+      saveModelFailure(j,agent.id,{at:Date.now(),attemptId:rid??null,lane,purpose:purpose??null,taskId:taskId??null,provider:route.provider,model:route.model,code:/^[A-Z_]{3,64}$/.test(code)?code:'MODEL_EXECUTION_FAILED',...failureFacts.diagnostic,streamFinish:failureFacts.streamFinish??null,textChars:text.length,reasoningChars,streamCounts},{notify:!reviewing});
     }
     if(rid)j.endAttempt(rid,{state:signal.aborted?'cancelled':'failed',usage,usageConfidence:reportedTerminal?'reported':dispatched?'unknown':'not-dispatched',error:/^[A-Z_]{3,64}$/.test(code)?code:'MODEL_EXECUTION_FAILED',textChars:text.length,reasoningChars,failureFacts,responseText:text});
     else j.audit(agent.id,'model-preparation-rejected',{lane,taskId,code:/^[A-Z_]{3,64}$/.test(code)?code:'MODEL_EXECUTION_FAILED',failureFacts});
-    throw Object.assign(failure(/^[A-Z_]{3,64}$/.test(code)?code:'MODEL_EXECUTION_FAILED'),code==='AUTONOMOUS_BUDGET_EXHAUSTED'&&Number.isSafeInteger(error.neededTokens)?{neededTokens:error.neededTokens}:{});
+    throw Object.assign(failure(/^[A-Z_]{3,64}$/.test(code)?code:'MODEL_EXECUTION_FAILED'),{attemptId:rid??null},code==='AUTONOMOUS_BUDGET_EXHAUSTED'&&Number.isSafeInteger(error.neededTokens)?{neededTokens:error.neededTokens}:{});
   }finally{f.tickets.delete(requestSignal);}
 }

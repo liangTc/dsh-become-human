@@ -23,4 +23,6 @@ assert.equal(reloaded.update(state),true,'Session cursors remain separate');
 const denied=new UnreadMessages({getItem(){throw Error('denied');},setItem(){throw Error('denied');}});
 assert.equal(denied.update(state),false);
 assert.equal(denied.update({...state,messages:[...state.messages,{seq:6,kind:'assistant',text:'new'}]}),true);
-console.log(JSON.stringify({passed:15,scope:'isolated unread state; no production messages'}));
+const alertCursor=new UnreadMessages(storage);alertCursor.update(state);alertCursor.read(state.sessionId,5);
+assert.equal(alertCursor.update({...state,messages:[...state.messages,{seq:6,kind:'model-error',text:'模型调用异常'}]}),true);
+console.log(JSON.stringify({passed:16,scope:'isolated unread state; no production messages'}));

@@ -14,6 +14,7 @@ for(const [name,failure,category]of [
  ['context',{message:'maximum context length exceeded'},'context'],
  ['timeout',{message:'connection timed out'},'timeout'],
  ['network',{message:'fetch failed'},'network'],
+ ['incomplete stream',{message:'Stream ended without finish_reason'},'incomplete-stream'],
  ['missing upstream evidence',{},'unknown']
 ])check(name,()=>assert.equal(modelFailureDiagnostic(failure).category,category));
 check('empty and validation are distinct',()=>{assert.equal(modelFailureDiagnostic({},'EMPTY_MODEL_OUTPUT').category,'empty');assert.equal(modelFailureDiagnostic({},'INVALID_TASK_OUTPUT').category,'validation');});
@@ -25,4 +26,5 @@ const values=new Map(),j={value:(_,key,fallback)=>values.get(key)??fallback,put:
 check('one successful lane cannot hide another lane failure',()=>{saveModelFailure(j,'same',{lane:'selection',code:'MODEL_EXECUTION_FAILED',at:10});saveModelFailure(j,'same',{lane:'foreground',code:'EMPTY_MODEL_OUTPUT',at:20});clearModelFailure(j,'same','foreground');assert(values.get('modelFailures').selection);assert(!values.get('modelFailures').foreground);});
 check('active error shown and resolved error hidden',()=>{const s={autonomy:{paused:true,error:'MODEL_EXECUTION_FAILED'},modelFailures:values.get('modelFailures')};assert.equal(activeModelAlerts(s).length,1);assert.equal(activeModelAlerts({...s,autonomy:{paused:false,error:null}}).length,0);});
 check('old records keep evidence limits',()=>{const [d]=activeModelAlerts({autonomy:{paused:true,error:'MODEL_EXECUTION_FAILED'},attempts:[{id:'old',trigger:'autonomous-tick',error:'MODEL_EXECUTION_FAILED',config:'{"provider":"old-provider","model":"old-model"}',failure_facts:'{"streamFinish":"error"}',ended:123}]});assert.equal(d.category,'unknown');assert.equal(d.legacy,true);assert.equal(d.model,'old-model');assert.equal(d.at,123);});
+check('old saved stream error includes review stage without rewriting evidence',()=>{const entry={attemptId:'old-review',lane:'foreground',code:'MODEL_EXECUTION_FAILED',category:'unknown',upstreamMessage:'Stream ended without finish_reason'},s={lastError:entry.code,modelFailures:{foreground:entry},attempts:[{id:'old-review',purpose:'conversation-review'}]};const [d]=activeModelAlerts(s);assert.equal(d.category,'incomplete-stream');assert.match(d.summary,/回复检查/);assert.equal(entry.category,'unknown');});
 console.log(JSON.stringify({passed:cases.length,cases,scope:'synthetic errors and actual diagnostic functions; no provider requests'}));

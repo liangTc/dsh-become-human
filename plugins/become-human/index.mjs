@@ -3,6 +3,8 @@ import {ExtensionPageRpc} from './extension-page-rpc.mjs';
 import {initializeDevelopment} from './development-runtime.mjs';
 import {boardOperations,controlBoard,prepareMatterRetry} from './cognition-runtime.mjs';
 import fs from 'node:fs/promises';
+import {findPackageJSON} from 'node:module';
+import {runStatus} from './run-status.mjs';
 import path from 'node:path';
 import z from '@deepseek-ai/schemastery';
 import {conversationPolicy,conversationalText,conversationOptions} from './conversation.mjs';
@@ -11,13 +13,14 @@ import {HumanFactory} from './driver.mjs';
 import {DeletionLab} from './deletion.mjs';
 import {SessionRetirement} from './retirement.mjs';
 import {expressionSkills,expressionStatus} from './expression.mjs';
-import {supersedeOwnerBatch} from './owner-turns.mjs';
+import {supersedeOwnerBatch,conversationSettings} from './owner-turns.mjs';
 import {replyPresentation} from './presentation.mjs';
 import {HumanMedia} from './multimodal.mjs';
 import {experienceService} from './experience-service.mjs';
 export const name='become-human';
+const pluginVersion=JSON.parse(await fs.readFile(findPackageJSON(import.meta.url,import.meta.url),'utf8')).version;
 export const inject=['agents','sessions','sessionPersistence','sessionProjections','llm','connection','webServer','workspaceRegistry','attachments'];
-export const Config=z.object({intervalMs:z.number().default(15000),tokenBudget:z.number().default(12000),localQuotaEnabled:z.boolean().default(false),maxCycles:z.number().default(3),maxTokens:z.number().required(false),requestTimeoutMs:z.number().required(false),interactiveOnly:z.boolean().default(false),provider:z.string(),model:z.string(),reasoningEffort:z.string(),budgetRound:z.string(),allowedRoutes:z.array(z.object({provider:z.string(),model:z.string()})).default([]),modelCapabilities:z.array(z.object({provider:z.string(),model:z.string(),adapter:z.union(['pi-ai','deepseek-native']),inputModalities:z.array(z.union(['text','image'])).required(false),reasoningEfforts:z.array(z.union(['off','low','medium','high','max']))})).default([]),externalBehaviorIds:z.array(z.union(['reflect-experience'])).default([]),domainEnabled:z.boolean().default(true),sharedBudgetGuard:z.boolean().default(true)});
+export const Config=z.object({legacyQuietHours:z.object({sessionId:z.string(),offset:z.number(),zone:z.string()}).required(false),intervalMs:z.number().default(15000),tokenBudget:z.number().default(12000),localQuotaEnabled:z.boolean().default(false),maxCycles:z.number().default(3),maxTokens:z.number().required(false),requestTimeoutMs:z.number().required(false),interactiveOnly:z.boolean().default(false),provider:z.string(),model:z.string(),reasoningEffort:z.string(),budgetRound:z.string(),allowedRoutes:z.array(z.object({provider:z.string(),model:z.string()})).default([]),modelCapabilities:z.array(z.object({provider:z.string(),model:z.string(),adapter:z.union(['pi-ai','deepseek-native']),inputModalities:z.array(z.union(['text','image'])).required(false),reasoningEfforts:z.array(z.union(['off','low','medium','high','max']))})).default([]),externalBehaviorIds:z.array(z.union(['reflect-experience'])).default([]),domainEnabled:z.boolean().default(true),sharedBudgetGuard:z.boolean().default(true)});
 export async function apply(ctx,config){
   let expressionRegistryRegistered=false;
   ctx.inject(['skills'],scoped=>{
@@ -40,6 +43,7 @@ export async function apply(ctx,config){
     const factory=scoped.becomeHuman,journal=factory.journal;
     scoped.inject(['skills'],s=>{factory.management.skills.registry=s.skills;if(factory.controllerSessionId)factory.management.skills.refreshRegistry(factory.controllerSessionId);});
     journal.safety=storage.ledger;
+    factory.autonomy.legacyQuietHours=config.legacyQuietHours;
     factory.media=new HumanMedia(journal,factory.domain,scoped.attachments);
     const deletionLab=await new DeletionLab(path.join(root,'deletion-lab'),journal).init();
     scoped.effect(()=>()=>deletionLab.close());let deletionPreview=null;
@@ -72,6 +76,7 @@ export async function apply(ctx,config){
     journal.db.prepare('UPDATE control SET used=? WHERE id=?').run(storage.ledger.used(),id);journal.put(id,'budgetBase',storage.ledger.budget.base);journal.put(id,'budgetRound',storage.ledger.budget.round);
     const workspace=await scoped.workspaceRegistry.create(process.cwd());await workspace.attachSession(id);
     for(const event of agent.session.snapshotEvents())if(event.type==='user/message')factory.domain.observe(id,event.data,event.time);
+    factory.domain.repairWorkLabelMemories(id);
     factory.domain.repairPreferenceSlots(id);
     initializeDevelopment(factory,id);
     factory.tools.recover(id);
@@ -84,26 +89,41 @@ export async function apply(ctx,config){
       journal.db.prepare("UPDATE user_request SET status='committed' WHERE agent=? AND request_id=?").run(id,row.request_id);
     }
     for(const pending of journal.db.prepare("SELECT * FROM user_request WHERE agent=? AND status='pending'").all(id))await deliverRequest(pending);
+    const retryIds=()=>journal.retryInputIds(id,mid=>factory.domain.sourceUsable(id,mid));
     function retryCandidates(){
-      const completed=new Set();let candidates=[];
-      for(const r of journal.db.prepare('SELECT state,request FROM attempt WHERE agent=? ORDER BY started DESC').all(id)){
-        const ids=JSON.parse(r.request).admittedIds??[];
-        if(['completed','wait'].includes(r.state))for(const mid of ids)completed.add(mid);
-        else if(['failed','cancelled','output-limit','interrupted'].includes(r.state)&&!candidates.length)candidates=ids.filter(mid=>!completed.has(mid)&&factory.domain.sourceUsable(id,mid));
-      }
-      return candidates.map(mid=>agent.session.snapshotEvents().find(e=>e.type==='user/message'&&e.data.id===mid)?.data).filter(Boolean);
+      const ids=retryIds();if(!ids.length)return [];
+      const events=agent.session.snapshotEvents();
+      return ids.map(mid=>events.find(e=>e.type==='user/message'&&e.data.id===mid)?.data).filter(Boolean);
     }
-    function retryCandidate(){return retryCandidates()[0];}
     let lastSafeState,retirementPreview=null;
-    function state(){
+    function state(mode='full'){
+      if(mode!=='full'&&storage.ledger.retired(id))return {sessionId:id,retiring:true,desired:'paused',status:'maintenance',canThink:false,inbox:0,management:null,messages:[]};
       if(storage.ledger.retired(id))return {...lastSafeState,revision:journal.db.prepare('SELECT total_changes() AS n').get().n+storage.ledger.rows.length,retiring:true,management:null,desired:'paused',status:'maintenance',agentBusy:true,canThink:false,messages:[],reminders:[],attempts:[],audit:[],persona:'',memory:'',memories:[],personaState:null,inbox:0,retirement:{operations:retirement.status(),preview:null},safety:storage.ledger.status()};
-      const control=journal.get(id),rows=journal.db.prepare('SELECT * FROM outbox WHERE agent=? ORDER BY seq DESC LIMIT 30').all(id).reverse().map(row=>{const request=row.event_key?.startsWith('user:')?journal.db.prepare('SELECT request_id FROM user_request WHERE agent=? AND message_id=?').get(id,row.event_key.slice(5)):null;return {...row,attachments:row.kind==='user'?factory.media.messageDescriptors(id,row.event_key?.slice(5)):[],origin:request?journal.value(id,'origin:'+request.request_id,'web'):row.kind==='status'?'system':'agent'};});
-      const recentAssistantIds=new Set(rows.filter(row=>row.kind==='assistant').map(row=>row.event_key?.slice(10))),recentAssistantEvents=new Map(agent.session.snapshotEvents().filter(e=>e.type==='assistant/message'&&recentAssistantIds.has(e.data.message.id)).map(e=>[e.data.message.id,e]));
-      for(const row of rows)if(row.kind==='assistant'){const owner=journal.db.prepare("SELECT text FROM outbox WHERE agent=? AND kind='user' AND seq<? ORDER BY seq DESC LIMIT 1").get(id,row.seq);row.displayText=conversationalText(row.text,conversationOptions(owner?.text??''));const event=recentAssistantEvents.get(row.event_key?.slice(10));row.bubbleParts=replyPresentation(journal,id,event,row.displayText).parts;}
-      const attempts=journal.db.prepare('SELECT id,turn,state,trigger,config,usage,usage_confidence,error,text_chars,reasoning_chars,failure_facts,started,ended FROM attempt WHERE agent=? ORDER BY started DESC LIMIT 8').all(id);
+      storage.guard(id);
+      const control=journal.get(id);
+      const settings=factory.autonomy.settings(id);
+      const autonomyBrief={settings:{enabled:settings.enabled,quietStart:settings.quietStart,quietEnd:settings.quietEnd,quietTimeZone:settings.quietTimeZone,timeZoneOffsetMinutes:settings.timeZoneOffsetMinutes},paused:journal.value(id,'autonomyPaused',false),error:journal.value(id,'autonomyError',null),phase:journal.value(id,'autonomyPhase','idle'),pendingBudgetRequest:factory.autonomy.pendingBudgetRequest(id)};
+      const brief={sessionId:id,bootId,version:pluginVersion,provider:config.provider,model:config.model,desired:control.desired,cancelEpoch:control.epoch,nextTickAt:control.next_tick,status:agent.status,agentBusy:!!agent.active,activeLane:agent.activeLane??null,
+        inbox:agent.inbox.nextStep.length+agent.inbox.nextTurn.length,canThink:true,stopReason:journal.value(id,'stopReason',null),pauseRevision:journal.value(id,'pauseRevision',0),lastError:journal.value(id,'lastError',null),
+        ownerInputRevision:journal.db.prepare('SELECT COALESCE(max(rowid),0) AS n FROM user_request WHERE agent=?').get(id).n,latestSeq:journal.db.prepare('SELECT COALESCE(max(seq),0) AS n FROM outbox WHERE agent=?').get(id).n,
+        driveMode:journal.value(id,'driveMode','bounded'),cycleLimit:journal.value(id,'driveMode','bounded')==='continuous'?null:settings.enabled?1:config.maxCycles||null,autonomy:autonomyBrief};
+      const run=runStatus(brief);
+      if(mode==='runtime-status')return {...brief,run,management:{data:factory.management.dataSettings(id)}};
+      const rows=journal.db.prepare('SELECT * FROM outbox WHERE agent=? ORDER BY seq DESC LIMIT 30').all(id).reverse().map(row=>{const request=row.event_key?.startsWith('user:')?journal.db.prepare('SELECT request_id FROM user_request WHERE agent=? AND message_id=?').get(id,row.event_key.slice(5)):null;return {...row,attachments:row.kind==='user'?factory.media.messageDescriptors(id,row.event_key?.slice(5)):[],origin:request?journal.value(id,'origin:'+request.request_id,'web'):row.kind==='status'?'system':'agent'};});
+      let legacyTurns;
+      function messageTurn(mid){
+        const turn=journal.value(id,'dialogue-origin:'+mid,null)?.turn;
+        if(Number.isSafeInteger(turn))return turn;
+        legacyTurns??=new Map(agent.session.snapshotEvents().filter(e=>e.type==='assistant/message').map(e=>[e.data.message.id,e.data.turn]));
+        return legacyTurns.get(mid);
+      }
+      for(const row of rows)if(row.kind==='assistant'){const owner=journal.db.prepare("SELECT text FROM outbox WHERE agent=? AND kind='user' AND seq<? ORDER BY seq DESC LIMIT 1").get(id,row.seq);row.displayText=conversationalText(row.text,conversationOptions(owner?.text??''));const turn=messageTurn(row.event_key?.slice(10));row.bubbleParts=replyPresentation(journal,id,turn===undefined?null:{data:{turn}},row.displayText).parts;}
+      if(mode==='chat-state')return {...brief,run,lightweight:true,messages:rows,modelFailures:journal.value(id,'modelFailures',{}),
+        management:{profile:{name:factory.management.profile(id).name},revision:factory.management.revision(id),execution:{conversation:conversationSettings(journal,id)}}};
+      const attempts=journal.db.prepare("SELECT id,turn,state,trigger,config,usage,usage_confidence,error,text_chars,reasoning_chars,failure_facts,started,ended,json_extract(CASE WHEN json_valid(request) THEN request ELSE '{}' END,'$.purpose') AS purpose FROM attempt WHERE agent=? ORDER BY started DESC LIMIT 8").all(id);
       const modelFailures=journal.value(id,'modelFailures',{});
       const autonomy={...factory.autonomy.snapshot(id),learningPack:{available:!!factory.learningPack.provider,active:factory.learningPack.available(factory.autonomy.settings(id))}},autonomyEnabled=autonomy.settings.enabled;
-      return lastSafeState={publicSources:factory.publicSources.status(),workObservation:factory.workObservation.indicator(id),plugin:'dsh-become-human',version:'0.7.0-beta.39',expression:expressionStatus(expressionRegistryRegistered),ownerInputRevision:journal.db.prepare('SELECT COALESCE(max(rowid),0) AS n FROM user_request WHERE agent=?').get(id).n,management:factory.management.snapshot(id),bootId,revision:journal.db.prepare('SELECT total_changes() AS n').get().n+storage.ledger.rows.length,runtime:runtimeVersion,sessionId:id,provider:config.provider,model:config.model,reasoningEffort:config.reasoningEffort??'provider-default',retryableInput:!!retryCandidate(),agentBusy:!!agent.active,activeLane:agent.activeLane??null,canThink:true,localQuotaEnabled:false,modelLimitPolicy:'host-provider-defaults',desired:control.desired,cancelEpoch:control.epoch,pauseRevision:journal.value(id,'pauseRevision',0),status:agent.status,used:storage.ledger.used()-storage.ledger.budget.base,cumulativeUsed:storage.ledger.used(),budgetRound:journal.value(id,'budgetRound','legacy'),budget:null,remaining:journal.value(id,'remaining',0),cycleLimit:journal.value(id,'driveMode','bounded')==='continuous'?null:autonomyEnabled?1:config.maxCycles===0?null:config.maxCycles,driveMode:journal.value(id,'driveMode','bounded'),nextTickAt:control.next_tick,longRun:journal.longRunStats(id),successes:journal.value(id,'successes',0),intervalMs:factory.config.intervalMs,interactiveOnly:autonomyEnabled?false:config.interactiveOnly,inbox:agent.inbox.nextStep.length+agent.inbox.nextTurn.length,lastUsage:journal.value(id,'lastUsage',null),lastUsageConfidence:journal.value(id,'lastUsageConfidence','legacy-unverified'),lastError:journal.value(id,'lastError',null),stopReason:journal.value(id,'stopReason',null),persona:factory.domain.persona(id).core,memory:journal.value(id,'memory','尚无简记。'),receipt:journal.value(id,'receipt',0),messages:rows,attempts,modelFailures,responseRecovery:{pending:journal.staged(id).length,committed:journal.db.prepare("SELECT count(*) AS n FROM response_stage WHERE agent=? AND state='committed'").get(id).n},deletion:{...deletionLab.status(),preview:deletionPreview?.expires>Date.now()?deletionPreview:null},safety:storage.ledger.status(),retirement:{operations:retirement.status(),preview:retirementPreview?.expires>Date.now()?retirementPreview:null},memories:factory.domain.list(id,{limit:20}),personaState:factory.domain.persona(id),goals:factory.domain.context(id).goals,reminders:factory.reminders.list(id),autonomy,modelGate:{inflight:factory.inflight,unbudgetedCalls:'denied',tools:autonomyEnabled?'public-research-and-exact-approved-report':'disabled',nativeUpload:'disabled',fork:'disabled',embedding:'disabled'},audit:journal.db.prepare('SELECT seq,kind,data FROM audit WHERE agent=? ORDER BY seq DESC LIMIT 12').all(id)};
+      return lastSafeState={...brief,publicSources:factory.publicSources.status(),workObservation:factory.workObservation.indicator(id),plugin:'dsh-become-human',run,expression:expressionStatus(expressionRegistryRegistered),management:factory.management.snapshot(id),revision:journal.db.prepare('SELECT total_changes() AS n').get().n+storage.ledger.rows.length,runtime:runtimeVersion,reasoningEffort:config.reasoningEffort??'provider-default',retryableInput:retryIds().length>0,localQuotaEnabled:false,modelLimitPolicy:'host-provider-defaults',used:storage.ledger.used()-storage.ledger.budget.base,cumulativeUsed:storage.ledger.used(),budgetRound:journal.value(id,'budgetRound','legacy'),budget:null,remaining:journal.value(id,'remaining',0),longRun:journal.longRunStats(id),successes:journal.value(id,'successes',0),intervalMs:factory.config.intervalMs,interactiveOnly:autonomyEnabled?false:config.interactiveOnly,lastUsage:journal.value(id,'lastUsage',null),lastUsageConfidence:journal.value(id,'lastUsageConfidence','legacy-unverified'),persona:factory.domain.persona(id).core,memory:journal.value(id,'memory','尚无简记。'),receipt:journal.value(id,'receipt',0),messages:rows,attempts,modelFailures,responseRecovery:{pending:journal.staged(id).length,committed:journal.db.prepare("SELECT count(*) AS n FROM response_stage WHERE agent=? AND state='committed'").get(id).n},deletion:{...deletionLab.status(),preview:deletionPreview?.expires>Date.now()?deletionPreview:null},safety:storage.ledger.status(),retirement:{operations:retirement.status(),preview:retirementPreview?.expires>Date.now()?retirementPreview:null},memories:factory.domain.list(id,{limit:20}),personaState:factory.domain.persona(id),goals:factory.domain.context(id).goals,reminders:factory.reminders.list(id),autonomy,modelGate:{inflight:factory.inflight,unbudgetedCalls:'denied',tools:autonomyEnabled?'public-research-and-exact-approved-report':'disabled',nativeUpload:'disabled',fork:'disabled',embedding:'disabled'},audit:journal.db.prepare('SELECT seq,kind,data FROM audit WHERE agent=? ORDER BY seq DESC LIMIT 12').all(id)};
     }
     let operations=Promise.resolve();
     const mutate=input=>operations=operations.catch(()=>{}).then(async()=>{
@@ -208,15 +228,27 @@ export async function apply(ctx,config){
         if(agent.active||agent.desired().desired!=='paused')throw new Error('PAUSE_REQUIRED');
         await deletionLab.recover();deletionPreview=null;
       }
+      else if(input.op==='maintenance-pause-if-idle'){
+        if(input.sessionId!==id)throw Error('STALE_SESSION');
+        if(input.expectedEpoch!==agent.desired().epoch)throw Error('STALE_EPOCH');
+        if(agent.active||agent.status==='running')throw Error('AGENT_BUSY');
+        if(agent.desired().desired==='running'){
+          if(agent.inbox.nextTurn.length||agent.inbox.nextStep.length)throw Error('AGENT_BUSY');
+          if(journal.value(id,'driveMode','bounded')!=='continuous')throw Error('PAUSE_REQUIRED');
+          await agent.control('paused');
+        }
+        return {desired:'paused',sessionId:id};
+      }
       else if(input.op==='pause'){journal.put(id,'pauseRevision',journal.value(id,'pauseRevision',0)+1);await agent.control('paused');journal.put(id,'stopReason','user');}
       else if(['start','once'].includes(input.op)){
         if(input.expectedEpoch!==undefined&&input.expectedEpoch!==agent.desired().epoch)throw new Error('STALE_EPOCH');
         if(agent.active||agent.status==='running'||agent.desired().desired==='running')throw new Error('ALREADY_RUNNING');
-        if(!state().canThink)throw new Error('BUDGET_EXHAUSTED');
+        if(!state('runtime-status').canThink)throw new Error('BUDGET_EXHAUSTED');
         agent.requestedCycles=input.op==='once'?1:factory.autonomy.settings(id).enabled||config.interactiveOnly?0:config.maxCycles;journal.put(id,'stopReason',null);agent.wake=true;
         // Schedule the first periodic tick after the initial request interval.
-        journal.tickAt(id,Date.now()+factory.config.intervalMs);await agent.control('running');
+        journal.tickAt(id,Date.now()+factory.config.intervalMs);await agent.control('running',{manualCheck:input.op==='once'});
       }else if(input.op==='message'){
+        if(input.developmentFixture!==undefined&&typeof input.developmentFixture!=='boolean')throw new Error('INVALID_MESSAGE');
         if(input.text!==undefined&&typeof input.text!=='string'||(input.text??'').length>1024)throw new Error('INVALID_MESSAGE');
         const attachmentIds=factory.media.ids(input.attachments??[]);
         if(!(input.text??'').trim()&&!attachmentIds.length)throw new Error('INVALID_MESSAGE');
@@ -226,6 +258,7 @@ export async function apply(ctx,config){
         if(input.origin!==undefined&&(typeof input.origin!=='string'||!/^[a-zA-Z0-9._:-]{1,64}$/.test(input.origin)))throw new Error('INVALID_MESSAGE');
         const text=(input.text??'').trim();let row=journal.db.prepare('SELECT * FROM user_request WHERE agent=? AND request_id=?').get(id,requestId);const newRequest=!row;
         if(row&&row.text!==text)throw new Error('REQUEST_ID_CONFLICT');
+        if(row&&journal.value(id,'fixture:'+row.message_id,false)!==(input.developmentFixture===true))throw new Error('REQUEST_ID_CONFLICT');
         if(row&&JSON.stringify(journal.value(id,'media:'+requestId,[]))!==JSON.stringify(attachmentIds))throw new Error('REQUEST_ID_CONFLICT');
         if(row&&journal.value(id,'target:'+requestId,'next-turn')!==target)throw new Error('REQUEST_ID_CONFLICT');
         if(!row){
@@ -237,6 +270,7 @@ export async function apply(ctx,config){
           journal.transaction(()=>{
             journal.db.prepare("INSERT INTO user_request VALUES(?,?,?,?,'pending')").run(id,requestId,text,row.message_id);
             journal.put(id,'target:'+requestId,target);
+            if(input.developmentFixture)journal.put(id,'fixture:'+row.message_id,true);
             journal.put(id,'media:'+requestId,attachmentIds);
             factory.media.bind(id,attachmentIds,row.message_id);
             if(input.origin!==undefined)journal.put(id,'origin:'+requestId,input.origin);
@@ -263,7 +297,7 @@ export async function apply(ctx,config){
       return actionResult?{state:state(),action:actionResult}:mcpDiscovery?{state:state(),mcpDiscovery}:state();
     });
     scoped.connection.fetch.register({path:'/api/become-human/state',methods:['GET'],requestBody:'buffered',fetch:async()=>Response.json(state(),{headers:{'Cache-Control':'no-store'}})});
-    scoped.connection.fetch.register({path:'/api/become-human/read',methods:['POST'],requestBody:'buffered',fetch:async request=>{try{const raw=await request.text();if(Buffer.byteLength(raw)>8192)throw new Error('TOO_LARGE');const input=JSON.parse(raw);storage.guard(id);if(input.sessionId&&input.sessionId!==id)throw new Error('STALE_SESSION');return Response.json(input.kind==='plugin-catalog'?factory.plugins.catalog():input.kind==='extension-page-catalog'?pageRpc.catalog():input.kind==='media'?await factory.media.read(id,input.id):input.kind==='multimodal-status'?await factory.media.status(agent):await factory.management.read(id,input));}catch(e){return Response.json({error:/^[A-Z_]{3,64}$/.test(e.message)?e.message:'READ_FAILED'},{status:400});}}});
+    scoped.connection.fetch.register({path:'/api/become-human/read',methods:['POST'],requestBody:'buffered',fetch:async request=>{try{const raw=await request.text();if(Buffer.byteLength(raw)>8192)throw new Error('TOO_LARGE');const input=JSON.parse(raw);if(input.sessionId&&input.sessionId!==id)throw new Error('STALE_SESSION');if(['chat-state','runtime-status'].includes(input.kind))return Response.json(state(input.kind));storage.guard(id);return Response.json(input.kind==='plugin-catalog'?factory.plugins.catalog():input.kind==='extension-page-catalog'?pageRpc.catalog():input.kind==='media'?await factory.media.read(id,input.id):input.kind==='multimodal-status'?await factory.media.status(agent):await factory.management.read(id,input));}catch(e){return Response.json({error:/^[A-Z_]{3,64}$/.test(e.message)?e.message:'READ_FAILED'},{status:400});}}});
     scoped.connection.fetch.register({path:'/api/become-human/extension',methods:['POST'],requestBody:'buffered',fetch:async request=>{try{const raw=await request.text();if(Buffer.byteLength(raw)>65536)throw Error('TOO_LARGE');const input=JSON.parse(raw);storage.guard(id);if(input.sessionId!==id)throw Error('STALE_SESSION');return Response.json(await pageRpc.call(input));}catch(error){return Response.json({error:/^[A-Z_]{3,64}$/.test(error.message)?error.message:'EXTENSION_RPC_FAILED'},{status:400});}}});
     scoped.connection.fetch.register({path:'/api/become-human/events',methods:['GET'],requestBody:'buffered',fetch:async request=>{
       const after=Number(new URL(request.url).searchParams.get('after')??0);
@@ -285,7 +319,7 @@ export async function apply(ctx,config){
         const reader=request.body?.getReader();let parts=[],bytes=0;
         if(reader)while(true){const {done,value}=await reader.read();if(done)break;bytes+=value.byteLength;if(bytes>8388608){await reader.cancel();return Response.json({error:'TOO_LARGE'},{status:413});}parts.push(Buffer.from(value));}
         const text=Buffer.concat(parts).toString('utf8'),input=JSON.parse(text);if(bytes>786432&&input.op!=='media-upload')return Response.json({error:'TOO_LARGE'},{status:413});return Response.json(await mutate(input));
-      }catch(e){return Response.json({error:['INVALID_REQUEST','INVALID_MESSAGE','INVALID_PERSONA','INVALID_RECEIPT','INVALID_REQUEST_ID','REQUEST_ID_CONFLICT','ALREADY_RUNNING','PAUSE_REQUIRED','NO_RETRYABLE_INPUT','BUDGET_EXHAUSTED','UNKNOWN_OPERATION','NOT_DISPOSABLE_FIXTURE','INVALID_DELETE_CONFIRMATION','DELETE_PREVIEW_STALE','SESSION_RETIRED','LINKED_ARTIFACT','DELETE_PENDING','STALE_SESSION','INVALID_MEMORY','SENSITIVE_MEMORY_REFUSED','INVALID_PERSONA_FIELD','INVALID_EVIDENCE','UNSUPPORTED_CLAIM','INTERACTIVE_ONLY','STALE_EPOCH'].includes(e.message)||/^(?:EXPERIENCE_|BEHAVIOR_|COGNITION_|MATTER_|ATTENTION_|REFLECTION_|OWNER_MATTER_|RUNTIME_MATTER_|STALE_|INVALID_|BUNDLED_|SKILL_|MODEL_ROUTE_|MEMORY_|USE_LEARNING_|NOTE_|TASK_|CONFIGURATION_|PROFILE_|GOAL_|ACTION_|REPORT_|WORK_|CAPABILITY_|TOOL_|MCP_|CUSTOM_MCP_|DSH_|BROWSER_|MEDIA_|MODEL_IMAGE_)/.test(e.message)||/^(INVALID_TASK_RETRY|INVALID_AUTONOMY_SETTINGS|INVALID_SEARCH_SETTINGS|INVALID_LEARNING_SOURCE|SOURCE_URL_NOT_ALLOWED|SIGNED_CONTROL_REQUIRED|INVALID_RESOURCE_GRANT|RESOURCE_GRANT_NOT_FOUND|INVALID_LEARNING_FEEDBACK|LEARNING_NOTE_NOT_FOUND)$/.test(e.message)?e.message:'CONTROL_FAILED'},{status:400});}
+      }catch(e){return Response.json({error:['INVALID_REQUEST','INVALID_MESSAGE','INVALID_PERSONA','INVALID_RECEIPT','INVALID_REQUEST_ID','REQUEST_ID_CONFLICT','ALREADY_RUNNING','AGENT_BUSY','PAUSE_REQUIRED','NO_RETRYABLE_INPUT','BUDGET_EXHAUSTED','UNKNOWN_OPERATION','NOT_DISPOSABLE_FIXTURE','INVALID_DELETE_CONFIRMATION','DELETE_PREVIEW_STALE','SESSION_RETIRED','LINKED_ARTIFACT','DELETE_PENDING','STALE_SESSION','INVALID_MEMORY','SENSITIVE_MEMORY_REFUSED','INVALID_PERSONA_FIELD','INVALID_EVIDENCE','UNSUPPORTED_CLAIM','INTERACTIVE_ONLY','STALE_EPOCH'].includes(e.message)||/^(?:EXPERIENCE_|BEHAVIOR_|COGNITION_|MATTER_|ATTENTION_|REFLECTION_|OWNER_MATTER_|RUNTIME_MATTER_|STALE_|INVALID_|BUNDLED_|SKILL_|MODEL_ROUTE_|MEMORY_|USE_LEARNING_|NOTE_|TASK_|CONFIGURATION_|PROFILE_|GOAL_|ACTION_|REPORT_|WORK_|CAPABILITY_|TOOL_|MCP_|CUSTOM_MCP_|DSH_|BROWSER_|MEDIA_|MODEL_IMAGE_)/.test(e.message)||/^(INVALID_TASK_RETRY|INVALID_AUTONOMY_SETTINGS|INVALID_SEARCH_SETTINGS|INVALID_LEARNING_SOURCE|SOURCE_URL_NOT_ALLOWED|SIGNED_CONTROL_REQUIRED|INVALID_RESOURCE_GRANT|RESOURCE_GRANT_NOT_FOUND|INVALID_LEARNING_FEEDBACK|LEARNING_NOTE_NOT_FOUND)$/.test(e.message)?e.message:'CONTROL_FAILED'},{status:400});}
     }});
     scoped.webServer.register({path:'/become-human',kind:'exact',handler:async(req,res)=>{
       if(!scoped.connection.authorizeIndex(req,res))return;

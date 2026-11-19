@@ -5,6 +5,7 @@ import path from 'node:path';
 import {randomUUID,createHash} from 'node:crypto';
 import {DatabaseSync} from 'node:sqlite';
 import {DomainMemory} from '../plugins/become-human/domain.mjs';
+import {ControlJournal} from '../plugins/become-human/driver.mjs';
 import {MemoryLifecycle} from '../plugins/become-human/memory-lifecycle.mjs';
 import {RollingDialogueSummary} from '../plugins/become-human/dialogue-summary.mjs';
 import {recentDialogue} from '../plugins/become-human/dialogue-history.mjs';
@@ -30,6 +31,46 @@ async function fixture(){
 }
 async function test(name,fn){let f;try{f=await fixture();await fn(f);cases.push({name,passed:true});}catch(error){cases.push({name,passed:false,error:error.stack});}finally{f?.close();}console.log(JSON.stringify(cases.at(-1)));}
 
+await test('Ordinary work labels are remembered; explicit test inputs stay isolated and old skipped sources repair once',f=>{
+ const file=path.join(f.dir,'owner.sqlite'),agent=f.id;let j=new ControlJournal(file);
+ try{
+  const d=new DomainMemory(j),observe=(id,text)=>d.observe(agent,{id,source:{kind:'human'},content:[{type:'text',text}]});
+  observe('work','我在【后端开发】组工作，我喜欢攀岩。');
+  assert.equal(d.list(agent,{type:'fact'})[0].payload.value,'攀岩');
+  j.put(agent,'fixture:explicit',true);observe('explicit','我喜欢奶茶。');
+  observe('legacy-fixture','【开发测试 20261024-A】我喜欢奶茶。');
+  assert(d.sourceIsDevelopmentTest(agent,'explicit'));assert(d.sourceIsDevelopmentTest(agent,'legacy-fixture'));
+  observe('current','我不再喜欢跑步了。');
+  const skip=(id,body)=>{d.source(agent,{id,body,occurred:1234});j.put(agent,'observed:'+id,true);j.audit(agent,'development-input-excluded',{sourceId:id});};
+  skip('legacy-work','【开发计划】我们明天看排期。我喜欢划船和跑步。');
+  skip('withdrawn','【测试组】旧工作记录。');j.db.prepare("UPDATE source_record SET status='withdrawn' WHERE id='withdrawn'").run();
+  assert.equal(d.repairWorkLabelMemories(agent),1);
+  const episodes=d.list(agent,{type:'episode'});assert(!episodes.some(e=>['explicit','legacy-fixture','withdrawn'].includes(e.refs[0])));assert.equal(episodes.find(e=>e.refs[0]==='legacy-work').valid_from,1234);
+  const facts=d.list(agent,{type:'fact'});assert(facts.some(e=>e.payload.value==='划船'));assert.equal(facts.find(e=>e.payload.value==='跑步').payload.polarity,'dislike');
+  j.close();j=new ControlJournal(file);assert.equal(new DomainMemory(j).repairWorkLabelMemories(agent),0);
+ }finally{j.close();}
+});
+await test('Failed summary batches stay isolated across later commits and restart, until explicit retry',f=>{
+ const options={recentTurnLimit:1};
+ for(let i=0;i<6;i++)f.turn('第一组问题 '+i);
+ const failed=f.summary.prepare(f.agent,options);f.summary.fail(f.agent,failed,'INVALID_DIALOGUE_SUMMARY_OUTPUT');f.reopen();
+ assert.equal(f.summary.prepare(f.agent,options),null);
+ for(let i=0;i<5;i++)f.turn('新的独立问题 '+i);
+ const next=f.summary.prepare(f.agent,options);assert(next);assert(next.coveredTurnIds.every(id=>!failed.coveredTurnIds.includes(id)));
+ f.summary.commit(f.agent,next,{topics:[{text:'新的独立问题',sourceIds:[next.sourceIds[0]]}],decisions:[],openQuestions:[],corrections:[]});f.reopen();
+ const status=f.summary.snapshot(f.agent,options);assert.equal(status.heldTurns,failed.coveredTurnIds.length);assert.equal(status.eligibleTurns,0);assert.equal(status.chunkCount,1);
+ assert.equal(f.summary.prepare(f.agent,options),null);f.summary.allowRetry(f.agent,'normal');
+ assert.deepEqual(f.summary.prepare(f.agent,options).coveredTurnIds,failed.coveredTurnIds);
+});
+await test('Older scope-wide holds protect pre-failure material and allow new dated turns',f=>{
+ const options={recentTurnLimit:1};for(let i=0;i<5;i++)f.turn('旧资料 '+i);
+ const cutoff=f.events.at(-1).time;f.journal.put(f.id,'rolling-dialogue-summary-hold:normal',{scope:'normal',at:cutoff,code:'MODEL_EXECUTION_FAILED',fingerprint:'legacy'});
+ assert.equal(f.summary.prepare(f.agent,options),null);for(let i=0;i<5;i++)f.turn('新增资料 '+i);
+ let job=f.summary.prepare(f.agent,options);assert(job.sources.every(ref=>ref.time>cutoff));
+ f.summary.fail(f.agent,job,'MODEL_EXECUTION_FAILED');f.reopen();assert.equal(f.summary.prepare(f.agent,options),null);
+ for(let i=0;i<5;i++)f.turn('又一批资料 '+i);const later=f.summary.prepare(f.agent,options);
+ assert(later.sources.every(row=>row.time>cutoff&&!job.sourceIds.includes(row.id)));
+});
 await test('A valid summary survives when its original replies leave the 256-reply raw scan',f=>{
  const {turns}=f.seed(),current=f.grow(),raw=recentDialogue(f.agent,{lane:'foreground',admittedIds:[current.id],turnLimit:256});assert(!raw.some(row=>row.id===turns[0].input.id));assert(raw.coverage.olderNativeRepliesOutsideScan>0);
  const context=f.summary.context(f.agent,{admittedIds:[current.id]});assert(context,'retained summary must not expire just because raw history is bounded');assert(context.sources.some(row=>row.id===turns[0].input.id));assert.equal(context.ownerFactsWritten,false);assert.equal(context.semanticValidation,'unverified-model-summary');

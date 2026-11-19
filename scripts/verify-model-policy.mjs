@@ -8,6 +8,7 @@ import {SafetyLedger} from '../plugins/become-human/safety.mjs';
 import {quotaView} from '../plugins/become-human/quota.mjs';
 import {modelCallOptions,executionSettings,autonomousBudgetEstimate} from '../plugins/become-human/model-policy.mjs';
 import {AutonomyStore} from '../plugins/become-human/autonomy-store.mjs';
+import {ControlJournal} from '../plugins/become-human/driver.mjs';
 import {choiceDialogueRequest} from '../plugins/become-human/choice-dialogue.mjs';
 
 // Actual request/context functions and signed quota ledger, synthetic adapter.
@@ -59,7 +60,18 @@ await test('style editing uses the foreground ledger and does not attach current
 await test('foreground remains usable after autonomous token budget is exhausted',async f=>{f.configure({tokenLimit:1});await f.call();assert.equal(f.stats.streams,1);assert.equal(f.ledger.autonomyEntries(f.id,0).length,0);assert.equal(f.reservations[0].request.budgetClass,'foreground');});
 await test('autonomous calls retain the resolved provider output reservation',async f=>{await f.call('selection');assert.equal(f.reservations[0].amount,requestCost(f.messages,{maxTokens:32768}));assert.equal(f.ledger.autonomyEntries(f.id,0).length,1);assert.equal(f.ends.at(-1).usageConfidence,'reported');});
 await test('autonomous token exhaustion preserves the actual host-resolved amount for grants',async f=>{f.configure({tokenLimit:1000});await assert.rejects(f.call('executor'),e=>e.message==='AUTONOMOUS_BUDGET_EXHAUSTED'&&e.neededTokens===requestCost(f.messages,{maxTokens:32768}));assert.equal(f.stats.streams,0);assert.equal(f.ledger.autonomyEntries(f.id,0).length,0);});
-await test('grant request includes the refused host reservation instead of an obsolete small forecast',async f=>{f.configure({tokenLimit:1000});let failure;try{await f.call('executor');}catch(e){failure=e;}assert(failure?.neededTokens>32768);const estimate=autonomousBudgetEstimate({tokens:2000,requests:2},failure.neededTokens),store={journal:f.journal,budget:()=>f.agent.factory.autonomy.budget(),getTask:()=>null},request=AutonomyStore.prototype.requestBudget.call(store,f.id,'next-task',estimate);assert.equal(request.suggestedTokens,failure.neededTokens-1000);assert.equal(request.remainingTaskRequests,2);assert.equal(request.estimateKind,'includes-next-host-resolved-request');assert.equal(f.stats.streams,0);});
+await test('grant request includes the refused host reservation instead of an obsolete small forecast',async f=>{
+  f.configure({tokenLimit:1000});let failure;
+  try{await f.call('executor');}catch(e){failure=e;}
+  assert(failure?.neededTokens>32768);
+  const estimate=autonomousBudgetEstimate({tokens:2000,requests:2},failure.neededTokens);
+  const journal=new ControlJournal(':memory:');journal.safety=f.ledger;
+  try{
+    const store=new AutonomyStore(journal,new DomainMemory(journal)),request=store.requestBudget(f.id,'new-task',estimate);
+    assert.equal(request.suggestedTokens,failure.neededTokens-1000);assert.equal(request.remainingTaskRequests,2);
+    assert.equal(request.estimateKind,'includes-next-host-resolved-request');assert.equal(f.stats.streams,0);
+  }finally{journal.close();}
+});
 await test('autonomous request exhaustion still blocks dispatch',async f=>{f.configure({requestLimit:1});await f.call('selection');await assert.rejects(f.call('executor'),/AUTONOMOUS_BUDGET_EXHAUSTED/);assert.equal(f.stats.streams,1);});
 await test('host window supplies the reservation when output default is unspecified',async f=>{f.setPrepared({provider:'fixture-provider',model:'fixture-model'},{contextWindow:65536});await f.call('executor');assert.equal(f.reservations[0].request.outputReservation,65536);assert.equal(f.stats.prepared[0].maxTokens,undefined);});
 await test('unknown capacity cannot silently bypass an enabled autonomous token budget',async f=>{f.setPrepared({provider:'fixture-provider',model:'fixture-model'},undefined);await assert.rejects(f.call('executor'),/MODEL_BUDGET_ESTIMATE_UNAVAILABLE/);assert.equal(f.stats.streams,0);assert.equal(f.reservations.length,0);});
@@ -73,4 +85,13 @@ await test('upstream finish status survives without persisting supplier error te
 await test('invalid supplier status is not persisted as a valid HTTP failure',async f=>{f.setFinish({kind:'error',failure:{status:900,message:'untrusted'}});await assert.rejects(f.call(),/MODEL_EXECUTION_FAILED/);assert.equal(f.ends.at(-1).failureFacts.httpStatus,undefined);});
 await test('a provider output finish remains distinct without restoring a local limit',async f=>{f.setFinish({kind:'max-tokens'});await assert.rejects(f.call(),/OUTPUT_LIMIT/);assert.equal(f.ends.at(-1).failureFacts.streamFinish,'max-tokens');assert.equal(f.stats.prepared[0].maxTokens,undefined);});
 await test('provider failure is visible with route and survives a different lane success',async f=>{f.setFinish({kind:'error',failure:{status:404,code:'MODEL_NOT_FOUND',message:'Model fixture-model does not exist'}});await assert.rejects(f.call('selection'),/MODEL_EXECUTION_FAILED/);const row=f.metadata.get('modelFailures').selection;assert.equal(row.category,'model-unavailable');assert.equal(row.model,'fixture-model');assert.equal(row.httpStatus,404);assert.equal(row.attemptId,f.ends.at(-1).rid);f.setFinish({kind:'stop'});await f.call('foreground');assert(f.metadata.get('modelFailures').selection);await f.call('selection');assert(!f.metadata.get('modelFailures').selection);});
+await test('generated draft survives failed review with one accurate degradation notification',async f=>{
+ const notices=[];f.agent.factory.journal.publish=(...args)=>notices.push(args);f.agent.factory.dialogueState={context:()=>null};f.agent.factory.relationship={settings:()=>({enabled:false})};f.agent.factory.conversationReview=true;
+ f.setReply(JSON.stringify({reply:'我在，慢慢说。'}));f.onStream(()=>{if(f.stats.streams===2){f.setReply('');f.setFinish({kind:'error',failure:{message:'Stream ended without finish_reason'}});}});
+ const messages=contextMessages(f.agent,'foreground','规则',{persona:{version:1,core:'当前人物'},input:[]});
+ const result=await choiceDialogueRequest(modelRequest)(f.agent,f.controller.signal,{turn:1,epoch:1,lane:'foreground',messages});
+ const failure=f.metadata.get('modelFailures').foreground;
+ assert.equal(f.stats.streams,2);assert.equal(failure.purpose,'conversation-review');assert.equal(failure.category,'incomplete-stream');assert.equal(failure.textChars,0);
+ assert.equal(result.text,'我在，慢慢说。');assert.equal(result.dialogueQuality.causeAttemptId,failure.attemptId);assert.equal(result.dialogueQuality.status,'review-unavailable');assert(!f.ends.some(row=>row.error==='CONVERSATION_REVIEW_UNAVAILABLE'));assert.equal(notices.length,1);assert.equal(notices[0][2],'model-error');assert.match(notices[0][1],/基础校验继续处理/);assert(!notices[0][1].includes('尚未投递'));
+});
 const report={at:new Date().toISOString(),scope:'Synthetic adapter plus actual request, context, choice and signed quota functions; no production/model/IM.',passed:tests.filter(t=>t.passed).length,failed:tests.filter(t=>!t.passed).length,cases:tests};console.log(JSON.stringify(report));if(report.failed)process.exitCode=1;

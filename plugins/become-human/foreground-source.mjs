@@ -1,5 +1,5 @@
 import {createHash} from 'node:crypto';
-import {retrievalTerms} from './knowledge-signals.mjs';
+import {retrievalTerms,developmentLabel} from './knowledge-signals.mjs';
 
 // An extractive reply proves which observed text was used. It does not prove
 // that a public page is true, complete, current, or relevant to the question.
@@ -35,7 +35,7 @@ export function foregroundQuestionText(question){
   if(typeof question!=='string')fail('question-string-required','question');
   let text=question.normalize('NFKC'),removedConstraintCount=0;
   const changed=pattern=>{text=text.replace(pattern,()=>{removedConstraintCount++;return ' ';});};
-  changed(/^\s*(?:【(?:开发|测试|验收)[^】\n]{0,100}】\s*)+/u);
+  while(developmentLabel.test(text))changed(developmentLabel);
   // A standalone URL-reading instruction chooses the transport, not a claim
   // which the page must mention. Remove only the complete leading clause;
   // conditions or questions before/after the URL remain substantive.

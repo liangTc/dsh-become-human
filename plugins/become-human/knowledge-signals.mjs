@@ -108,13 +108,18 @@ export function topicKeys(text){
   const value=normalized(text);return aliases.filter(group=>group.some(term=>contains(value,term))).map(group=>group[0]).slice(0,6);
 }
 
+// These are labels emitted by older acceptance scripts. Keep ordinary project
+// headings intact, including 【开发计划】 and 【后端开发】.
+const fixtureLabel=/【(?:开发(?:测试|短测|验收)(?:(?:[\s：:][^】\n]{1,96})|(?:反馈|临时来源|批注|人工批注)(?:\s[^】\n]{1,64})?)?|隔离开发测试|连续输入测试|分条回复测试|提醒功能短测|提醒取消短测|到点触发短测|新版出站复测)】|\[(?:dev[ -]?test|test[ -]?fixture|acceptance[ -]?test)\]/iu;
+export const developmentLabel=new RegExp('^\\s*(?:'+fixtureLabel.source+')','iu');
+
 export function developmentInput(text){
   // Exclude explicit development fixtures without treating ordinary mentions
   // of a software test as proof that the owner's whole message is fictional.
   if(typeof text!=='string')return false;
   // Historical harness messages predate the bracketed marker. Recognize the
   // explicit fixture label/disclaimer, never a bare mention of software tests.
-  return /【[^】]*(?:测试|短测|验收|开发)[^】]*】|\[(?:dev[ -]?test|test[ -]?fixture|acceptance[ -]?test)\]/iu.test(text)
+  return fixtureLabel.test(text)
     ||/(?:这(?:是一条|是一次|是一段|条|只是|仅)|仅(?:供|用于)|本(?:条|轮)).{0,16}(?:开发测试|开发短测|测试输入|功能测试|验收测试|测试消息)|不(?:代表|作为|是).{0,12}(?:真实经历|个人偏好|真实偏好|真实需求)|测试(?:文字|内容|材料).{0,8}(?:不构成|不代表|不作为).{0,20}(?:喜好|偏好|经历|事实)|仅用于测试|开发测试[：:]|^(?:恢复闲聊测试|暂停恢复测试|手机入站短测|通道刷新补测)/u.test(text)
     ||/^\s*(?:QWEN_SHORT_[A-Z0-9]+|(?:WEB_(?:FORMAL|RECOVERY)|HOST_IDEMPOTENCY)_\d{8}(?:_[A-Z])?|P0_FINAL_REAL_[A-Z]|新版(?:角色|普通消息抢占|开放学习抢占|执行阶段抢占|继续|部署|前台优先|出站)(?:测试|短测))[：:]/iu.test(text);
 }

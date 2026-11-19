@@ -1,6 +1,7 @@
 import {randomUUID,createHash} from 'node:crypto';
 import {contextMessages,personaPolicy,contextPolicy} from './context.mjs';
 import {reviewConversationReply} from './conversation-review.mjs';
+import {reviewAvailability,canDegradeReview,recordReviewUnavailable,recordReviewSkipped,recordReviewRecovered} from './conversation-review-recovery.mjs';
 import {leakedDialogueHeader} from './dialogue-frame.mjs';
 import {requestedCapability} from './capability-dialogue.mjs';
 import {requestedBoard} from './cognition-dialogue.mjs';
@@ -37,7 +38,7 @@ export function choiceDialogueRequest(request){
       let system=textOf(options.messages[0]);const suffix=personaPolicy+contextPolicy;if(system.endsWith(suffix))system=system.slice(0,-suffix.length);
       let messages=contextMessages(agent,'foreground',system+choiceDialoguePolicy,{...data,...(relationship?{relationship}:{}),choiceOutputContract:contract});
       let reviewData=JSON.parse(textOf(messages[1])),styleRepair=false;
-      const repaired={protocol:false,conversation:false};
+      const repaired={protocol:false,conversation:false};let blockingReviewRejected=false;
       for(let pass=0;pass<3;pass++){
         const response=await request(agent,signal,{...options,...(styleRepair?{purpose:'conversation-style-repair'}:{}),messages}),parsed=parse(response.text);
         // Even malformed action output belongs to the bounded routing repair.
@@ -49,8 +50,12 @@ export function choiceDialogueRequest(request){
         if(!reply||parsed===undefined&&/^\s*(?:[\[{]|```)/u.test(reply))contractError=Object.assign(new Error('INVALID_DIALOGUE_RESPONSE'),{validationDiagnostic:{field:'reply',reason:'natural-reply-required'}});
         if(!contractError&&leakedDialogueHeader(reply,JSON.parse(textOf(messages[1]))))contractError=Object.assign(new Error('INVALID_DIALOGUE_RESPONSE'),{validationDiagnostic:{field:'reply',reason:'internal-transport-header'}});
         let conversationIssues,dialogueQuality;
-        if(!contractError&&f.conversationReview===true){
-          try{const review=await reviewConversationReply(agent,signal,{request,options,data:reviewData,reply});if(review.decision==='revise'){
+        const availability=reviewAvailability(agent);
+        if(!contractError&&f.conversationReview===true&&!availability.available&&!blockingReviewRejected){
+          dialogueQuality=recordReviewSkipped(agent,response,options,availability);
+        }else if(!contractError&&f.conversationReview===true){
+          try{const review=await reviewConversationReply(agent,signal,{request,options,data:reviewData,reply});recordReviewRecovered(agent);if(review.decision==='revise'){
+            if(review.issues.some(issue=>!stylisticIssues.has(issue.kind)))blockingReviewRejected=true;
             // A reviewed reply with only residual style feedback must not turn
             // into a failed user turn after the bounded semantic correction.
             // Provenance, factual scope, execution and pressure remain blocking.
@@ -59,7 +64,14 @@ export function choiceDialogueRequest(request){
               j.audit(id,'dialogue-quality-warning',{attemptId:response.rid,turn:options.turn,...dialogueQuality,issues:review.issues.map(issue=>({kind:issue.kind,spanHash:createHash('sha256').update(issue.span).digest('hex')})),origin:'owner',lane:'foreground'});
             }else{conversationIssues=review.issues;contractError=Object.assign(new Error('CONVERSATION_REVIEW_REJECTED'),{validationDiagnostic:{field:'reply',reason:'conversation-behavior',issueKinds:review.issues.map(issue=>issue.kind)}});}
           }}
-          catch(error){j.endAttempt(response.rid,{state:signal.aborted?'cancelled':'validation-rejected',usage:response.usage,usageConfidence:response.usage?'reported':'unknown',error:'CONVERSATION_REVIEW_UNAVAILABLE',textChars:response.text.length,reasoningChars:response.reasoningChars});throw error;}
+          catch(error){
+            const degraded=canDegradeReview(agent,signal,error,{epoch:options.epoch,blockingReviewRejected});
+            if(degraded)dialogueQuality=recordReviewUnavailable(agent,error,{response,options,degraded:true});
+            else{
+              if(!signal.aborted&&!['STALE_EPOCH','STALE_RESPONSE','USER_PREEMPTED','USER_STOPPED'].includes(error.code??error.message))recordReviewUnavailable(agent,error,{response,options,degraded:false});
+              j.endAttempt(response.rid,{state:signal.aborted?'cancelled':'failed',usage:response.usage,usageConfidence:response.usage?'reported':'unknown',error:'CONVERSATION_REVIEW_UNAVAILABLE',textChars:response.text.length,reasoningChars:response.reasoningChars,failureFacts:{phase:'conversation-review',causeAttemptId:error.attemptId??null,code:/^[A-Z_]{3,64}$/.test(error.code??error.message)?error.code??error.message:'MODEL_EXECUTION_FAILED',generatedReplyHeld:true}});throw error;
+            }
+          }
         }
         let dialogueState;
         if(!contractError&&plain(parsed)&&parsed.dialogue!=null&&f.dialogueState){
@@ -86,6 +98,10 @@ export function choiceDialogueRequest(request){
           try{relationshipDecision={ownerSourceIds,choice:f.relationship.validateDecision(id,parsed.choice,{ownerSourceIds})};}
           catch(error){j.audit(id,'relationship-choice-unscored',{attemptId:response.rid,code:error.message,reason:'invalid-optional-choice',validationDiagnostic:error.validationDiagnostic??null});}
         }
+        // Keep the original dialogue in the canonical conversation. Do not
+        // commit optional model-derived focus/relationship changes without the
+        // independent review; source/attribution validation above still runs.
+        if(dialogueQuality?.status==='review-unavailable'){dialogueState=undefined;relationshipDecision=undefined;}
         const clarification=plain(parsed)&&parsed.learningLookupDecision==='clarify'&&data.learningLookup?.requested===true&&!data.learningConversation?.note;
         return {...response,text:reply,...(dialogueQuality?{dialogueQuality}:{}),...(clarification?{learningLookupDecision:'clarify'}:{}),...(dialogueState?{dialogueState}:{}),...(relationshipDecision?{relationshipDecision}:{})};
       }

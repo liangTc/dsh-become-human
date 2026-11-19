@@ -65,7 +65,7 @@ export class DomainMemory {
     const body=message.content.filter(b=>b.type==='text').map(b=>b.text).join('');
     if(secret(body)||message.source?.kind!=='human')return;
     this.source(agent,{id:message.id,body,occurred:time});
-    if(developmentInput(body)){
+    if(this.sourceIsDevelopmentTest(agent,message.id)){
       // The canonical dialogue remains usable for this turn. An explicitly
       // fictional fixture must not become a real owner's episode or preference.
       this.journal.put(agent,'observed:'+message.id,true);this.journal.audit(agent,'development-input-excluded',{sourceId:message.id,textChars:body.length,scope:'automatic-long-term-memory'});return;
@@ -73,6 +73,40 @@ export class DomainMemory {
     this.save(agent,{type:'episode',payload:{userSaid:body},refs:[message.id],confidence:1});
     for(const preference of preferenceStatements(body))this.save(agent,{type:'fact',payload:{entity:'user',predicate:'preference',...preference},refs:[message.id]});
     this.journal.put(agent,'observed:'+message.id,true);
+  }
+  repairWorkLabelMemories(agent){
+    this.journal.assertAdmitted(agent);
+    if(this.journal.value(agent,'workLabelsRepairedV1',false))return 0;
+    // Repair only messages the old observer actually excluded. Source times
+    // and current owner edits win over a newly recovered historical claim.
+    return this.journal.transaction(()=>{
+      const candidates=this.db.prepare(`SELECT DISTINCT s.id,s.body,s.occurred FROM audit a
+        JOIN source_record s ON s.agent=a.agent AND s.id=json_extract(a.data,'$.sourceId')
+        WHERE a.agent=? AND a.kind='development-input-excluded' AND s.kind='user' AND s.namespace='real'
+          AND s.status='active' AND s.root=s.id AND instr(s.body,'【')>0 AND s.occurred>?
+        ORDER BY s.occurred DESC,s.id`).all(agent,this.journal.value(agent,'memoryContextBarrierAt',0));
+      let restored=0;
+      const existingSlot=new Set(this.db.prepare("SELECT json_extract(payload,'$.value') AS value FROM memory_record WHERE agent=? AND type='fact' AND json_extract(payload,'$.predicate')='preference'").all(agent).map(row=>preferenceKey(row.value)));
+      for(const row of candidates){
+        if(!/【[^】]*(?:测试|短测|验收|开发)[^】]*】/u.test(row.body)||this.sourceIsDevelopmentTest(agent,row.id)||!this.sourceUsable(agent,row.id)||secret(row.body))continue;
+        if(this.db.prepare("SELECT 1 FROM dependency WHERE source=? AND kind='memory' LIMIT 1").get(row.id))continue;
+        const episode={userSaid:row.body};
+        if(JSON.stringify(episode).length>2048)continue;
+        const insert=(type,payload)=>{
+          const memory=this.save(agent,{type,payload,refs:[row.id],confidence:type==='episode'?1:.7});
+          this.db.prepare('UPDATE memory_record SET valid_from=min(valid_from,?) WHERE id=? AND agent=?').run(row.occurred,memory,agent);
+        };
+        insert('episode',episode);restored++;
+        for(const item of preferenceStatements(row.body)){
+          const key=preferenceKey(item.value);
+          if(existingSlot.has(key))continue;
+          insert('fact',{entity:'user',predicate:'preference',...item});existingSlot.add(key);
+        }
+      }
+      this.journal.put(agent,'workLabelsRepairedV1',true);
+      this.journal.audit(agent,'work-label-memories-repaired',{restored});
+      return restored;
+    });
   }
   repairPreferenceSlots(agent){
     if(this.journal.value(agent,'preferenceSlotsV2',false))return {restored:0,alreadyApplied:true};
@@ -147,7 +181,8 @@ export class DomainMemory {
     // trusted-result text mentioning a software test is not an owner fixture.
     const seen=new Set();
     for(let depth=0;typeof id==='string'&&!seen.has(id)&&depth<32;depth++){
-      seen.add(id);const row=this.db.prepare('SELECT id,kind,body,root FROM source_record WHERE agent=? AND id=?').get(agent,id);if(!row)return false;
+      seen.add(id);if(this.journal.value(agent,'fixture:'+id,false))return true;
+      const row=this.db.prepare('SELECT id,kind,body,root FROM source_record WHERE agent=? AND id=?').get(agent,id);if(!row)return false;
       if(row.kind==='user'&&developmentInput(row.body))return true;
       if(row.kind==='configuration'){
         let data;try{data=JSON.parse(row.body);}catch{}

@@ -17,6 +17,14 @@ const clip=(value,count)=>Array.from(value).slice(0,count).join('');
 const slot=scope=>scope==='normal'?'normal':'development';
 const key=scope=>'rolling-dialogue-summary:'+slot(scope);
 const holdKey=scope=>'rolling-dialogue-summary-hold:'+slot(scope);
+// Old records identified only the failure time. Keep that historical gap
+// closed, while allowing turns completed after the failure to be compacted.
+function availableAfterFailure(turns,held,scope){
+  if(held?.scope!==scope)return turns;
+  const excluded=new Set(held.turns?.map(turn=>turn.id));
+  const cutoff=held.legacyThroughTime??(held.turns?0:held.at);
+  return turns.filter(turn=>!excluded.has(turn.id)&&turn.rows.some(row=>row.time>cutoff)&&turn.rows.some(row=>row.order>(held.throughOrder??0)));
+}
 const interruptKey=scope=>'rolling-dialogue-summary-interrupted:'+slot(scope);
 const scopeIsDev=scope=>scope.startsWith('development:');
 const distinct=values=>Array.isArray(values)&&values.length===new Set(values).size;
@@ -93,11 +101,11 @@ export class RollingDialogueSummary {
   prepare(agent,{admittedIds=[],recentTurnLimit}={}){
     this.admitted(agent);if(!distinct(admittedIds)||admittedIds.some(id=>!ident(id)))fail('INVALID_DIALOGUE_SUMMARY_INPUT');
     const state=this.archive(agent,{admittedIds,recentTurnLimit}),held=this.journal.value(agent.id,holdKey(state.scope),null);
-    if(held?.scope===state.scope)return null;
+    const available=availableAfterFailure(state.uncovered,held,state.scope);
     const threshold=state.chunks.length?policy.nextThreshold:policy.firstThreshold;
-    if(state.uncovered.length<threshold&&!state.invalidChunks)return null;
+    if(available.length<threshold&&!state.invalidChunks)return null;
     const turns=[],sources=[];
-    for(const turn of state.uncovered.slice(0,policy.maxTurnsPerJob)){
+    for(const turn of available.slice(0,policy.maxTurnsPerJob)){
       let count=1200,rows;
       do{rows=turn.rows.map(row=>({id:row.id,role:row.role,time:row.time,text:clip(row.text,count),excerpted:Array.from(row.text).length>count}));count=Math.floor(count/2);}while(byteLength({id:turn.id,rows})>policy.maxInputBytes-1000&&count>=75);
       const candidate=[...turns,{id:turn.id,rows}];if(byteLength({turns:candidate})>policy.maxInputBytes)break;
@@ -144,15 +152,21 @@ export class RollingDialogueSummary {
       if(!fresh||fresh.scope!==job.scope||fresh.fingerprint!==job.fingerprint||fresh.expectedVersion!==job.expectedVersion)fail('STALE_DIALOGUE_SUMMARY');
       const sections=this.validateOutput(fresh,output),state=this.archive(agent,{admittedIds:fresh.admittedIds,recentTurnLimit:fresh.recentTurnLimit}),now=this.clock(),chunk={id:randomUUID(),scope:fresh.scope,fingerprint:fresh.fingerprint,created:now,sections,sources:fresh.sources,turns:fresh.input.turns.map(turn=>({id:turn.id,sourceIds:turn.rows.map(row=>row.id)})),excerptedMessages:fresh.input.turns.flatMap(turn=>turn.rows).filter(row=>row.excerpted).length};
       const all=[...state.chunks,chunk],evicted=Math.max(0,all.length-policy.maxChunks),discarded=all.slice(0,evicted),value={version:1,revision:job.expectedVersion+1,scope:job.scope,updated:now,chunks:all.slice(-policy.maxChunks),evictedChunks:(current?.scope===job.scope?current.evictedChunks??0:0)+evicted,evictedTurns:(current?.scope===job.scope?current.evictedTurns??0:0)+discarded.reduce((n,chunk)=>n+chunk.turns.length,0),retiredThroughSeq:Math.max(current?.scope===job.scope?current.retiredThroughSeq??0:0,...discarded.flatMap(chunk=>chunk.sources.map(row=>row.order)))};
-      this.journal.put(agent.id,key(job.scope),value);this.journal.put(agent.id,'rolling-dialogue-summary:lastScope',job.scope);this.journal.put(agent.id,holdKey(job.scope),null);this.journal.put(agent.id,interruptKey(job.scope),null);
+      this.journal.put(agent.id,key(job.scope),value);this.journal.put(agent.id,'rolling-dialogue-summary:lastScope',job.scope);this.journal.put(agent.id,interruptKey(job.scope),null);
       this.journal.audit(agent.id,'dialogue-summary-committed',{revision:value.revision,scope:scopeIsDev(job.scope)?'development':'normal',chunkId:chunk.id,sourceTurns:chunk.turns.length,sourceMessages:chunk.sources.length,backlogTurns:job.backlogTurns,evictedChunks:evicted,semanticVerified:false,ownerFactsWritten:false,permissionsChanged:false});return this.snapshot(agent,{admittedIds:job.admittedIds,recentTurnLimit:job.recentTurnLimit});
     });
   }
   fail(agent,job,code){
     this.admitted(agent);if(!job?.scope||!ident(job.id)||!job.fingerprint)return;
     const reason=typeof code==='string'&&/^[A-Z_]{3,80}$/u.test(code)?code:'DIALOGUE_SUMMARY_FAILED';
-    this.journal.put(agent.id,holdKey(job.scope),{scope:job.scope,at:this.clock(),jobId:job.id,fingerprint:job.fingerprint,code:reason});
-    this.journal.audit(agent.id,'dialogue-summary-held',{code:reason,jobId:job.id,scope:scopeIsDev(job.scope)?'development':'normal',previousSummaryPreserved:true});
+    const saved=this.journal.value(agent.id,holdKey(job.scope),null),prior=saved?.scope===job.scope?saved:null;
+    const failed=new Map(prior?.turns?.map(turn=>[turn.id,turn.order]));
+    for(const row of job.sources)failed.set(row.turnId,Math.max(failed.get(row.turnId)??0,row.order));
+    const ordered=[...failed].map(([id,order])=>({id,order})).sort((a,b)=>a.order-b.order);
+    const discarded=ordered.slice(0,Math.max(0,ordered.length-policy.maxRawTurns));
+    const throughOrder=discarded.reduce((n,row)=>Math.max(n,row.order),prior?.throughOrder??0);
+    this.journal.put(agent.id,holdKey(job.scope),{scope:job.scope,at:this.clock(),jobId:job.id,fingerprint:job.fingerprint,code:reason,turns:ordered.slice(-policy.maxRawTurns),throughOrder,legacyThroughTime:prior?.legacyThroughTime??(prior&&!prior.turns?prior.at:0)});
+    this.journal.audit(agent.id,'dialogue-summary-held',{code:reason,jobId:job.id,scope:scopeIsDev(job.scope)?'development':'normal',sourceTurnIds:job.coveredTurnIds,previousSummaryPreserved:true});
   }
   interrupt(agent,job){
     this.admitted(agent);if(!job?.scope||!ident(job.id)||typeof job.fingerprint!=='string'||typeof job.basis!=='string')return;
@@ -193,7 +207,8 @@ export class RollingDialogueSummary {
   }
   snapshot(agent,options={}){
     this.admitted(agent);const scope=this.scope(agent,options),state=this.archive(agent,options),record=state.record,held=this.journal.value(agent.id,holdKey(scope),null),interruption=this.journal.value(agent.id,interruptKey(scope),null),latestOwner=agent.session.snapshotEvents().filter(e=>e.type==='user/message').at(-1),comparison=options.admittedIds?.length||!interruption?.admittedIds?.includes(latestOwner?.data.id)?state:this.archive(agent,{admittedIds:interruption.admittedIds,recentTurnLimit:interruption.recentTurnLimit}),interrupted=interruption?.scope===scope&&interruption.basis===this.basis(agent,comparison),turns=new Set(state.chunks.flatMap(chunk=>chunk.turns.map(turn=>turn.id)));
-    return {version:record?.scope===scope?record.revision:0,enabled:true,scope,developmentOnly:scopeIsDev(scope),status:held?.scope===scope?'held':interrupted?'interrupted':state.chunks.length?'active':state.invalidChunks?'invalidated':'empty',updated:record?.scope===scope?record.updated:null,sourceTurnCount:turns.size,sourceMessageCount:new Set(state.chunks.flatMap(chunk=>chunk.sources.map(row=>row.id))).size,chunkCount:state.chunks.length,invalidatedChunks:state.invalidChunks,backlogTurns:state.uncovered.length,evictedChunks:record?.scope===scope?record.evictedChunks??0:0,omittedOlderTurns:record?.scope===scope?record.evictedTurns??0:0,olderNativeRepliesOutsideScan:state.olderNativeRepliesOutsideScan,hold:held?.scope===scope?{code:held.code,at:held.at}:null,interrupted:interrupted?{at:interruption.at,count:interruption.count,waitingFor:'new-expired-basis-or-explicit-retry'}:null,limits:policy,originalsRetained:true,semanticVerified:false,ownerFactsWritten:false,permissionsChanged:false};
+    const eligible=availableAfterFailure(state.uncovered,held,scope).length;
+    return {version:record?.scope===scope?record.revision:0,enabled:true,scope,developmentOnly:scopeIsDev(scope),status:held?.scope===scope?'held':interrupted?'interrupted':state.chunks.length?'active':state.invalidChunks?'invalidated':'empty',updated:record?.scope===scope?record.updated:null,sourceTurnCount:turns.size,sourceMessageCount:new Set(state.chunks.flatMap(chunk=>chunk.sources.map(row=>row.id))).size,chunkCount:state.chunks.length,invalidatedChunks:state.invalidChunks,backlogTurns:state.uncovered.length,eligibleTurns:eligible,heldTurns:state.uncovered.length-eligible,evictedChunks:record?.scope===scope?record.evictedChunks??0:0,omittedOlderTurns:record?.scope===scope?record.evictedTurns??0:0,olderNativeRepliesOutsideScan:state.olderNativeRepliesOutsideScan,hold:held?.scope===scope?{code:held.code,at:held.at}:null,interrupted:interrupted?{at:interruption.at,count:interruption.count,waitingFor:'new-expired-basis-or-explicit-retry'}:null,limits:policy,originalsRetained:true,semanticVerified:false,ownerFactsWritten:false,permissionsChanged:false};
   }
 }
 

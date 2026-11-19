@@ -1,6 +1,6 @@
 {
   "name": "dsh-become-human",
-  "version": "0.7.0-beta.40",
+  "version": "0.7.0-beta.41",
   "type": "module",
   "description": "Bounded autonomous Agent Web integration for DSH 0.2.0-rc.2",
   "main": "index.mjs",
@@ -14,6 +14,8 @@
   "files": [
     "index.mjs",
     "driver.mjs",
+    "run-status.mjs",
+    "quiet-hours.mjs",
     "conversation-recall.mjs",
     "api.mjs",
     "panel.html",
@@ -106,6 +108,7 @@
     "work-observation-runtime.mjs",
     "choice-dialogue.mjs",
     "conversation-review.mjs",
+    "conversation-review-recovery.mjs",
     "learning-selection-review.mjs",
     "relationship-choice.mjs",
     "dialogue-frame.mjs",

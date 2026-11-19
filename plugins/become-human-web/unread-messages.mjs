@@ -1,4 +1,4 @@
-const visibleMessage = row => ['assistant','budget-request'].includes(row?.kind)
+const visibleMessage = row => ['assistant','budget-request','model-error'].includes(row?.kind)
   && Number.isSafeInteger(row.seq) && row.seq > 0 && !!String(row.displayText ?? row.text ?? '').trim();
 export class UnreadMessages {
   constructor(storage){this.storage=storage;this.seen=new Map();this.session=null;this.rows=[];}

@@ -1,4 +1,4 @@
-import {quotaView} from './quota.mjs';
+import {quotaView,signedBudgetTime} from './quota.mjs';
 
 const HOUR=3600000,DAY=24*HOUR;
 const parse=value=>{try{return typeof value==='string'?JSON.parse(value):value??null;}catch{return null;}};
@@ -78,6 +78,7 @@ function category(row,index){
   return Object.hasOwn(taskKinds,task?.kind)?taskKinds[task.kind]:'other';
 }
 function signedIndex(ledger){
+  if(ledger?.budget?.dispatched)return ledger.budget.dispatched;
   const dispatched=new Set();
   for(const row of ledger?.rows??[])if(row.kind==='budget-dispatch'){const data=parse(row.data);if(typeof data?.rid==='string')dispatched.add(data.rid);}
   return dispatched;
@@ -113,9 +114,7 @@ function rowsFor(db,id,start,end,tables){
 }
 function quotaSnapshot(factory,id,now,dispatch,tables){
   const j=factory.journal,ledger=j.safety,policy=factory.autonomy.settings(id);
-  const ids=ledger?.autonomyAgents?.(id)??new Set([id]);
-  let signedNow=Math.max(now,j.value(id,'autonomyTimeHighWater',0));
-  for(const entry of ledger?.budget?.entries.values()??[])if(ids.has(entry.agent))signedNow=Math.max(signedNow,count(entry.created)??0);
+  const signedNow=Math.max(now,j.value(id,'autonomyTimeHighWater',0),signedBudgetTime(ledger,id));
   const view=quotaView(ledger??{autonomyEntries:()=>[],autonomyGrants:()=>[]},id,policy,signedNow);
   const entries=ledger?.autonomyEntries?.(id,view.windowStart).filter(entry=>entry.created<=signedNow&&entry.status!=='released')??[];
   let reportedTokens=0,unknownUsageRequests=0,pendingReservedTokens=0,settledConservativeTokens=0,dispatchedRequests=0,preparedRequests=0,partialReportedTokens=0,derivedTotalRequests=0;
@@ -136,7 +135,7 @@ function quotaSnapshot(factory,id,now,dispatch,tables){
     pendingReservedTokens:available?pendingReservedTokens:null,settledConservativeTokens:available?settledConservativeTokens:null,
     partialReportedTokens:available?partialReportedTokens:null,derivedTotalRequests,
     legacyRoundEstimate:available?entries.filter(entry=>!entry.roundId).length:null,
-    includesRetiredSessionLedger:ids.size>1};
+    includesRetiredSessionLedger:(ledger?.autonomyAgents?.(id)?.size??1)>1};
 }
 
 // A read-only view of existing requests and durable budget tickets. Opening the

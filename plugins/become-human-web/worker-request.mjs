@@ -1,4 +1,4 @@
-const retryableReads=new Set(['behavior-catalog','workflow-catalog']);
+const retryableReads=new Set(['behavior-catalog','workflow-catalog','runtime-status','chat-state']);
 const transientCodes=new Set(['WORKER_REQUEST_TIMEOUT','WORKER_CONNECTION_FAILED']);
 
 // Retry only observation requests against the very same worker. A successful

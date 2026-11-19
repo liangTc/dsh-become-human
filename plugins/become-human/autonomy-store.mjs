@@ -1,10 +1,25 @@
 import {createHash} from 'node:crypto';
 import {currentPersonaProfile,PERSONA_CONTEXT_VERSION} from './persona-profile.mjs';
 import {researchUrl,learningCoverage,claimTextProjection} from './learning.mjs';
-import {quotaView,quotaWindow} from './quota.mjs';
+import {quotaView,quotaWindow,signedBudgetTime} from './quota.mjs';
 import {socialDefaults,socialStatus} from './social.mjs';
+import {defaultQuietHours,quietUntil,zoneOffsetMinutes} from './quiet-hours.mjs';
 import {developmentInput} from './knowledge-signals.mjs';
 const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
+function budgetShortfall(budget,tokens,requests,roundId){
+  const availableTokens=budget.tokenLimit===null?null:Math.max(0,budget.tokenLimit-budget.reservedTokens);
+  const availableRequests=budget.requestLimit===null?null:Math.max(0,budget.requestLimit-budget.requests);
+  return {availableTokens,availableRequests,suggestedTokens:Math.max(0,tokens-(availableTokens??Infinity)),
+    suggestedRequests:Math.max(0,requests-(availableRequests??Infinity)),
+    suggestedRounds:budget.roundLimit!==null&&!budget.roundIds.includes(roundId)&&budget.rounds>=budget.roundLimit?1:0};
+}
+function budgetNoticeText(request){
+  const parts=[];
+  if(request.suggestedTokens>0)parts.push('约 '+Math.ceil(request.suggestedTokens).toLocaleString('en-US')+' token 的可用额度');
+  if(request.suggestedRequests>0)parts.push(request.suggestedRequests+' 次请求');
+  if(request.suggestedRounds>0)parts.push(request.suggestedRounds+' 轮自主活动');
+  return '【自主额度申请】自主活动正在等待额度，本次预计还需 '+parts.join('、')+'。请在 Human 的“自主与额度”中查看并决定是否补充；这是准入预估，不是实际扣费，与你聊天仍可用。';
+}
 export function learningMemoryPayload(result,source){
   const {text:summary,...summaryProjection}=claimTextProjection(result.claims,{maxChars:400});
   const payload={title:result.title,summary,url:source.url,sourceDigest:source.digest,knowledgeStatus:'source-linked-interpretation',summaryProjection};
@@ -16,7 +31,7 @@ export function learningMemoryPayload(result,source){
   if(Buffer.byteLength(JSON.stringify(payload),'utf8')>2048)throw new Error('LEARNING_MEMORY_OVERVIEW_TOO_LARGE');
   return payload;
 }
-const defaults={...socialDefaults,enabled:false,presetId:'custom',learningEnabled:false,proactiveEnabled:false,quotaEnabled:true,tokenQuotaEnabled:true,requestQuotaEnabled:true,roundQuotaEnabled:false,roundLimit:24,roundTimeoutMs:300000,budgetWindow:'utc-day',wakeIntervalMs:600000,quotaTransitionStart:0,quotaTransitionUntil:0,goalProposalsEnabled:false,goalAutoActivateEnabled:false,searchEnabled:false,searchProvider:'bing',searchEndpoint:'',sources:[],tokenLimit:40000,requestLimit:24,sourceIntervalMs:3600000,contactCooldownMs:3600000,quietStart:22,quietEnd:8,timeZoneOffsetMinutes:480};
+const defaults={...socialDefaults,enabled:false,presetId:'custom',learningEnabled:false,proactiveEnabled:false,quotaEnabled:true,tokenQuotaEnabled:true,requestQuotaEnabled:true,roundQuotaEnabled:false,roundLimit:24,roundTimeoutMs:300000,budgetWindow:'utc-day',wakeIntervalMs:600000,quotaTransitionStart:0,quotaTransitionUntil:0,goalProposalsEnabled:false,goalAutoActivateEnabled:false,searchEnabled:false,searchProvider:'bing',searchEndpoint:'',sources:[],tokenLimit:40000,requestLimit:24,sourceIntervalMs:3600000,contactCooldownMs:3600000,...defaultQuietHours,quietTimeZone:null,timeZoneOffsetMinutes:480};
 export class AutonomyStore {
   constructor(journal,domain){
     this.journal=journal;this.domain=domain;this.db=journal.db;
@@ -25,19 +40,30 @@ export class AutonomyStore {
       CREATE TABLE IF NOT EXISTS autonomy_task(id TEXT PRIMARY KEY,agent TEXT,kind TEXT,status TEXT,checkpoint TEXT,persona_version INTEGER,created INTEGER,updated INTEGER);
       CREATE TABLE IF NOT EXISTS learning_note(id TEXT PRIMARY KEY,agent TEXT,memory_id TEXT,source_id TEXT,data TEXT,status TEXT,created INTEGER,feedback TEXT);
       CREATE TABLE IF NOT EXISTS human_activity_feedback(task TEXT PRIMARY KEY,agent TEXT NOT NULL,created INTEGER NOT NULL,attempts INTEGER NOT NULL DEFAULT 0,code TEXT,next_at INTEGER NOT NULL DEFAULT 0);
-      CREATE INDEX IF NOT EXISTS autonomy_task_agent ON autonomy_task(agent,status);`);
+      CREATE INDEX IF NOT EXISTS autonomy_task_agent ON autonomy_task(agent,status);
+      CREATE INDEX IF NOT EXISTS autonomy_task_pending_order ON autonomy_task(agent,created,id) WHERE status IN ('ready','suspended','waiting-budget');`);
     this.db.prepare("UPDATE autonomy_task SET status='suspended' WHERE status='executing'").run();
   }
-  settings(id){return {...defaults,...(this.journal.safety?.autonomyPolicy(id)??this.journal.value(id,'autonomySettings',{}))};}
+  settings(id){
+    const policy=this.journal.safety?.autonomyPolicy(id)??this.journal.value(id,'autonomySettings',{});
+    const settings={...defaults,...policy},legacy=this.legacyQuietHours;
+    // Legacy onboarding recorded the zone separately. Respect subsequent manual offset changes.
+    if(!Object.hasOwn(policy,'quietTimeZone')&&legacy?.sessionId===id&&settings.timeZoneOffsetMinutes===legacy.offset)
+      settings.quietTimeZone=legacy.zone;
+    return settings;
+  }
   async configure(id,input){
     if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).some(k=>!Object.hasOwn(defaults,k)||['quotaTransitionStart','quotaTransitionUntil'].includes(k)))throw new Error('INVALID_AUTONOMY_SETTINGS');
-    const s={...this.settings(id),...input};
+    const previous=this.settings(id),s={...previous,...input};
+    if(!Object.hasOwn(input,'quietTimeZone')&&Object.hasOwn(input,'timeZoneOffsetMinutes')&&input.timeZoneOffsetMinutes!==previous.timeZoneOffsetMinutes)s.quietTimeZone=null;
+    if(s.quietTimeZone!==null)zoneOffsetMinutes(s.quietTimeZone,Date.now());
     for(const k of ['enabled','learningEnabled','proactiveEnabled','socialEnabled','quotaEnabled','searchEnabled','tokenQuotaEnabled','requestQuotaEnabled','roundQuotaEnabled','goalProposalsEnabled','goalAutoActivateEnabled'])if(typeof s[k]!=='boolean')throw new Error('INVALID_AUTONOMY_SETTINGS');
     for(const [k,min,max] of [['socialIntervalMs',600000,86400000],['socialMinGapMs',600000,86400000],['socialMaxUnanswered',1,8],['socialTopicCooldownMs',600000,604800000]])if(!Number.isSafeInteger(s[k])||s[k]<min||s[k]>max)throw new Error('INVALID_AUTONOMY_SETTINGS');
     if(!['utc-day','local-day','rolling-day'].includes(s.budgetWindow))throw new Error('INVALID_BUDGET_WINDOW');
     for(const [key,min,max] of [['roundLimit',1,10000],['roundTimeoutMs',1000,3600000],['wakeIntervalMs',10000,3600000]])if(!Number.isSafeInteger(s[key])||s[key]<min||s[key]>max)throw new Error('INVALID_AUTONOMY_SETTINGS');
-    const previous=this.settings(id),now=Math.max(Date.now(),this.journal.value(id,'autonomyTimeHighWater',0));
-    if(s.budgetWindow!==previous.budgetWindow||s.timeZoneOffsetMinutes!==previous.timeZoneOffsetMinutes&&s.budgetWindow==='local-day'){
+    const now=Math.max(Date.now(),this.journal.value(id,'autonomyTimeHighWater',0));
+    const windowChanged=s.budgetWindow!==previous.budgetWindow||s.timeZoneOffsetMinutes!==previous.timeZoneOffsetMinutes&&s.budgetWindow==='local-day';
+    if(windowChanged){
       const oldWindow=quotaWindow(previous,now);s.quotaTransitionStart=oldWindow.start;s.quotaTransitionUntil=oldWindow.end??now+86400000;
     }
     if(!['bing','duckduckgo','searxng'].includes(s.searchProvider)||typeof s.searchEndpoint!=='string')throw new Error('INVALID_SEARCH_SETTINGS');
@@ -49,7 +75,11 @@ export class AutonomyStore {
     if(!this.journal.safety)throw new Error('SIGNED_CONTROL_REQUIRED');
     await this.journal.safety.prepare('autonomy-policy:'+crypto.randomUUID(),'autonomy-policy',{agent:id,settings:s});
     this.journal.put(id,'autonomySettings',s);
-    if(!s.quotaEnabled){this.journal.put(id,'autonomyBudgetRequest',null);this.journal.put(id,'autonomyWait',null);if(!this.journal.value(id,'autonomyPaused',false)&&!this.journal.value(id,'autonomyError',null))this.journal.put(id,'autonomyPhase','waiting');}
+    if(!s.quotaEnabled||windowChanged)this.journal.put(id,'autonomyBudgetRequest',null);
+    else if(['tokenLimit','requestLimit','roundLimit','tokenQuotaEnabled','requestQuotaEnabled','roundQuotaEnabled'].some(key=>s[key]!==previous[key])){
+      this.journal.put(id,'autonomyBudgetRequest',this.pendingBudgetRequest(id,now));
+    }
+    if(!s.quotaEnabled){this.journal.put(id,'autonomyWait',null);if(!this.journal.value(id,'autonomyPaused',false)&&!this.journal.value(id,'autonomyError',null))this.journal.put(id,'autonomyPhase','waiting');}
     // presetId is retained only for compatibility with saved autonomy policy.
     // Applying cost or scheduling settings must never overwrite the profile.
     this.event(id,'settings:'+hash(s)+':'+this.domain.persona(id).version,'configuration',{presetId:s.presetId});return s;
@@ -88,8 +118,15 @@ export class AutonomyStore {
     const tid=crypto.randomUUID(),now=Date.now();this.db.prepare("INSERT INTO autonomy_task VALUES(?,?,?,'ready',?,?,?,?)").run(tid,id,kind,JSON.stringify(checkpoint),version,now,now);this.journal.audit(id,'task-created',{taskId:tid,kind,question:checkpoint.candidate?.question??null});return this.getTask(tid);
   }
   getTask(tid){const row=this.db.prepare('SELECT * FROM autonomy_task WHERE id=?').get(tid);return row?{...row,checkpoint:JSON.parse(row.checkpoint)}:null;}
-  pendingTasks(id){return this.db.prepare("SELECT id FROM autonomy_task t WHERE agent=? AND status IN ('ready','suspended','waiting-budget') AND NOT EXISTS(SELECT 1 FROM goal_record g WHERE g.id=json_extract(t.checkpoint,'$.goal.id') AND g.agent=t.agent AND g.status='paused') ORDER BY created,id").all(id);}
-  pending(id){return this.pendingTasks(id)[0];}
+  pendingTasks(id,{after,limit=-1}={}){
+    const query="SELECT id,created FROM autonomy_task t WHERE agent=? AND status IN ('ready','suspended','waiting-budget') AND NOT EXISTS(SELECT 1 FROM goal_record g WHERE g.id=json_extract(t.checkpoint,'$.goal.id') AND g.agent=t.agent AND g.status='paused')";
+    const order=' ORDER BY created,id LIMIT ?';
+    if(!after)return this.db.prepare(query+order).all(id,limit);
+    const rows=this.db.prepare(query+' AND (created,id)>(?,?)'+order).all(id,after.created,after.id,limit);
+    if(limit<0||rows.length<limit)rows.push(...this.db.prepare(query+' AND (created,id)<=(?,?)'+order).all(id,after.created,after.id,limit<0?-1:limit-rows.length));
+    return rows;
+  }
+  pending(id){return this.pendingTasks(id,{limit:1})[0];}
   update(tid,status,checkpoint){return this.journal.transaction(()=>{const task=this.getTask(tid);if(!task)return;this.db.prepare('UPDATE autonomy_task SET status=?,checkpoint=?,updated=? WHERE id=?').run(status,JSON.stringify(checkpoint??task.checkpoint),Date.now(),tid);this.journal.audit(task.agent,'task-'+status,{taskId:tid,roundId:checkpoint?.roundId??task.checkpoint.roundId??tid,kind:task.kind,priorStatus:task.status,noteId:checkpoint?.noteId??task.checkpoint.noteId,reason:checkpoint?.reason,checkpoint:checkpoint?{plan:checkpoint.plan??null,source:checkpoint.source?{url:checkpoint.source.url,digest:checkpoint.source.digest}:null,noteId:checkpoint.noteId??null,researchReads:checkpoint.researchReads??null}:null});if(['completed','cancelled','failed'].includes(status)&&this.journal.value(task.agent,'autonomyBudgetRequest',null)?.taskId===tid)this.journal.put(task.agent,'autonomyBudgetRequest',null);if(['completed','cancelled','failed'].includes(status)&&task.kind!=='behavior-choice')this.db.prepare('INSERT INTO human_activity_feedback(task,agent,created) VALUES(?,?,?) ON CONFLICT(task) DO NOTHING').run(tid,task.agent,Date.now());});}
   correction(id,url){return this.journal.value(id,'learning-correction:'+hash(url),null);}
   correctionSources(id){return this.db.prepare("SELECT data FROM learning_note WHERE agent=? AND status='corrected' ORDER BY created DESC LIMIT 20").all(id).map(r=>JSON.parse(r.data)).filter(n=>n&&this.correction(id,n.source.requestedUrl??n.source.url)).map(n=>({url:n.source.requestedUrl??n.source.url,title:n.title,topic:('根据纠正反馈重新核对原学习问题：'+(n.researchQuestion||n.title)).slice(0,240),discovery:n.source.discovery??null}));}
@@ -165,29 +202,58 @@ export class AutonomyStore {
     this.event(id,'feedback:'+noteId+':'+hash(feedback),'feedback',{noteId,...feedback});return feedback;});
   }
   deleteNote(id,noteId){return this.journal.transaction(()=>{const note=this.db.prepare('SELECT * FROM learning_note WHERE id=? AND agent=?').get(noteId,id);if(!note)throw new Error('LEARNING_NOTE_NOT_FOUND');const data=JSON.parse(note.data);if(data){const url=data.source.requestedUrl??data.source.url;if(this.correction(id,url)?.noteId===noteId)this.journal.put(id,'learning-correction:'+hash(url),null);}const memory=this.db.prepare("SELECT status FROM memory_record WHERE id=?").get(note.memory_id);if(memory?.status==='active')this.domain.forgetRecord(id,note.memory_id);this.db.prepare("UPDATE learning_note SET data='null',feedback=NULL,status='deleted' WHERE id=?").run(noteId);this.db.prepare("DELETE FROM human_note_revision WHERE agent=? AND note=?").run(id,noteId);this.db.prepare("UPDATE source_record SET body='',status='deleted' WHERE id=?").run(note.source_id);this.domain.invalidate(note.source_id);});}
-  quiet(s,time=Date.now()){const hour=new Date(time+s.timeZoneOffsetMinutes*60000).getUTCHours();return s.quietStart===s.quietEnd?false:s.quietStart<s.quietEnd?hour>=s.quietStart&&hour<s.quietEnd:hour>=s.quietStart||hour<s.quietEnd;}
-  budget(id){
-    const s=this.settings(id),now=Math.max(Date.now(),this.journal.value(id,'autonomyTimeHighWater',0));this.journal.put(id,'autonomyTimeHighWater',now);
-    const ids=this.journal.safety?.autonomyAgents(id)??new Set([id]);
-    const signedTime=Math.max(0,...[...(this.journal.safety?.budget.entries.values()??[])].filter(e=>ids.has(e.agent)).map(e=>e.created??0));
-    const time=Math.max(now,signedTime);this.journal.put(id,'autonomyTimeHighWater',time);
-    const view=quotaView(this.journal.safety??{autonomyEntries:()=>[],autonomyGrants:()=>[]},id,s,time),entries=this.journal.safety?.autonomyEntries(id,view.windowStart)??[];let reportedTokens=0,unknownRequests=0;
-    for(const entry of entries){const a=this.db.prepare('SELECT usage,usage_confidence FROM attempt WHERE id=?').get(entry.rid);if(a?.usage_confidence==='reported'){const usage=JSON.parse(a.usage);reportedTokens+=usage?.totalTokens??((usage?.inputTokens??0)+(usage?.outputTokens??0)+(usage?.cacheReadTokens??0)+(usage?.cacheWriteTokens??0));}else unknownRequests++;}
+  quiet(s,time=Date.now()){return quietUntil(s,time)!==null;}
+  budget(id,{now=Date.now(),includeUsage=true}={}){
+    const ledger=this.journal.safety,highWater=this.journal.value(id,'autonomyTimeHighWater',0);
+    const time=Math.max(now,highWater,signedBudgetTime(ledger,id));
+    if(includeUsage&&time>highWater)this.journal.put(id,'autonomyTimeHighWater',time);
+    const view=quotaView(ledger??{autonomyEntries:()=>[],autonomyGrants:()=>[]},id,this.settings(id),time);
+    if(!includeUsage)return view;
+    const entries=ledger?.autonomyEntries(id,view.windowStart)??[],lookup=this.db.prepare('SELECT usage,usage_confidence FROM attempt WHERE id=?');
+    let reportedTokens=0,unknownRequests=0;
+    for(const entry of entries){const a=lookup.get(entry.rid);if(a?.usage_confidence==='reported'){const usage=JSON.parse(a.usage);reportedTokens+=usage?.totalTokens??((usage?.inputTokens??0)+(usage?.outputTokens??0)+(usage?.cacheReadTokens??0)+(usage?.cacheWriteTokens??0));}else unknownRequests++;}
     return {...view,reportedTokens,unknownRequests};
   }
-  requestBudget(id,taskId,estimate){
-    const prior=this.journal.value(id,'autonomyBudgetRequest',null),b=this.budget(id),task=this.getTask(taskId);
-    if(!b.quotaEnabled){this.journal.put(id,'autonomyBudgetRequest',null);return null;}
-    const needed=estimate?.tokens??this.journal.value(id,'autonomyNeededTokens',1024),requests=estimate?.requests??(task?.checkpoint?.plan?1:2);
-    const availableTokens=b.tokenLimit===null?Infinity:Math.max(0,b.tokenLimit-b.reservedTokens),availableRequests=b.requestLimit===null?Infinity:Math.max(0,b.requestLimit-b.requests);
-    const request={id:prior?.windowStart===b.windowStart&&prior.taskId===taskId?prior.id:crypto.randomUUID(),taskId,objective:task?.checkpoint?.plan?.question??task?.checkpoint?.candidate?.question??(taskId.startsWith('development:')?'整理已有记忆与经历':'下一项人格范围内的自主任务'),value:task?.checkpoint?.plan?.value??'先选择一个值得执行的方向',suggestedTokens:Math.max(0,needed-availableTokens),suggestedRequests:Math.max(0,requests-availableRequests),remainingTaskTokens:needed,remainingTaskRequests:requests,availableTokens,availableRequests,estimateKind:estimate?.basis??(estimate?'remaining-task-preliminary':'next-request-fallback'),windowStart:b.windowStart,expiresAt:b.windowEnd,purpose:'继续已选择的自主任务；额外额度不授予工具或数据权限',status:'pending'};
-    request.suggestedRounds=b.roundLimit!==null&&!b.roundIds.includes(task?.checkpoint.roundId??task?.id??taskId)&&b.rounds>=b.roundLimit?1:0;
-    this.journal.put(id,'autonomyBudgetRequest',request);
-    if(request.suggestedTokens>0||request.suggestedRequests>0||request.suggestedRounds>0){
-      const description=[request.suggestedTokens>0?'约 '+Math.ceil(request.suggestedTokens).toLocaleString('en-US')+' token 的可用额度':null,request.suggestedRequests>0?request.suggestedRequests+' 次请求':null,request.suggestedRounds>0?request.suggestedRounds+' 轮自主活动':null].filter(Boolean).join('、');
-      this.journal.publish?.(id,'【自主额度申请】自主活动正在等待额度，本次预计还需 '+description+'。请在 Human 的“自主与额度”中查看并决定是否补充；这是准入预估，不是实际扣费，与你聊天仍可用。','budget-request','autonomy-budget-notice:'+b.windowStart);
+  pendingBudgetRequest(id,now=Date.now(),budget){
+    const request=this.journal.value(id,'autonomyBudgetRequest',null);
+    if(!request||request.status!=='pending'||request.expiresAt<=Math.max(now,this.journal.value(id,'autonomyTimeHighWater',0))||!this.settings(id).quotaEnabled)return null;
+    if(request.taskId!=='new-task'){
+      const development=request.taskId.startsWith('development:');
+      const task=development?this.journal.value(id,'developmentReview',null):this.db.prepare('SELECT id,status FROM autonomy_task WHERE agent=? AND id=?').get(id,request.taskId);
+      if(task?.id!==request.taskId||!['ready','suspended','waiting-budget'].includes(task.status))return null;
     }
-    return request;
+    // Earlier releases keyed notices by the original window start. Preserve
+    // their receipt on upgrade even as a rolling accounting window moves.
+    const noticeKey=request.noticeKey??'autonomy-budget-notice:'+request.windowStart;
+    const noticeSeq=request.noticeSeq??this.db.prepare('SELECT seq FROM outbox WHERE agent=? AND event_key=?').get(id,noticeKey)?.seq;
+    const view=budget??this.budget(id,{now,includeUsage:false});
+    if(!view.quotaEnabled||request.expiresAt<=view.now)return null;
+    const priced=this.priceBudgetRequest({...request,noticeKey,noticeSeq},view);
+    return priced?{...priced,noticeText:budgetNoticeText(priced)}:null;
+  }
+  requestBudget(id,taskId,estimate){
+    const b=this.budget(id),prior=this.pendingBudgetRequest(id,b.now,b),task=this.getTask(taskId);
+    if(!b.quotaEnabled){this.journal.put(id,'autonomyBudgetRequest',null);return null;}
+    // There is one owner-facing approval slot. An unrelated waiting task must
+    // not replace a still-actionable request and issue another notice each tick.
+    if(prior&&prior.taskId!==taskId)return prior;
+    const needed=estimate?.tokens??this.journal.value(id,'autonomyNeededTokens',1024),requests=estimate?.requests??(task?.checkpoint?.plan?1:2);
+    const same=prior?.taskId===taskId?prior:null,requestId=same?.id??crypto.randomUUID(),roundId=task?.checkpoint.roundId??taskId;
+    const request={id:requestId,taskId,roundId,objective:task?.checkpoint?.plan?.question??task?.checkpoint?.candidate?.question??(taskId.startsWith('development:')?'整理已有记忆与经历':'下一项人格范围内的自主任务'),value:task?.checkpoint?.plan?.value??'先选择一个值得执行的方向',remainingTaskTokens:needed,remainingTaskRequests:requests,...budgetShortfall(b,needed,requests,roundId),estimateKind:estimate?.basis??(estimate?'remaining-task-preliminary':'next-request-fallback'),windowStart:same?.windowStart??b.windowStart,expiresAt:same?.expiresAt??b.windowEnd,noticeKey:same?.noticeKey??'autonomy-budget-request:'+requestId,purpose:'继续已选择的自主任务；额外额度不授予工具或数据权限',status:'pending'};
+    return this.journal.transaction(()=>{
+      if(request.suggestedTokens||request.suggestedRequests||request.suggestedRounds){
+        const policy=b.budgetWindow??this.settings(id).budgetWindow,now=b.now??Date.now();
+        const notified=this.journal.value(id,'autonomyBudgetNoticePeriod',null);
+        const inPeriod=notified?.policy===policy&&notified.expiresAt>now&&(policy==='rolling-day'||notified.windowStart===b.windowStart);
+        const legacyNotice=policy!=='rolling-day'&&this.db.prepare('SELECT seq FROM outbox WHERE agent=? AND event_key=?').get(id,'autonomy-budget-notice:'+b.windowStart);
+        if(same?.noticeSeq)request.noticeSeq=same.noticeSeq;
+        else if(!inPeriod&&!legacyNotice){
+          request.noticeSeq=this.journal.publish(id,budgetNoticeText(request),'budget-request',request.noticeKey);
+        }
+        if(request.noticeSeq&&!inPeriod)this.journal.put(id,'autonomyBudgetNoticePeriod',{policy,windowStart:b.windowStart,expiresAt:same?.noticeSeq?request.expiresAt:b.windowEnd});
+      }
+      this.journal.put(id,'autonomyBudgetRequest',request);return request;
+    });
   }
   async grant(id,input){
     if(!this.journal.safety)throw new Error('SIGNED_CONTROL_REQUIRED');
@@ -196,9 +262,19 @@ export class AutonomyStore {
     if(!['once','daily'].includes(input.mode)||!Number.isSafeInteger(input.tokens)||input.tokens<0||input.tokens>20000000||!Number.isSafeInteger(input.requests)||input.requests<0||input.requests>10000||!Number.isSafeInteger(rounds)||rounds<0||rounds>10000||input.tokens+input.requests+rounds===0||!Number.isSafeInteger(input.days)||input.days<1||input.days>30)throw new Error('INVALID_RESOURCE_GRANT');
     const budget=this.budget(id),now=Math.max(Date.now(),this.journal.value(id,'autonomyTimeHighWater',0));
     const grant={id:crypto.randomUUID(),agent:id,mode:input.mode,tokens:input.tokens,requests:input.requests,rounds,created:now,windowStart:budget.windowStart,expires:input.mode==='once'?budget.windowEnd:now+input.days*86400000};
-    await this.journal.safety.prepare('autonomy-grant:'+grant.id,'autonomy-grant',grant);this.journal.put(id,'autonomyBudgetRequest',null);return grant;
+    await this.journal.safety.prepare('autonomy-grant:'+grant.id,'autonomy-grant',grant);
+    this.journal.put(id,'autonomyBudgetRequest',this.pendingBudgetRequest(id));
+    return grant;
   }
   async revoke(id,grantId){const found=this.journal.safety.autonomyGrants(id,Math.max(Date.now(),this.journal.value(id,'autonomyTimeHighWater',0))).find(g=>g.id===grantId);if(!found)throw new Error('RESOURCE_GRANT_NOT_FOUND');await this.journal.safety.prepare('autonomy-revoke:'+grantId,'autonomy-grant-revoke',{id:grantId,agent:id});}
-  snapshot(id){const budget=this.budget(id);let request=this.journal.value(id,'autonomyBudgetRequest',null);if(request&&(!budget.quotaEnabled||request.windowStart!==budget.windowStart||request.taskId!=='new-task'&&!['ready','suspended','waiting-budget'].includes(request.taskId.startsWith('development:')?(this.journal.value(id,'developmentReview',null)?.id===request.taskId?this.journal.value(id,'developmentReview',null)?.status:null):this.getTask(request.taskId)?.status))){this.journal.put(id,'autonomyBudgetRequest',null);request=null;}return {settings:this.settings(id),social:socialStatus(this.journal,this.domain,id,this.settings(id)),paused:this.journal.value(id,'autonomyPaused',false),phase:this.journal.value(id,'autonomyPhase','idle'),error:this.journal.value(id,'autonomyError',null),lastWait:this.journal.value(id,'autonomyWait',null),budget,pendingBudgetRequest:request,notes:this.notes(id),tasks:this.db.prepare('SELECT id,kind,status,created,updated FROM autonomy_task WHERE agent=? ORDER BY created DESC LIMIT 12').all(id),events:this.events(id),executor:{backend:'dsh-llm-task',temporaryContext:true,independentSession:false,nestedAgents:false}};}
+  priceBudgetRequest(request,budget){
+    if(!request)return null;
+    const roundId=request.roundId??this.getTask(request.taskId)?.checkpoint.roundId??request.taskId;
+    const amounts=budgetShortfall(budget,request.remainingTaskTokens,request.remainingTaskRequests,roundId);
+    return amounts.suggestedTokens||amounts.suggestedRequests||amounts.suggestedRounds?{...request,...amounts}:null;
+  }
+  snapshot(id){
+    const budget=this.budget(id),pending=this.pendingBudgetRequest(id,budget.now,budget);
+    return {settings:this.settings(id),social:socialStatus(this.journal,this.domain,id,this.settings(id)),paused:this.journal.value(id,'autonomyPaused',false),phase:this.journal.value(id,'autonomyPhase','idle'),error:this.journal.value(id,'autonomyError',null),lastWait:this.journal.value(id,'autonomyWait',null),budget,pendingBudgetRequest:pending,notes:this.notes(id),tasks:this.db.prepare('SELECT id,kind,status,created,updated FROM autonomy_task WHERE agent=? ORDER BY created DESC LIMIT 12').all(id),events:this.events(id),executor:{backend:'dsh-llm-task',temporaryContext:true,independentSession:false,nestedAgents:false}};}
   purge(id){for(const table of ['autonomy_event','autonomy_task','learning_note'])this.db.prepare('DELETE FROM '+table+' WHERE agent=?').run(id);}
 }

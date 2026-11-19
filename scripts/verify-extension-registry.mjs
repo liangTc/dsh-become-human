@@ -28,7 +28,7 @@ await fs.writeFile(path.join(profile,'.npmrc'),'registry='+base+'\nfetch-retries
 const fixture={starts:0,stops:0,resumes:0,state:{sessionId:'isolated-registry-test',desired:'paused',cancelEpoch:1,lastError:null,autonomy:{paused:false}}};
 const runtime={config:{runtimeHome,sourceHome:path.join(root,'host'),runtimeProfile:'fixture'},state:async()=>fixture.state,start:async()=>{fixture.starts++;},recordLifecycle(){}};
 const remote={stopRuntime:async()=>{fixture.stops++;fixture.state.desired='paused';},controlRuntime:async()=>{fixture.resumes++;}};
-const manager=await new RuntimeExtensions({root:path.join(root,'manager'),runtime,remote,cliOptions:['--registry='+base,'--fetch-retries=0','--store-dir='+path.join(root,'store'),'--cache-dir='+path.join(root,'cache')]}).init();
+let manager=await new RuntimeExtensions({root:path.join(root,'manager'),runtime,remote,cliOptions:['--registry='+base,'--fetch-retries=0','--store-dir='+path.join(root,'store'),'--cache-dir='+path.join(root,'cache')]}).init();
 // Only move directories created by this isolated fixture. No user package
 // cache, real profile or production process is touched.
 async function moveFixture(from,to){for(const file of [from,to])if(!path.resolve(file).startsWith(path.resolve(root)+path.sep))throw Error('FIXTURE_PATH_ESCAPE');const stat=await fs.lstat(from);if(!stat.isDirectory()||stat.isSymbolicLink())throw Error('FIXTURE_DIRECTORY_REQUIRED');await fs.rename(from,to);}
@@ -54,14 +54,13 @@ try{
    evicted=true;const moduleConfig=await fs.readFile(path.join(modules,'.modules.yaml'));await moveFixture(store,storeBackup);await moveFixture(modules,modulesBackup);await fs.mkdir(path.join(modules,name),{recursive:true});await fs.writeFile(path.join(modules,'.modules.yaml'),moduleConfig);await fs.writeFile(path.join(modules,name,'package.json'),JSON.stringify(packages.get('2.0.0').manifest));await fs.writeFile(path.join(modules,name,'cordis.patch.yml'),'- id: become-human\n  name: '+name+'\n');
   }};
   const starts=fixture.starts,failed=await submit({action:'install',source:name+'@2.0.0'});assert(evicted);assert.equal(failed.result.status,'failed');assert.equal(failed.result.code,'EXTENSION_NAMESPACE_REQUIRED');assert.equal(failed.result.recovery.status,'failed');assert.equal(failed.result.recovery.code,'EXTENSION_CLI_FAILED');assert.equal(fixture.starts,starts);assert.equal(offlineCalls,1);assert.equal(requests.length,offlineRequests,'Offline restoration must not request registry content');assert(failed.result.canRecover);
-  await manager.close();const next=await new RuntimeExtensions({root:path.join(root,'manager'),runtime,remote,cliOptions:manager.cliOptions,run:originalRun}).init();try{
+  await manager.close();const next=await new RuntimeExtensions({root:path.join(root,'manager'),runtime,remote,cliOptions:manager.cliOptions,run:originalRun}).init();
+  manager=next;
    assert(next.blocked);assert.equal(next.canRecover(next.blocked),true);assert.equal(fixture.starts,starts);const beforeRequests=requests.length;
    const input={requestId:randomUUID(),expectedRevision:(await next.list()).revision,trustedCode:true,action:'recover',operationId:failed.result.id};
    await assert.rejects(()=>next.submit({...input,action:'remove',name,operationId:undefined}),/EXTENSION_RECOVERY_REQUIRED/);
    if(await fs.lstat(store).catch(()=>null))await moveFixture(store,path.join(root,'empty-store'));await moveFixture(storeBackup,store);await moveFixture(modules,path.join(root,'incomplete-modules'));await moveFixture(modulesBackup,modules);
    const recovered=await next.submit(input);await next.active;assert.equal(next.jobs.at(-1).status,'completed');assert.equal(next.blocked,null);assert.equal(fixture.starts,starts+1);assert.equal(fixture.resumes,0);assert.equal(requests.length,beforeRequests);const old=(await next.list()).items[0];assert.equal(old.version,'1.1.0');assert.equal(old.nodes[0].disabled,true);assert.equal(old.nodes[0].config.mode,'preserved');const startsAfter=fixture.starts;assert.equal((await next.submit(input)).id,recovered.id);assert.equal(fixture.starts,startsAfter);
-   manager.jobs=next.jobs;
-  }finally{await next.close();manager.closed=false;manager.run=originalRun;}
  });
  await passed('Restored registry extension remains explicitly removable',async()=>{const r=await submit({action:'remove',name});assert.equal(r.result.status,'completed');assert.equal((await manager.list()).items.length,0);assert.equal(fixture.resumes,0);});
  await passed('Registry 404 leaves original failure evidence and restores the paused runtime',async()=>{const starts=fixture.starts,r=await submit({action:'install',source:name+'-missing@1.0.0'});assert.equal(r.result.code,'EXTENSION_CLI_FAILED');assert.equal(r.result.recovery.status,'restored',JSON.stringify(r.result));assert.equal(fixture.starts,starts+1);assert.equal(fixture.resumes,0);assert.equal((await manager.list()).items.length,0);});

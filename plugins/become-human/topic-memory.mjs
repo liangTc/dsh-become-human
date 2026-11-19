@@ -1,9 +1,9 @@
 // Bounded, deterministic topic memory. This is lexical matching with an
 // explicit synonym dictionary; it does not claim full semantic understanding.
+import {developmentInput} from './knowledge-signals.mjs';
 const DAY=86400000;
 export const topicMemoryPolicy=Object.freeze({version:1,maxRecords:256,retentionMs:180*DAY,unansweredMs:30*DAY,answeredMs:7*DAY});
 const normalize=text=>String(text??'').normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]/gu,'');
-const developmentText=text=>/【开发(?:短测|测试)】|仅用于(?:开发)?测试|这(?:条|段|次).{0,12}(?:测试|不代表个人)|(?:测试|验证)(?:消息|指令)|(?:测试|验证)通过/u.test(String(text??''));
 const domains=[
   ['coffee',/咖啡|拿铁|美式|意式|手冲|冷萃|coffee|espresso|latte/u],
   ['food',/吃饭|一顿饭|美食|饭菜|餐厅|菜品|好吃|口味|漂亮饭|摆盘|料理|food|meal/u],
@@ -59,11 +59,11 @@ function storedRecords(journal,id,now){
   // Read-through migration preserves existing conversations without requiring
   // a migration write or a model call. The next normal commit persists them.
   const legacy=journal.value(id,'socialContacts',[]).filter(c=>!seen.has(c.messageId));
-  return [...records,...legacy].filter(r=>r&&typeof r.messageId==='string'&&Number.isSafeInteger(r.at)&&r.at<=now&&now-r.at<topicMemoryPolicy.retentionMs&&['chat','care'].includes(r.kind)&&!developmentText(r.question)).sort((a,b)=>a.at-b.at).slice(-topicMemoryPolicy.maxRecords);
+  return [...records,...legacy].filter(r=>r&&typeof r.messageId==='string'&&Number.isSafeInteger(r.at)&&r.at<=now&&now-r.at<topicMemoryPolicy.retentionMs&&['chat','care'].includes(r.kind)&&!developmentInput(r.question)).sort((a,b)=>a.at-b.at).slice(-topicMemoryPolicy.maxRecords);
 }
 
 function ownerRows(journal,id,since,domain,now){
-  return journal.db.prepare("SELECT event_key,text,created FROM outbox WHERE agent=? AND kind='user' AND event_key LIKE 'user:%' AND created>=? AND created<=? ORDER BY created DESC,seq DESC LIMIT 256").all(id,since,now).reverse().map(row=>({id:row.event_key.slice(5),text:row.text,time:row.created})).filter(row=>usable(domain,id,row.id)&&!developmentText(row.text)).map(row=>({...row,signature:topicFingerprint(row.text)}));
+  return journal.db.prepare("SELECT event_key,text,created FROM outbox WHERE agent=? AND kind='user' AND event_key LIKE 'user:%' AND created>=? AND created<=? ORDER BY created DESC,seq DESC LIMIT 256").all(id,since,now).reverse().map(row=>({id:row.event_key.slice(5),text:row.text,time:row.created})).filter(row=>usable(domain,id,row.id)&&!domain?.sourceIsDevelopmentTest?.(id,row.id)&&!developmentInput(row.text)).map(row=>({...row,signature:topicFingerprint(row.text)}));
 }
 
 function continuation(text){
@@ -117,7 +117,7 @@ export function repeatedLongTermTopic(journal,domain,id,question,text,now=Date.n
 
 // Called in the existing response transaction; idempotent after crash replay.
 export function commitTopicMemory(journal,id,contact){
-  if(!['chat','care'].includes(contact.kind)||developmentText(contact.question))return;
+  if(!['chat','care'].includes(contact.kind)||developmentInput(contact.question))return;
   const records=storedRecords(journal,id,contact.at),old=records.find(r=>r.messageId===contact.messageId);
   if(old?.signature)return;
   const body=journal.db.prepare("SELECT text FROM outbox WHERE agent=? AND event_key=?").get(id,'assistant:'+contact.messageId)?.text??'';

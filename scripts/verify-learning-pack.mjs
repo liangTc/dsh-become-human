@@ -31,6 +31,57 @@ await test('Validated result saves through core storage without automatic sharin
 await test('Model errors retain old failures; reinstall does not retry them',async x=>{const dispose=install(x),t=task(x);x.f.autonomy.update(t.id,'failed',{...t.checkpoint,reason:'MODEL_EXECUTION_FAILED'});dispose();install(x);const result=await next(x);assert(!result?.task||result.task.id!==t.id);assert.equal(x.f.autonomy.getTask(t.id).status,'failed');});
 await test('Duplicate provider and unsupported version fail closed',x=>{install(x);assert.throws(()=>install(x),/INVALID_LEARNING_PACK/);const pack=new LearningPack();assert.throws(()=>pack.register({version:2,collect(){},prepare(){},execute(){}}),/INVALID_LEARNING_PACK/);});
 await test('New checkpoints retain the learning contract version',()=>assert.equal(checkpointForOpportunity({kind:'research',question:'check'}).learningPackVersion,1));
+await test('Evidence rejection retains the next source and records exhausted attempts in the original task',async x=>{
+ install(x);
+ const source={url:'https://example.org/source',digest:'a'.repeat(64)};
+ for(const reads of [1,2]){
+   const t=task(x,'research',{source,discovery:{results:[{},{}]},researchReads:reads});
+   const rid=randomUUID();x.j.beginAttempt(x.id,rid,1,1,{taskId:t.id,lane:'autonomy'});
+   const ctx=context(x,t,{executeModel:async()=>({rid,text:'[WAIT]'})});
+   await selectedTaskWorkflow(t.kind,x.agent).execute(ctx);
+   const stored=x.f.autonomy.getTask(t.id);
+   assert.equal(x.j.db.prepare('SELECT state FROM attempt WHERE id=?').get(rid).state,'evidence-insufficient');
+   if(reads===1){
+     assert.equal(stored.status,'suspended');assert.equal(stored.checkpoint.source,null);
+     assert.equal(stored.checkpoint.rejectedSources[0].digest,source.digest);
+   }else{
+     assert.equal(stored.status,'failed');assert.equal(stored.checkpoint.reason,'INSUFFICIENT_SOURCE_EVIDENCE');
+   }
+ }
+ assert.equal(x.f.autonomy.notes(x.id).length,0);
+ assert.equal(x.j.db.prepare('SELECT count(*) n FROM outbox WHERE agent=?').get(x.id).n,0);
+});
+await test('An older cooling checkpoint cannot hide a ready report, including behind a full page',async x=>{
+ const store=x.f.autonomy,now=Date.now();
+ const reports=Array.from({length:34},(_,i)=>{
+   const t=task(x,'write-report',{candidate:{kind:'write-report',question:'报告 '+i}});
+   x.j.db.prepare('UPDATE autonomy_task SET created=? WHERE id=?').run(now+i,t.id);
+   if(i!==33)store.defer(x.id,t,'cooling',60000,now);
+   return t;
+ });
+ assert.equal(await candidate(x.agent,signal,settings(x),now),null);
+ assert.equal((await candidate(x.agent,signal,settings(x),now)).task.id,reports[33].id);
+ assert.equal((await candidate(x.agent,signal,settings(x),now+60001)).task.id,reports[0].id);
+});
+await test('Custom behavior can wait for its own condition without blocking a later checkpoint',async x=>{
+ let ready=false,checked=0;
+ x.f.behaviors.register('local-wait',{version:1,title:'测试',description:'等待条件',inputSchema:{type:'object',properties:{},additionalProperties:false},
+   readyToResume(agent,ctx){assert.equal(agent.id,x.id);assert.deepEqual(ctx.input,{});assert.equal(ctx.result.summary,'等待');checked++;return ready;},
+   execute:async()=>({status:'completed',summary:'完成'})});
+ const def=x.f.behaviors.definition(x.agent,'local-wait'),t=task(x,'behavior',{behaviorId:def.id,behaviorFingerprint:def.fingerprint,plan:{input:{}},behaviorResult:{status:'waiting',summary:'等待'}});
+ const report=task(x,'write-report');x.j.db.prepare('UPDATE autonomy_task SET created=created-60000 WHERE id=?').run(t.id);
+ assert.equal((await next(x)).task.id,report.id);assert.equal(checked,1);
+ ready=true;assert.equal((await next(x)).task.id,t.id);assert.equal(checked,2);
+});
+await test('Malformed provider readiness only holds that task and does not flood the journal',async x=>{
+ x.f.behaviors.register('bad-ready',{version:1,title:'测试',description:'错误条件',inputSchema:{type:'object',properties:{},additionalProperties:false},
+   readyToResume:async()=>true,execute:async()=>({status:'completed',summary:'完成'})});
+ const def=x.f.behaviors.definition(x.agent,'bad-ready'),t=task(x,'behavior',{behaviorId:def.id,behaviorFingerprint:def.fingerprint,plan:{input:{}},behaviorResult:{status:'waiting',summary:'等待'}});
+ for(let i=0;i<2;i++)assert.equal(await next(x),null);
+ const events=x.j.db.prepare("SELECT data FROM audit WHERE agent=? AND kind='behavior-provider-held'").all(x.id);
+ assert.equal(events.length,1);assert.equal(JSON.parse(events[0].data).taskId,t.id);
+ assert.equal(x.f.autonomy.getTask(t.id).status,'ready');
+});
 await test('Workflow ownership is verified separately from builtin replacement',async x=>{assert.throws(()=>workflowIds({dsh:{human:{providesWorkflows:['chat']}}}),/INVALID_RUNTIME_WORKFLOW/);const pkg=path.join(x.dir,'node_modules','dsh-human-learning');await fs.mkdir(pkg,{recursive:true});await fs.writeFile(path.join(pkg,'package.json'),JSON.stringify({dsh:{human:{providesWorkflows:['deep-learning']}}}));await fs.writeFile(path.join(x.dir,'package.json'),JSON.stringify({dsh:{profile:{bundles:['dsh-human-learning']}}}));const result=await prepareRuntimeProfile(x.dir,[{id:'become-human',config:{}}]);assert.equal(result.behaviorOwners['deep-learning'],'dsh-human-learning');const text=await fs.readFile(path.join(x.dir,'cordis.patch.yml'),'utf8');assert(text.includes('externalBehaviorIds: []'));});
 await test('Broken optional collector cannot stop another registered behavior',async x=>{x.f.learningPack.register({version:1,collect:()=>[{kind:'unknown'}],prepare(){},execute(){}});x.f.behaviors.register('check',{version:1,title:'检查',description:'查看现状',inputSchema:{type:'object',properties:{},additionalProperties:false},opportunities:()=>[{question:'查看现状'}],execute:async()=>({status:'completed',summary:'完成'})});const result=await next(x);assert(result.opportunities.some(row=>row.behaviorId==='check'));assert(!result.opportunities.some(row=>row.kind==='unknown'));assert.equal(x.j.value(x.id,'autonomyPaused',false),false);});
 await test('Learning workflows never pollute the generic goal behavior catalog',async x=>{install(x);const {HumanManagement}=await import('../plugins/become-human/management.mjs');x.f.goals={behaviorContext:()=>{}};const scope={factory:x.f,journal:x.j};const behaviors=HumanManagement.prototype.read.call(scope,x.id,{kind:'behavior-catalog'}),workflows=HumanManagement.prototype.read.call(scope,x.id,{kind:'workflow-catalog'});assert(!behaviors.some(r=>r.id==='deep-learning'));assert.deepEqual(workflows.map(r=>r.id),['deep-learning']);});

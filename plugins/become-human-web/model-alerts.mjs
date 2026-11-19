@@ -1,4 +1,4 @@
-import {modelFailureDiagnostic} from './runtime/model-failure.mjs';
+import {modelFailureDiagnostic,explainModelFailure} from './runtime/model-failure.mjs';
 const object=value=>{if(value&&typeof value==='object')return value;try{return JSON.parse(value??'null')??{};}catch{return {};}};
 export function activeModelAlerts(state){
   const result=[];
@@ -12,7 +12,8 @@ export function activeModelAlerts(state){
       const diagnostic=facts.diagnostic??modelFailureDiagnostic({status:facts.httpStatus??facts.status},code);
       entry={...diagnostic,code,attemptId:row?.id,at:row?.ended??row?.started,provider:config.provider,model:config.model,streamFinish:facts.streamFinish,legacy:!facts.diagnostic};
     }
-    result.push({...entry,scope});
+    const attempt=(state.attempts??[]).find(row=>row.id===entry.attemptId);
+    result.push({...explainModelFailure({...entry,purpose:entry.purpose??attempt?.purpose??object(attempt?.request).purpose}),scope});
   }
   return result;
 }

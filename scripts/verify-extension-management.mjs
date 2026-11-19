@@ -48,8 +48,55 @@ await test('Removal cleans owned configuration and keeps unrelated nodes',async 
 await test('Package manager failure restores locked dependencies without resuming models',async f=>{
  f.run=async()=>{throw Error('EXTENSION_CLI_FAILED');};await f.submit({action:'install',source:'dsh-human-example@1.0.0'});await f.manager.active;assert.equal((await f.manager.list()).jobs[0].code,'EXTENSION_CLI_FAILED');assert.equal(f.starts,1);assert.equal(f.resumes,0);assert.equal(f.manager.jobs[0].recovery.status,'restored');
 });
-await test('Existing autonomous failure is not cleared by a successful extension restart',async f=>{
- f.state.autonomy.paused=true;await f.submit({action:'toggle',name:'dsh-human-example',enabled:false});await f.manager.active;assert.equal((await f.manager.list()).jobs[0].status,'completed');assert.equal(f.resumes,0);
+await test('Successful maintenance restores continuous chat while keeping autonomous protection',async f=>{
+ f.state.autonomy={paused:true,error:'MODEL_EXECUTION_FAILED'};
+ await f.submit({action:'toggle',name:'dsh-human-example',enabled:false});await f.manager.active;
+ assert.equal((await f.manager.list()).jobs[0].status,'completed');assert.equal(f.resumes,1);
+ assert.deepEqual(f.state.autonomy,{paused:true,error:'MODEL_EXECUTION_FAILED'});
+});
+await test('Active and queued foreground work completes before maintenance and a user pause is preserved',async f=>{
+ Object.assign(f.state,{agentBusy:true,inbox:2});await f.submit({action:'toggle',name:'dsh-human-example',enabled:false});
+ const timeout=AbortSignal.timeout(3000);while(!f.manager.waitingForIdle){timeout.throwIfAborted();await new Promise(r=>setTimeout(r,5));}
+ assert.equal(f.stops,0);assert.equal(f.remote.maintenance,false);
+ Object.assign(f.state,{agentBusy:false,inbox:0,desired:'paused'});await f.manager.active;
+ assert.equal(f.manager.jobs.at(-1).status,'completed');assert.equal(f.stops,1);assert.equal(f.resumes,0);
+});
+await test('A bounded run cannot be converted into continuous autonomy by maintenance',async f=>{
+ f.state.driveMode='bounded';await f.submit({action:'toggle',name:'dsh-human-example',enabled:false});await f.manager.active;
+ assert.equal(f.manager.jobs.at(-1).code,'PAUSE_REQUIRED');assert.equal(f.stops,0);
+});
+await test('A turn starting after preflight defers maintenance without applying the mutation twice',async f=>{
+ let checks=0;const stop=f.remote.stopRuntime;
+ f.remote.stopRuntime=async options=>{assert.equal(options.idleState.sessionId,f.state.sessionId);if(++checks===1)throw Error('AGENT_BUSY');return stop(options);};
+ await f.submit({action:'toggle',name:'dsh-human-example',enabled:false});await f.manager.active;
+ assert.equal(f.manager.jobs.at(-1).status,'completed');assert.equal(checks,2);assert.equal(f.stops,1);assert.equal(f.state.desired,'running');
+});
+await test('Maintenance preserves independently configured phone replies and wake permissions',async()=>{
+ const {RemoteGateway}=await import('../plugins/become-human-web/remote.mjs');
+ const idleState={sessionId:'preserved-session',cancelEpoch:5};
+ const runtime={close:async options=>assert.deepEqual(options,{idleState}),control:async input=>assert.equal(input.op,'start')};
+ const gateway=new RemoteGateway(':memory:',runtime);
+ try{
+  gateway.maintenance=true;
+  for(const reply of [true,false]){
+   for(const wake of [true,false]){
+    gateway.preference('reply-enabled',reply);gateway.preference('remote-wake',wake);
+    const block=wake?gateway.allowWake('test'):gateway.blockWake('test');
+    await gateway.stopRuntime({idleState,keepWakePreference:true});
+    await gateway.controlRuntime({op:'start',sessionId:idleState.sessionId},{maintenanceRestore:true});
+    assert.equal(gateway.preference('reply-enabled'),reply);assert.equal(gateway.preference('remote-wake'),wake);assert.deepEqual(gateway.wakeBlock(),block);
+   }
+  }
+ }finally{await gateway.close();}
+});
+await test('A pause between the idle read and stop takes precedence over the old run state',async f=>{
+ let checks=0;const stop=f.remote.stopRuntime;
+ f.remote.stopRuntime=async options=>{
+  if(++checks===1){f.state={...f.state,desired:'paused',cancelEpoch:2};throw Error('STALE_EPOCH');}
+  assert.equal(options.idleState.cancelEpoch,2);return stop(options);
+ };
+ await f.submit({action:'toggle',name:'dsh-human-example',enabled:false});await f.manager.active;
+ assert.equal(f.manager.jobs.at(-1).status,'completed');assert.equal(f.stops,1);assert.equal(f.resumes,0);
 });
 
 const source={id:'fixture.source',title:'Public source',url:'https://example.com/feed',intervalMs:600000};
@@ -99,6 +146,24 @@ await test('Offline recovery failure stays held until an explicit idempotent ret
  f.failStart=true;await f.submit({action:'toggle',name:'dsh-human-example',enabled:false});await f.manager.active;const original=f.manager.blocked;assert(original&&f.manager.canRecover(original));
  await assert.rejects(()=>f.submit({action:'toggle',name:'dsh-human-example',enabled:true}),/EXTENSION_RECOVERY_REQUIRED/);f.failStart=false;
  const input={action:'recover',operationId:original.id,expectedRevision:(await f.manager.list()).revision,requestId:randomUUID(),trustedCode:true};const job=await f.manager.submit(input);await f.manager.active;assert.equal(f.manager.jobs.at(-1).status,'completed');assert.equal(original.recovery.status,'restored');const starts=f.starts;assert.equal((await f.manager.submit(input)).id,job.id);assert.equal(f.starts,starts);assert.equal(f.resumes,0);
+});
+await test('Legacy full history permits recovery and preserves replay after archiving and restart',async f=>{
+ const input={action:'toggle',name:'dsh-human-example',enabled:false,trustedCode:true,requestId:randomUUID(),expectedRevision:(await f.manager.list()).revision};
+ const success=await f.manager.submit(input);await f.manager.active;
+ f.failStart=true;await f.submit({action:'toggle',name:input.name,enabled:true});await f.manager.active;
+ const blocked=f.manager.blocked;assert(blocked&&f.manager.canRecover(blocked));f.failStart=false;
+ const older=Array.from({length:998},()=>({id:randomUUID(),requestId:randomUUID(),status:'completed',action:'toggle',name:input.name}));
+ // A pre-upgrade active file can contain 1000 entries, including an old open recovery.
+ const legacy=[f.manager.jobs[0],blocked,...older];
+ await f.manager.close();await fs.writeFile(f.manager.file,JSON.stringify(legacy));
+ f.manager=await new RuntimeExtensions({root:f.dir,runtime:f.runtime,remote:f.remote,run:f.run}).init();
+ assert.equal(f.manager.blocked.id,blocked.id);assert(f.manager.jobs.length<110);
+ const starts=f.starts;assert.equal((await f.manager.submit(input)).id,success.id);assert.equal(f.starts,starts);
+ await assert.rejects(f.manager.submit({...input,enabled:true}),/REQUEST_ID_CONFLICT/);
+ await f.submit({action:'recover',operationId:blocked.id});await f.manager.active;
+ assert(!f.manager.blocked);assert.equal(f.manager.jobs.at(-1).status,'completed');
+ await f.submit({action:'toggle',enabled:true,name:input.name});await f.manager.active;
+ assert.equal(f.manager.jobs.at(-1).status,'completed');
 });
 await test('Manual recovery refuses subsequent user configuration changes',async f=>{
  f.failStart=true;await f.submit({action:'toggle',name:'dsh-human-example',enabled:false});await f.manager.active;const original=f.manager.blocked,stops=f.stops;

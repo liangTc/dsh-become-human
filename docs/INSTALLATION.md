@@ -1,13 +1,13 @@
 # 安装与升级
 
-> **本次测试发行：0.7.0-beta.40。** [下载组合安装包](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.40)，安装和验证边界以[本版发行说明](https://github.com/liangTc/dsh-become-human/blob/main/docs/RELEASE_BETA40.md)为准。下文 beta.5 为历史发行说明；npm [beta.40](https://www.npmjs.com/package/dsh-become-human-web/v/0.7.0-beta.40) 已发布并完成下载校验。
+> **测试版 0.7.0-beta.41。** [GitHub Release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.41) · [npm 安装包](https://www.npmjs.com/package/dsh-become-human-web/v/0.7.0-beta.41) · [本版发行说明](https://github.com/liangTc/dsh-become-human/blob/v0.7.0-beta.41/docs/RELEASE_BETA41.md)
 
 [返回首页](../README.md) · [配置说明](CONFIGURATION.md) · [使用指南](USAGE.md) · [测试状态](TESTING_STATUS.md)
 
 > [!WARNING]
-> **`0.7.0-beta.40` 是测试版本（Prerelease），尚未开发完成。** 本页是公开发行的安装流程，不表示干净机器安装与全部能力已完成验收。
+> **`0.7.0-beta.41` 是测试版本（Prerelease），尚未开发完成。** 本页是公开发行的安装流程，不表示干净机器安装与全部能力已完成验收。
 
-本页公开下载链接指向 beta.40 组合包；源码构建使用所下载源码的版本，以 `package.json` 为准，两者不可混用。beta.40 组合包见本页顶部发行链接。历史 beta.4 包仍可查阅，但不包含 beta.5 的新增能力。原生 DeepSeek 最终发行包的全新安装整链仍保留待测；发布测试包不等于该流程已经通过。
+本页公开下载链接指向 beta.41 组合包；源码构建使用所下载源码的版本，以 `package.json` 为准，两者不可混用。beta.41 组合包见本页顶部发行链接。历史 beta.4 包仍可查阅，但不包含 beta.5 的新增能力。原生 DeepSeek 最终发行包的全新安装整链仍保留待测；发布测试包不等于该流程已经通过。
 
 **已知问题：** beta.5 首次创建 Human 可能因初始化顺序失败；修复自 beta.6 起进入开发源码。需要后续修复、可选行为包和扩展页面时，请按下方步骤构建对应开发源码，并核对版本与测试记录。最新干净安装仍需单独验收。
 
@@ -28,7 +28,7 @@
 
 安装流程是：**安装一个组合包 → 打开 Human 完成首次设置 → 创建并启动**。组合包已经包含后台代码；插件自动准备专用运行目录和内部 profile，复用宿主的 Node 与 DSH 启动后台，无需另装第二套 Human 程序。
 
-安装入口为 [v0.7.0-beta.40 测试发行](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.40) 的预构建 `.tgz` 与 SHA-256 文件。npm beta.40 已发布；社区登记的提交或合并不替代本页的版本与安装要求。
+安装入口为 [v0.7.0-beta.41 测试发行](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.41) 的预构建 `.tgz` 与 SHA-256 文件。npm beta.41 已发布；社区登记的提交或合并不替代本页的版本与安装要求。
 
 ## 1. 准备 DSH 与模型
 
@@ -62,7 +62,7 @@ npx @deepseek-ai/dsh@0.2.0-rc.2 web
 停止要更新的 DSH 服务后执行（与下方 `.tgz` 方式二选一）：
 
 ```powershell
-npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add dsh-become-human-web@0.7.0-beta.40 --registry=https://registry.npmjs.org/
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add dsh-become-human-web@0.7.0-beta.41 --registry=https://registry.npmjs.org/
 ```
 
 安装后直接进入第 4 步启动与配置，无需重复安装本地包。首次发布时镜像可能延迟，示例指定 npm 官方仓库。
@@ -71,16 +71,16 @@ npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add dsh-become-human-web@0.
 
 ### 使用预构建包
 
-从 [v0.7.0-beta.40 Release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.40) 下载以下两个附件，并保存到同一目录：
+从 [v0.7.0-beta.41 Release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.41) 下载以下两个附件，并保存到同一目录：
 
-- [dsh-become-human-web-0.7.0-beta.40.tgz](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.40/dsh-become-human-web-0.7.0-beta.40.tgz)
-- [dsh-become-human-web-0.7.0-beta.40.tgz.sha256](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.40/dsh-become-human-web-0.7.0-beta.40.tgz.sha256)
+- [dsh-become-human-web-0.7.0-beta.41.tgz](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.41/dsh-become-human-web-0.7.0-beta.41.tgz)
+- [dsh-become-human-web-0.7.0-beta.41.tgz.sha256](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.41/dsh-become-human-web-0.7.0-beta.41.tgz.sha256)
 
 在该目录打开 PowerShell，校验后再安装：
 
 ```powershell
-$humanExpectedSha = ((Get-Content -LiteralPath './dsh-become-human-web-0.7.0-beta.40.tgz.sha256' -Raw).Trim() -split '\s+')[0]
-$humanActualSha = (Get-FileHash -LiteralPath './dsh-become-human-web-0.7.0-beta.40.tgz' -Algorithm SHA256).Hash
+$humanExpectedSha = ((Get-Content -LiteralPath './dsh-become-human-web-0.7.0-beta.41.tgz.sha256' -Raw).Trim() -split '\s+')[0]
+$humanActualSha = (Get-FileHash -LiteralPath './dsh-become-human-web-0.7.0-beta.41.tgz' -Algorithm SHA256).Hash
 if ($humanExpectedSha -notmatch '^[a-fA-F0-9]{64}$' -or $humanActualSha -ine $humanExpectedSha) {
   throw '安装包校验失败，请重新核对下载来源和文件。'
 }
@@ -90,7 +90,7 @@ if ($humanExpectedSha -notmatch '^[a-fA-F0-9]{64}$' -or $humanActualSha -ine $hu
 
 ### 从源码构建
 
-下载或克隆 [liangTc/dsh-become-human](https://github.com/liangTc/dsh-become-human) 的 `main` 分支，进入仓库根目录。远程分支与本地开发源码可能不同步；构建前核对所下载版本的 `package.json` 和变更记录，不把本地 beta.40 的说明当作远程已同步的证明。
+下载或克隆 [liangTc/dsh-become-human](https://github.com/liangTc/dsh-become-human) 的 `main` 分支，进入仓库根目录。远程分支与本地开发源码可能不同步；构建前核对所下载版本的 `package.json` 和变更记录，请使用与目标版本一致的源码或组合包。
 
 ```powershell
 git clone --branch main --single-branch https://github.com/liangTc/dsh-become-human.git
@@ -113,7 +113,7 @@ npm run release:package
 在安装包所在目录执行，文件名替换为实际文件名：
 
 ```powershell
-npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./dsh-become-human-web-0.7.0-beta.40.tgz
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./dsh-become-human-web-0.7.0-beta.41.tgz
 ```
 
 这是 DSH 官方组合包安装路径，会更新 profile 的依赖与 bundle 列表。不要用普通 `npm install` 代替 profile 注册，也不要只复制 `manager.mjs`。[官方打包与安装说明](https://deepseek-harness.github.io/deepseek-harness/develop/basic/publish) 说明了 `.tgz`、本地目录和 profile 的区别。
@@ -127,7 +127,7 @@ npx @deepseek-ai/dsh@0.2.0-rc.2 web --no-open
 打开终端打印的认证地址，进入左侧 Human 入口。认证链接等同访问凭据，不要贴到 issue、截图或公开日志中。新安装会显示首次设置向导：
 
 1. **选择模型**：从宿主已有的兼容模型中选择，核对环境与凭据是否就绪。没有可用项时，先在 DSH 模型设置中补齐路由和凭据，再返回刷新。
-2. **人物与额度**：选择知秋、小埋、天昊或夏彦，选取低、中、高自主额度；可填写对你的称呼和时区。后续可在 Human 设置中继续编辑。
+2. **人物与额度**　选择人物和自主额度，填写称呼，确认时区与每天的安静时段。默认 22:00 至次日 08:00 暂停闲时自主循环。选好后在下一步核对，日后可在设置中修改。
 3. **核对并创建**：检查选择后点击“创建并启动”。后台目录、内部 profile 和空闲回环端口自动准备，首次配置保存在插件管理的数据目录，无需编辑 YAML。
 
 首次自主活动默认关闭。保持关闭时先开始主人对话，需要自主活动时再明确开启。当前开发版中启用自主活动不会同时开启学习；学习需要另外安装并启用学习行为包、开启其学习设置。公开 beta.5 的旧向导仍显示“同时开启自主学习和主动交流”，不要用它判断当前源码的行为。创建过程不通过额外模型请求测试 API，也不会自动完成手机绑定。
@@ -172,7 +172,7 @@ npx @deepseek-ai/dsh@0.2.0-rc.2 web --no-open
 
 ### 页面内更新（新增，本地开发版）
 
-进入 **Human → 设置 → 版本与更新**，选择测试版 Beta 或正式版，点击“检查更新”；有更高版本时点击“一键更新”并确认。此功能尚未随公开 npm beta.40 发布，旧版用户需要先通过原安装方式升级到包含该入口的版本。
+进入 **Human → 设置 → 版本与更新**，选择 Beta 并检查更新。仍可用本页的固定版本 CLI 命令原地升级。
 
 - 固定读取官方 npm 的 `dsh-become-human-web`，核验 SHA-512、安装包身份、Node.js 与 DSH 版本兼容性。不会自动降级、覆盖同版本或执行任意下载地址。
 - 下载校验完成后暂停 Human 后台，保留当前宿主 profile 的安装配置及锁文件，再使用 DSH 官方插件命令安装；不修改会话、记忆、人格、凭据或手机绑定。备份是安装恢复快照，不替代完整离线数据备份。

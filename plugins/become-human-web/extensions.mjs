@@ -3,8 +3,10 @@ import {extensionPages,activeExtensionPages} from './extension-pages.mjs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
+import {DatabaseSync} from 'node:sqlite';
 import {createRequire} from 'node:module';
 import {spawn,execFile} from 'node:child_process';
+import {setTimeout as delay} from 'node:timers/promises';
 import {gunzipSync} from 'node:zlib';
 import YAML from 'yaml';
 import {runtimeExtensionPatch,behaviorReplacementIds,workflowIds,externalBehaviorOwners,runtimeProfileManifest} from './runtime-profile.mjs';
@@ -54,12 +56,31 @@ export class RuntimeExtensions {
   constructor({root,runtime,remote,run=runExtensionCli,cliOptions=[]}){this.root=path.join(root,'extensions');this.runtime=runtime;this.remote=remote;this.run=run;this.cliOptions=cliOptions;this.active=null;this.closed=false;}
   async init(){
     await fs.mkdir(this.root,{recursive:true});const stat=await fs.lstat(this.root);if(!stat.isDirectory()||stat.isSymbolicLink())fail('EXTENSION_FILE_INVALID');
-    this.file=path.join(this.root,'operations.json');this.jobs=JSON.parse((await regular(this.file,{optional:true,limit:4*1024*1024}))?.toString()??'[]');
+    this.file=path.join(this.root,'operations.json');this.jobs=JSON.parse((await regular(this.file,{optional:true,limit:24*1024*1024}))?.toString()??'[]');
     if(!Array.isArray(this.jobs))fail('EXTENSION_HISTORY_INVALID');
-    for(const job of this.jobs)if(['queued','running'].includes(job.status)){job.status='interrupted';job.code='EXTENSION_INSTALL_INTERRUPTED';job.finishedAt=Date.now();}
-    await this.save();return this;
+    const file=path.join(this.root,'history.sqlite'),info=await fs.lstat(file).catch(error=>{if(error.code!=='ENOENT')throw error;});
+    if(info&&!info.isFile())fail('EXTENSION_FILE_INVALID');
+    this.archive=new DatabaseSync(file);
+    try{
+      this.archive.exec('CREATE TABLE IF NOT EXISTS completed_job(request_id TEXT PRIMARY KEY NOT NULL,name TEXT,job TEXT NOT NULL);CREATE INDEX IF NOT EXISTS completed_job_name ON completed_job(name)');
+      for(const job of this.jobs)if(['queued','running'].includes(job.status)){job.status='interrupted';job.code='EXTENSION_INSTALL_INTERRUPTED';job.finishedAt=Date.now();}
+      await this.save();return this;
+    }catch(error){this.archive.close();this.archive=null;throw error;}
   }
-  async save(){await atomic(this.file,JSON.stringify(this.jobs,null,2));}
+  async save(){
+    const older=this.jobs.slice(0,-100).filter(job=>['failed','completed','interrupted'].includes(job.status)&&(!job.recovery||['committed','restored'].includes(job.recovery.status)));
+    if(!older.length){await atomic(this.file,JSON.stringify(this.jobs,null,2));return;}
+    // Commit replay records before trimming the live file. After a crash the
+    // live copy wins; repeating this archive step is safe.
+    this.archive.exec('BEGIN IMMEDIATE');
+    try{
+      const write=this.archive.prepare('INSERT OR REPLACE INTO completed_job VALUES(?,?,?)');
+      for(const job of older)write.run(job.requestId,job.name??null,JSON.stringify(job));
+      this.archive.exec('COMMIT');
+    }catch(error){this.archive.exec('ROLLBACK');throw error;}
+    const archived=new Set(older),keep=this.jobs.filter(job=>!archived.has(job));
+    await atomic(this.file,JSON.stringify(keep,null,2));this.jobs=keep;
+  }
   get recoveryStore(){return new ExtensionRecovery(this.root,this.profile);}
   get blocked(){return this.jobs.findLast(j=>j.recovery&&!['committed','restored'].includes(j.recovery.status))??null;}
   canRecover(job){return !!job?.recovery&&['failed','prepared'].includes(job.recovery.status)&&!!job.recovery.after;}
@@ -89,10 +110,39 @@ export class RuntimeExtensions {
     }
     fail('EXTENSION_BEHAVIOR_REGISTRATION_FAILED');
   }
+  async maintenanceState(){
+    let state;
+    try{state=await this.runtime.state('runtime-status');}catch(error){
+      if(this.runtime.cookie||this.runtime.waiting||this.runtime.child?.exitCode===null)throw error;
+      return;
+    }
+    if(state?.agentBusy||state?.desired==='running'&&state.inbox>0)fail('AGENT_BUSY');
+    if(state?.desired==='running'&&state.driveMode==='bounded')fail('PAUSE_REQUIRED');
+    return state;
+  }
+  async stopForChange(job,input,signal){
+    let sessionId=input.sessionId;
+    while(true){
+      signal.throwIfAborted();
+      try{
+        const previous=await this.maintenanceState();
+        if(sessionId&&previous?.sessionId&&sessionId!==previous.sessionId)fail('STALE_SESSION');
+        sessionId??=previous?.sessionId;
+        signal.throwIfAborted();this.remote.maintenance=true;this.waitingForIdle=false;
+        await this.remote.stopRuntime({idleState:previous,keepWakePreference:!!previous});
+        return previous;
+      }catch(error){
+        if(!['AGENT_BUSY','STALE_EPOCH'].includes(error.message))throw error;
+        this.remote.maintenance=false;this.waitingForIdle=true;
+        if(!job.waitingForIdle){job.waitingForIdle=true;await this.save();}
+        await delay(500,undefined,{signal});
+      }
+    }
+  }
   async recover(job,signal){
     const snapshot=await this.recoveryStore.load(job);
     if((await profileImage(this.profile)).digest!==job.recovery.after)fail('EXTENSION_RECOVERY_CONFLICT');
-    await this.remote.stopRuntime();signal.throwIfAborted();
+    await this.remote.stopRuntime({idleState:await this.maintenanceState()});signal.throwIfAborted();
     if((await profileImage(this.profile)).digest!==job.recovery.after)fail('EXTENSION_RECOVERY_CONFLICT');
     job.recovery.status='restoring';await this.save();
     try{
@@ -135,7 +185,10 @@ export class RuntimeExtensions {
     return {name,title:typeof manifest.dsh?.human?.plugin?.title==='string'?manifest.dsh.human.plugin.title.slice(0,64):name,pluginContract:manifest.dsh?.human?.plugin?.version??null,version:manifest.version,description:typeof manifest.description==='string'?manifest.description.slice(0,300):'',replacesBehaviors:behaviorReplacementIds(manifest),providesWorkflows:workflowIds(manifest),pages,configEditors:extensionEditors(manifest,nodes),nodes:nodes.map(n=>({id:n.id,disabled:patch.find(p=>p.id===n.id)?.disabled??!!n.disabled,config:patch.find(p=>p.id===n.id)?.config??n.config??{}}))};
   }
   async list(){
-    const c=await this.configuration(),bundles=c.manifest.dsh?.profile?.bundles??[],names=[...new Set([...bundles,...this.jobs.map(j=>j.name).filter(name=>Object.hasOwn(c.manifest.dependencies??{},name))])].filter(editable),items=[];
+    const c=await this.configuration(),bundles=c.manifest.dsh?.profile?.bundles??[],liveNames=new Set(this.jobs.map(job=>job.name));
+    const archived=this.archive.prepare('SELECT 1 FROM completed_job WHERE name=? LIMIT 1');
+    const managed=Object.keys(c.manifest.dependencies??{}).filter(name=>liveNames.has(name)||archived.get(name));
+    const names=[...new Set([...bundles,...managed])].filter(editable),items=[];
     for(const name of names)try{items.push({...await this.describe(name,c.patch),manageable:bundles.includes(name),registered:bundles.includes(name),...(!bundles.includes(name)?{code:'EXTENSION_NOT_REGISTERED'}:{})});}catch(e){items.push({name,manageable:false,registered:bundles.includes(name),code:errorCode(e),nodes:[]});}
     return {revision:c.revision,items,jobs:this.jobs.slice(-20).reverse().map(j=>({...j,canRecover:this.canRecover(j)})),recoveryRequired:this.blocked?{id:this.blocked.id,name:this.blocked.name,canRecover:this.canRecover(this.blocked)}:null,busy:!!this.active,scope:'human-private-runtime',trustedCode:true,installScripts:false};
   }
@@ -152,8 +205,9 @@ export class RuntimeExtensions {
     if(this.closed)fail('EXTENSION_MANAGER_CLOSED');
     if(!plain(input)||!['install','remove','toggle','configure','recover'].includes(input.action)||typeof input.requestId!=='string'||!/^[a-zA-Z0-9-]{8,100}$/.test(input.requestId)||input.trustedCode!==true)fail('EXTENSION_REQUEST_INVALID');
     const basis=hash(JSON.stringify({action:input.action,source:input.source,name:input.name,enabled:input.enabled,entries:input.entries,operationId:input.operationId,expectedRevision:input.expectedRevision}));
-    const old=this.jobs.find(j=>j.requestId===input.requestId);if(old){if(old.basis!==basis)fail('REQUEST_ID_CONFLICT');return {...old};}
-    if(this.active)fail('EXTENSION_OPERATION_BUSY');if(this.jobs.length>=1000)fail('EXTENSION_HISTORY_FULL');
+    const old=this.jobs.find(j=>j.requestId===input.requestId)??JSON.parse(this.archive.prepare('SELECT job FROM completed_job WHERE request_id=?').get(input.requestId)?.job??'null');
+    if(old){if(old.basis!==basis)fail('REQUEST_ID_CONFLICT');return {...old};}
+    if(this.active)fail('EXTENSION_OPERATION_BUSY');
     const c=await this.configuration();if(input.expectedRevision!==c.revision)fail('EXTENSION_CONFIGURATION_CHANGED');
     if(input.action==='recover'){
       const original=this.blocked;if(!original||original.id!==input.operationId||!this.canRecover(original))fail('EXTENSION_RECOVERY_UNAVAILABLE');
@@ -181,11 +235,11 @@ export class RuntimeExtensions {
     this.active.catch(()=>{});return {...job};
   }
   async execute(job,input,signal){
+    let stopped=false;
     try{
-      job.status='running';await this.save();let previous;try{previous=await this.runtime.state();}catch{}
-      if(input.sessionId&&previous?.sessionId&&input.sessionId!==previous.sessionId)fail('STALE_SESSION');
-      const resume=previous?.desired==='running'&&!previous.lastError&&!previous.autonomy?.paused;
-      await this.remote.stopRuntime();signal.throwIfAborted();
+      job.status='running';await this.save();const previous=await this.stopForChange(job,input,signal);
+      stopped=true;job.waitingForIdle=false;signal.throwIfAborted();
+      const resume=previous?.desired==='running';
       // Check again after stopping: an external CLI or editor may have changed
       // the profile since the management preview.
       const current=await this.configuration();if(current.revision!==input.configuration.revision)fail('EXTENSION_CONFIGURATION_CHANGED');
@@ -217,14 +271,18 @@ export class RuntimeExtensions {
       signal.throwIfAborted();this.runtime.closed=false;await this.runtime.start();signal.throwIfAborted();const ready=await this.runtime.state();
       await this.verifyBehaviorOwnership(ready,signal);
       if(expectedSession&&ready.sessionId!==expectedSession){await this.runtime.close();fail('STALE_SESSION');}
-      if(resume){this.remote.maintenance=false;await this.remote.controlRuntime({op:'start',sessionId:ready.sessionId,expectedEpoch:ready.cancelEpoch});}
+      if(resume){
+        if(ready.desired!=='paused'||ready.autonomy?.paused!==previous.autonomy?.paused||ready.autonomy?.error!==previous.autonomy?.error)fail('EXTENSION_RUNTIME_STATE_CHANGED');
+        await this.remote.controlRuntime({op:'start',sessionId:ready.sessionId,expectedEpoch:ready.cancelEpoch},{maintenanceRestore:true});
+      }
       signal.throwIfAborted();
       job.status='completed';job.finishedAt=Date.now();job.runtime='started';job.resumed=!!resume;
       job.recovery.status='committed';await this.save();await this.recoveryStore.discard(job.id).catch(()=>{job.recovery.cleanupPending=true;});
     }catch(e){
+      if(stopped)this.remote.blockWake?.('extension-maintenance-failed');
       // A late startup/control response cannot leave the driver running after
       // shutdown cancelled this operation. The mutation remains unconfirmed.
-      if(signal.aborted)await this.remote.stopRuntime().catch(()=>{});
+      if(signal.aborted&&stopped)await this.remote.stopRuntime().catch(()=>{});
       job.status=signal.aborted?'interrupted':'failed';job.code=errorCode(e);job.finishedAt=Date.now();job.runtime='check-required';
       if(job.recovery&&!['committed','restored'].includes(job.recovery.status)){
         if(signal.aborted){job.recovery.status='interrupted';job.recovery.code='EXTENSION_RECOVERY_INSPECTION_REQUIRED';}
@@ -232,7 +290,14 @@ export class RuntimeExtensions {
         catch(error){job.recovery.code=errorCode(error);}
       }
     }
-    finally{job.finishedAt=Date.now();await this.save();this.runtime.recordLifecycle?.('extension-operation',{action:job.action,name:job.name,status:job.status,code:job.code,recovery:job.recovery?.status??null});}
+    finally{this.waitingForIdle=false;job.waitingForIdle=false;job.finishedAt=Date.now();await this.save();this.runtime.recordLifecycle?.('extension-operation',{action:job.action,name:job.name,status:job.status,code:job.code,recovery:job.recovery?.status??null});}
   }
-  async close(){this.closed=true;this.controller?.abort(Error('EXTENSION_INSTALL_INTERRUPTED'));await this.active;}
+  async close(){
+    this.closed=true;
+    const reason=Error('EXTENSION_INSTALL_INTERRUPTED');
+    this.controller?.abort(reason);
+    await this.submission?.catch(()=>{});
+    this.controller?.abort(reason); // A submission may have been finishing its preflight.
+    await this.active;this.archive?.close();this.archive=null;
+  }
 }

@@ -130,6 +130,7 @@ export async function reviewConversationReply(agent,signal,{request,options,data
       j.audit(agent.id,'conversation-review-protocol-repair',{turn:options.turn,attemptId:response.rid,validationDiagnostic:error.validationDiagnostic,maximumAdditionalCalls:1,origin:'owner',lane:'foreground'});
       continue;
     }
+    if(response&&!error.attemptId)error.attemptId=response.rid;
     throw error;
    }
   }

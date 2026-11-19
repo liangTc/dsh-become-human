@@ -15,6 +15,8 @@ const {DomainMemory}=await import('../plugins/become-human/domain.mjs');
 const {ToolExecutor}=await import('../plugins/become-human/tool-executor.mjs');
 const {capabilityDialogue}=await import('../plugins/become-human/capability-dialogue.mjs');
 const {usageStatistics}=await import('../plugins/become-human/usage-statistics.mjs');
+const {choiceDialogueRequest}=await import('../plugins/become-human/choice-dialogue.mjs');
+const {RemoteGateway}=await import('../plugins/become-human-web/remote.mjs');
 const root=await fs.mkdtemp(path.join(process.env.BH_TEST_TMP??os.tmpdir(),'bh-attempts-')),tests=[];
 async function test(name,fn){let f;try{f=fixture();await fn(f);tests.push({name,passed:true});}catch(e){tests.push({name,passed:false,error:e.stack});}finally{f?.journal.close();}}
 function fixture(){
@@ -31,6 +33,48 @@ function fixture(){
  return {id,owner,usage,ids,agent,tools,dialogue,generated,reopen,row,get journal(){return journal;},get executions(){return executions;}};
 }
 const call=tool=>JSON.stringify({capability:{tool,input:{}}});
+await test('Reconciliation consumes the suffix across restart and commits the cursor with the outbox',async f=>{
+ const events=[],reads=[],session={id:f.id,get seq(){return events.length;},snapshotEvents(from,to){reads.push([from,to]);return events.slice(from,to);}};
+ const user=id=>({id,role:'user',content:[{type:'text',text:id}]});
+ const append=(type,data)=>events.push({type,data,time:1000+events.length,seq:events.length});
+ const splice=(start,removedCount,inserted)=>append('agent/inbox/spliced',{target:'next-turn',start,removedCount,inserted});
+ for(let n=0;n<2000;n++)append('assistant/message',{message:{id:'reply-'+n,content:[{type:'text',text:'reply '+n}]}});
+ splice(0,0,[user('pending')]);f.journal.reconcile(session);assert.deepEqual(reads,[[0,2001]]);
+ f.reopen();reads.length=0;splice(1,0,[user('removed')]);splice(0,2,[user('new')]);
+ append('assistant/message',{message:{id:'one-more',content:[{type:'text',text:'one more'}]}});
+ f.journal.db.exec("CREATE TEMP TRIGGER fail_insert BEFORE INSERT ON outbox BEGIN SELECT RAISE(ABORT,'fixture'); END");
+ assert.throws(()=>f.journal.reconcile(session),/fixture/);
+ assert.equal(f.journal.value(f.id,'outboxProjection').offset,2001);
+ f.journal.db.exec('DROP TRIGGER fail_insert');reads.length=0;f.journal.reconcile(session);
+ assert.deepEqual(reads,[[2000,2001],[2001,2004]]);
+ assert.equal(f.journal.value(f.id,'successes'),2001);assert.equal(f.journal.value(f.id,'memory'),'one more');
+ assert.deepEqual(f.journal.db.prepare("SELECT text FROM outbox WHERE kind='user' ORDER BY seq").all().map(r=>r.text),['pending','new']);
+ reads.length=0;f.journal.reconcile(session);assert.deepEqual(reads,[[2003,2004]]);
+ assert.equal(f.journal.db.prepare('SELECT count(*) n FROM outbox').get().n,2003);
+ events.splice(1999);reads.length=0;f.journal.reconcile(session);
+ assert.deepEqual(reads,[[0,1999]]);assert.equal(f.journal.value(f.id,'successes'),1999);
+});
+await test('Only durable owner responses settle retry eligibility including local replies and upgraded receipts',async f=>{
+ const add=(rid,ids,purpose,state)=>{
+  f.journal.beginAttempt(f.id,rid,1,1,{lane:'foreground',admittedIds:ids,...(purpose?{purpose}:{})});
+  f.journal.endAttempt(rid,{state});
+ };
+ const ids=()=>f.journal.retryInputIds(f.id,()=>true);
+ add('retry-original',['batch-a','batch-b'],null,'failed');
+ add('review-only',['batch-a','batch-b','review-only'],'conversation-review','failed');
+ add('tool-complete',['batch-a','batch-b'],null,'completed');
+ assert.deepEqual(ids(),['batch-a','batch-b']);
+ f.journal.stageResponse(f.id,'final-local',1,1,'MESSAGE',{data:{message:{id:'assistant-local'}},ownerBatch:{id:'batch',inputIds:['batch-a']}});
+ f.journal.commitResponse('final-local');assert.deepEqual(ids(),['batch-b']);
+ add('final-wait',['batch-b'],null,'generated');f.journal.stageResponse(f.id,'final-wait',1,1,'WAIT',{});
+ f.journal.commitResponse('final-wait');f.reopen();assert.deepEqual(ids(),[]);
+ // Force an upgrade from just the old durable rows, with no new receipt keys.
+ f.journal.db.exec("DELETE FROM metadata WHERE key GLOB 'owner-replied:*' OR key='ownerReplyReceiptBackfill'");
+ f.journal.put(f.id,'local-admitted:pre-origin',['legacy-command']);
+ f.journal.publish(f.id,'Legacy command response','assistant','assistant:pre-origin');
+ add('old-failed',['legacy-command'],null,'failed');f.reopen();assert.deepEqual(ids(),[]);
+ assert.equal(f.journal.value(f.id,'owner-replied:legacy-command'),true);
+});
 await test('Background review failure is not presented as a missing owner reply',async f=>{
  const events=[{seq:1,time:Date.now(),type:'turn/end',data:{turn:1,reason:{kind:'error',error:{code:'HUMAN_REVIEW_ERROR',message:'INVALID_MEMORY_SUMMARY'}}}}];
  const session={id:f.id,snapshotEvents:()=>events};f.journal.reconcile(session);f.journal.reconcile(session);
@@ -44,6 +88,25 @@ await test('Rejected protocol remains rejected after cold reopen and is not exec
 await test('Completed model routing does not disguise a failed tool job',async f=>{await f.dialogue([call('fixture-fail'),'No result.']);assert.equal(f.row(f.ids[0]).state,'completed');assert.equal(f.tools.list(f.id).items[0].status,'failed');f.reopen().recoverAttempts(f.id);assert.equal(f.row(f.ids[0]).state,'completed');assert.equal(f.journal.db.prepare('SELECT status FROM human_tool_job').get().status,'failed');});
 await test('Write approval remains pending across reopen without executing the action',async f=>{await f.dialogue([call('fixture-write')]);assert.equal(f.row(f.ids[0]).state,'completed');assert.equal(f.executions,0);f.reopen().recoverAttempts(f.id);assert.equal(f.journal.db.prepare('SELECT status FROM human_tool_job').get().status,'awaiting-approval');assert.equal(f.journal.db.prepare('SELECT count(*) n FROM response_stage').get().n,0);assert.equal(f.executions,0);});
 await test('A staged final reply recovers once, separately from consumed routing output',async f=>{const r=await f.dialogue([call('fixture-read'),'Natural result.']),message={id:randomUUID(),role:'assistant',content:[{type:'text',text:r.text}]},events=[{seq:1,type:'turn/start',data:{turn:1}}],session={id:f.id,snapshotEvents:()=>events,append:(type,data)=>events.push({seq:events.length+1,type,data,time:Date.now()})};f.journal.stageResponse(f.id,r.rid,1,1,'MESSAGE',{data:{message},usage:f.usage,textChars:r.text.length});f.reopen();const recovered=f.journal.recoverResponses(session);for(const id of recovered)f.journal.commitResponse(id);f.journal.recoverAttempts(f.id);assert.equal(f.row(r.rid).state,'completed');assert.equal(f.row(f.ids[0]).state,'completed');assert.equal(events.filter(e=>e.type==='assistant/message').length,1);assert.deepEqual(f.journal.recoverResponses(session),[]);assert.equal(events.filter(e=>e.type==='assistant/message').length,1);});
+await test('Review outage preserves one canonical reply and one notification through restart and remote delivery',async f=>{
+ f.agent.factory.conversationReview=true;f.agent.factory.relationship={settings:()=>({enabled:false})};f.agent.factory.dialogueState={context:()=>null};
+ const r=await choiceDialogueRequest(async(_a,_s,o)=>{
+  if(o.purpose==='conversation-review'){
+   f.journal.beginAttempt(f.id,'review-fixture',o.turn,o.epoch,o);
+   f.journal.endAttempt('review-fixture',{state:'failed',error:'MODEL_EXECUTION_FAILED'});
+   throw Object.assign(Error('MODEL_EXECUTION_FAILED'),{attemptId:'review-fixture'});
+  }
+  return f.generated('原回复仍然连贯。');
+ })(f.agent,new AbortController().signal,{epoch:1,turn:1,lane:'foreground',admittedIds:[f.owner],messages:[{role:'system',content:[{type:'text',text:'Synthetic'}]},{role:'user',content:[{type:'text',text:JSON.stringify({persona:f.agent.factory.domain.persona(f.id),input:[]})}]}]});
+ assert.equal(r.dialogueQuality.status,'review-unavailable');const message={id:randomUUID(),role:'assistant',content:[{type:'text',text:r.text}]},events=[{seq:1,type:'turn/start',data:{turn:1}}],session={id:f.id,snapshotEvents:()=>events,append:(type,data)=>events.push({seq:events.length+1,type,data,time:Date.now()})};
+ f.journal.stageResponse(f.id,r.rid,1,1,'MESSAGE',{data:{message},usage:f.usage,textChars:r.text.length});f.reopen();
+ assert(f.journal.value(f.id,'conversationReviewCooldown').until>Date.now());
+ for(const rid of f.journal.recoverResponses(session))f.journal.commitResponse(rid);f.journal.reconcile(session);f.journal.reconcile(session);
+ assert.deepEqual(f.journal.retryInputIds(f.id,()=>true),[]);
+ const feed=()=>f.journal.db.prepare('SELECT * FROM outbox WHERE agent=? ORDER BY seq').all(f.id);assert.equal(feed().filter(r=>r.kind==='assistant').length,1);assert.equal(feed().filter(r=>r.kind==='model-error').length,1);assert.equal(feed().filter(r=>r.kind==='status').length,0);assert.equal(f.row(r.rid).state,'completed');assert.equal(f.journal.value(f.id,'lastError',null),null);
+ const received=[],remote=new RemoteGateway(':memory:',{state:async()=>({sessionId:f.id,desired:'running',inbox:0,messages:[]}),events:async after=>({sessionId:f.id,events:feed().filter(row=>row.seq>after)})},{seal:x=>x,unseal:x=>x});
+ try{remote.register('fixture',{verify:async()=>({privateOwner:true}),send:async(_c,text)=>{received.push(text);return {accepted:true};}});remote.db.prepare('INSERT INTO channel VALUES(?,?,?,1,?,0,NULL)').run('fixture','fixture',JSON.stringify({ownerId:'owner'}),f.id);await remote.tick();await remote.tick();assert.equal(received.length,2);assert(received.some(t=>t.includes('原回复仍然连贯。')));assert(received.some(t=>t.includes('基础校验')));}finally{await remote.close();}
+});
 await test('A stale staged final reply is discarded rather than silently published',async f=>{const r=await f.dialogue([call('fixture-read'),'Natural result.']);f.journal.stageResponse(f.id,r.rid,1,1,'MESSAGE',{data:{message:{id:randomUUID(),content:[{type:'text',text:r.text}]}},usage:f.usage});f.journal.set(f.id,'paused');f.reopen();let published=0;f.journal.recoverResponses({id:f.id,snapshotEvents:()=>[{type:'turn/start',data:{turn:1}}],append:()=>published++});assert.equal(published,0);assert.equal(f.row(r.rid).error,'STALE_STAGED_RESULT');assert.equal(f.row(f.ids[0]).state,'completed');});
 await test('Unknown consumed usage remains unknown and conservatively reserved after recovery',async f=>{await f.dialogue([call('fixture-read'),'Done.'],{withUsage:false});const before=f.row(f.ids[0]),used=f.journal.get(f.id).used;assert.equal(before.usage_confidence,'unknown');assert.equal(used,200);f.reopen().recoverAttempts(f.id);assert.deepEqual(f.row(f.ids[0]),before);assert.equal(f.journal.get(f.id).used,used);});
 await test('Real unfinished dispatch is still recovered as interrupted with unknown usage',async f=>{const rid=f.journal.reserve(f.id,100,Infinity,{turn:1,epoch:1,request:{lane:'foreground'}});f.journal.dispatchAttempt(rid,{provider:'synthetic',model:'synthetic'});f.reopen().recoverAttempts(f.id);assert.equal(f.row(rid).state,'interrupted');assert.equal(f.row(rid).error,'PROCESS_INTERRUPTED');assert.equal(f.row(rid).usage_confidence,'unknown');});

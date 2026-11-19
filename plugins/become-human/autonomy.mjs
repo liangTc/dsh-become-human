@@ -18,10 +18,9 @@ import {compactConversation} from './dialogue-compaction.mjs';
 import {cachedLearningDraft,learningSelectionPolicy} from './learning-selection-review.mjs';
 import {createAssistantMessage} from './api.mjs';
 import {conversationPolicy as baseConversationPolicy,experienceGroundingPolicy,foregroundConversationPolicy,conversationalText,conversationOptions} from './conversation.mjs';
-import {learningOrigin,validateLearningIntent} from './learning-policy.mjs';
-import {learningEngagementSnapshot,studyDisposition,explicitLearningNoteRequest,delegateLearningLookup} from './learning-engagement.mjs';
-import {structured,claimTextProjection,assertAgentPerspective,assertAgentExperience,outputDiagnostic,requireOutputText} from './learning.mjs';
-import {searchQuery} from './research.mjs';
+import {learningPlanFields,validateLearningPlan,admitLearningRoute,learningOfferReceipt,isLearningActivity} from './learning-pack.mjs';
+import {learningEngagementSnapshot,explicitLearningNoteRequest,delegateLearningLookup} from './learning-engagement.mjs';
+import {structured,claimTextProjection,assertAgentExperience,outputDiagnostic,requireOutputText} from './learning.mjs';
 import {expressionPrompt} from './expression.mjs';
 import {autonomousBudgetEstimate} from './model-policy.mjs';
 import {quotaAllows,roundDuration} from './quota.mjs';
@@ -59,16 +58,6 @@ export function estimateTaskBudget(agent,task){
 
 export function discoverSource(agent,signal,task,settings,epoch,options={}){return discoverPublicSource(agent,signal,task,settings,epoch,{...options,valid});}
 
-function rejectInsufficientEvidence(agent,task,response,reason){
-  const {journal:j,autonomy:store}=agent.factory,id=agent.id,cp={...task.checkpoint},source=cp.source;
-  delete cp.learningDraft;
-  j.endAttempt(response.rid,{state:'evidence-insufficient',usage:response.usage,usageConfidence:response.usage?'reported':'unknown',textChars:response.text.length,reasoningChars:response.reasoningChars});
-  j.audit(id,'learning-evidence-insufficient',{taskId:task.id,attemptId:response.rid,sourceDigest:source.digest,code:reason});
-  if(task.kind==='research'&&cp.discovery&&(cp.researchReads??0)<cp.discovery.results.length){
-    cp.rejectedSources=[...(cp.rejectedSources??[]),{url:source.url,digest:source.digest,reason}].slice(-6);cp.source=null;store.update(task.id,'suspended',cp);
-  }else{store.defer(id,task,'INSUFFICIENT_SOURCE_EVIDENCE',store.settings(id).sourceIntervalMs);store.update(task.id,'failed',{...cp,reason:'INSUFFICIENT_SOURCE_EVIDENCE',failureCategory:'source-insufficient'});}
-  j.put(id,'autonomyWait','insufficient-source-evidence');j.put(id,'autonomyPhase','waiting');
-}
 
 export async function runAutonomyTurn(agent,signal){
   const f=agent.factory,j=f.journal,store=f.autonomy,id=agent.id,epoch=agent.desired().epoch,settings=store.settings(id);
@@ -120,10 +109,12 @@ export async function runAutonomyTurn(agent,signal){
       agent.activeRoundId=task.checkpoint.roundId??task.id;
       const elapsed=roundDuration(j.safety,id,agent.activeRoundId),maxMs=settings.roundTimeoutMs-elapsed;
       if(maxMs<=0){store.update(task.id,'failed',{...task.checkpoint,reason:'AUTONOMOUS_ROUND_TIMEOUT'});store.defer(id,task,'AUTONOMOUS_ROUND_TIMEOUT',settings.sourceIntervalMs);phase('waiting');return;}
-      j.put(id,'lastAutonomousFamily',['chat','care'].includes(task.kind)?'social':['research','learn-ai','share-insight'].includes(task.kind)?'learning':'activity');
+      j.put(id,'lastAutonomousFamily',['chat','care'].includes(task.kind)?'social':isLearningActivity(task.kind)?'learning':'activity');
       segmentStartedMono=performance.now();segment={id:crypto.randomUUID(),agent:id,roundId:agent.activeRoundId,started:Date.now(),maxMs};j.safety.appendSync('segment-start:'+segment.id,'autonomy-segment-start',segment);await j.safety.anchor();
       roundSignal=AbortSignal.timeout(maxMs);signal=AbortSignal.any([parentSignal,roundSignal]);
-      j.put(id,'autonomyBudgetRequest',null);j.put(id,'autonomyWait',null);
+      const budgetRequest=j.value(id,'autonomyBudgetRequest',null);
+      if(budgetRequest&&(budgetRequest.taskId===task.id||budgetRequest.taskId==='new-task'))j.put(id,'autonomyBudgetRequest',null);
+      j.put(id,'autonomyWait',null);
       if(!task.checkpoint.plan){
         phase('selecting');agent.activeLane='selection';
         const selectionInput=selectionMessages(agent,task,persona);
@@ -140,16 +131,14 @@ export async function runAutonomyTurn(agent,signal){
           // external search query. Keep the older question/value form readable.
           if(plan.decision==='wait'&&typeof plan.reason==='string'&&plan.reason.trim()&&plan.reason.length<=400&&Object.keys(plan).every(k=>['decision','reason'].includes(k)))plan={decision:'wait',question:'',value:plan.reason};
           if(!['execute','wait'].includes(plan.decision))throw contractFailure('decision','invalid-enum-value');
-          const unexpected=Object.keys(plan).filter(k=>!['decision','question','value',...(['research','learn-ai'].includes(task.kind)?['learningIntent']:[]),...(task.kind==='research'?['searchQuery','alternateSearchQuery']:[]),...(task.kind==='chat'?['topicKey']:[]),...(task.kind==='behavior'?['input']:[])].includes(k));if(unexpected.length)throw contractFailure('output','unexpected-fields',{unexpectedFieldCount:unexpected.length,knownUnexpectedFields:unexpected.filter(k=>['searchQuery','sourceUrl','source','learningIntent','learning_intent','learningPurpose','reason','kind','topicKey','plan','rationale','version','origin'].includes(k))});
+          const unexpected=Object.keys(plan).filter(k=>!['decision','question','value',...learningPlanFields(task.kind),...(task.kind==='chat'?['topicKey']:[]),...(task.kind==='behavior'?['input']:[])].includes(k));if(unexpected.length)throw contractFailure('output','unexpected-fields',{unexpectedFieldCount:unexpected.length,knownUnexpectedFields:unexpected.filter(k=>['searchQuery','sourceUrl','source','learningIntent','learning_intent','learningPurpose','reason','kind','topicKey','plan','rationale','version','origin'].includes(k))});
           for(const [field,max] of [['question',240],['value',400]]){if(typeof plan[field]!=='string')throw contractFailure(field,plan[field]===undefined?'required-field-missing':'invalid-field-type',{expectedType:'string'});if(plan[field].length>max)throw contractFailure(field,'field-too-long',{length:plan[field].length,maximum:max});}
           if(plan.decision==='execute'){requireOutputText(plan,'question',240);requireOutputText(plan,'value',400);}
           if((task.checkpoint.goal||task.checkpoint.matterId)&&plan.decision==='execute'&&plan.question.trim()!==task.checkpoint.candidate.question.trim())throw failure(task.checkpoint.goal?'GOAL_DIRECTION_CHANGED':'MATTER_DIRECTION_CHANGED');
           if(task.kind==='behavior'&&plan.decision==='execute'){f.behaviors.validate(agent,task.checkpoint.behaviorId,plan.input,task.checkpoint.behaviorFingerprint);if(task.checkpoint.behaviorInput!==undefined&&!isDeepStrictEqual(plan.input,task.checkpoint.behaviorInput))throw failure('BEHAVIOR_INPUT_CHANGED');}
-          if(task.kind==='research'&&plan.decision==='execute'){requireOutputText(plan,'searchQuery',160);searchQuery(plan.searchQuery);if(plan.alternateSearchQuery!==undefined){requireOutputText(plan,'alternateSearchQuery',160);searchQuery(plan.alternateSearchQuery);}}
           if(task.kind==='chat'&&plan.decision==='execute'&&!task.checkpoint.social?.topics.some(t=>t.key===plan.topicKey))throw contractFailure('topicKey','outside-eligible-topics');
           if(task.kind==='chat'&&plan.decision==='execute')assertSocialNovelty(j,id,plan.question,'',Date.now(),settings.socialTopicCooldownMs,{unanswered:task.checkpoint.social?.unanswered??0,domain:f.domain});
-          if(task.kind==='share-insight'){assertAgentPerspective(plan.question);assertAgentPerspective(plan.value);}
-          if(plan.decision==='execute'&&['research','learn-ai'].includes(task.kind))plan.learningIntent=validateLearningIntent(plan,task);
+          validateLearningPlan(task,plan);
         }catch(error){
           // An invalid proposal never becomes an executable task or an orphan
           // goal attempt. Commit the chosen kind only after full validation.
@@ -162,18 +151,13 @@ export async function runAutonomyTurn(agent,signal){
         if(selectedOpportunity)j.transaction(()=>{f.pluginEvents?.claim(id,task.checkpoint.pluginEventIds??[]);task=store.selectOpportunity(task.id,selectedOpportunity,task.checkpoint);});
         j.audit(id,'direction-selected',{taskId:task.id,roundId:agent.activeRoundId,decision:plan.decision,question:plan.question,value:plan.value,...(plan.topicKey?{topicKey:plan.topicKey}:{}),...(plan.learningIntent?{learningIntent:plan.learningIntent}:{})});
         if(plan.decision==='wait'){if(task.kind==='research')j.put(id,'lastResearchAt',Date.now());store.defer(id,task,'selection-wait',socialDelay(settings,task));store.update(task.id,task.checkpoint.goal?'suspended':'cancelled',{...task.checkpoint,reason:'selection-wait',selectionReason:plan.value});phase('waiting');return;}
-        if(['research','learn-ai'].includes(task.kind)){
-          const disposition=studyDisposition(j,f.domain,id,plan.question,Date.now()),origin=learningOrigin(task),explicit=['owner-goal','active-matter'].includes(origin)||!!task.checkpoint.correction;
-          const studies=j.value(id,'learningRouteStudies',[]).filter(row=>Number.isSafeInteger(row.at)&&Date.now()-row.at<90*86400000),routeKey=disposition.matchedKey??disposition.key,last=studies.find(row=>row.key===routeKey)?.at??0,gap=settings.sourceIntervalMs/Math.max(.25,Math.min(1,disposition.weight));
-          if(!explicit&&disposition.weight<1&&Date.now()-last<gap){store.defer(id,task,'learning-route-lower-priority',gap-(Date.now()-last));store.update(task.id,'cancelled',{...task.checkpoint,plan,reason:'learning-route-lower-priority'});j.put(id,'autonomyWait','learning-route-lower-priority');phase('waiting');return;}
-          j.put(id,'learningRouteStudies',[...studies.filter(row=>row.key!==routeKey),{key:routeKey,at:Date.now()}].slice(-128));
-        }
+        if(!admitLearningRoute(agent,task,plan,settings)){phase('waiting');return;}
         j.transaction(()=>{store.update(task.id,'ready',{...task.checkpoint,plan});task=store.getTask(task.id);f.experience?.strategies.bind(id,task,task.checkpoint.strategyUses??[]);});
         if(task.checkpoint.goal&&!f.goals.linked(id,task.id)&&task.kind!=='write-report')f.goals.attachTask(id,task.checkpoint.goal,task.id);
         if(task.checkpoint.goal)agent.activeGoalTask=task;
       }
-      j.put(id,'lastAutonomousFamily',['chat','care'].includes(task.kind)?'social':['research','learn-ai','share-insight'].includes(task.kind)?'learning':'activity');
-      const workflow=selectedTaskWorkflow(task.kind,agent),work={agent,task,response:null,signal,turn,epoch,phase,valid,modelRequest,discoverSource,rejectInsufficientEvidence,executeModel:current=>new DshTaskExecutor().execute(agent,signal,{task:current,source:current.checkpoint.source,persona:store.persona(id,'execution'),turn,epoch})};
+      j.put(id,'lastAutonomousFamily',['chat','care'].includes(task.kind)?'social':isLearningActivity(task.kind)?'learning':'activity');
+      const workflow=selectedTaskWorkflow(task.kind,agent),work={agent,task,response:null,signal,turn,epoch,phase,valid,modelRequest,discoverSource,executeModel:current=>new DshTaskExecutor().execute(agent,signal,{task:current,source:current.checkpoint.source,persona:store.persona(id,'execution'),turn,epoch})};
       try{
         if(workflow.prepare&&!await workflow.prepare(work))return;
         task=work.task;
@@ -205,11 +189,11 @@ export async function runAutonomyTurn(agent,signal){
     const data={turn,step:1,message,stream:[],...(response.usage?{usage:response.usage}:{})};
     if(response.workMemoryRefs?.length)j.put(id,'work-observation-message:'+data.message.id,response.workMemoryRefs);
     if(response.noteId)j.put(id,'learning-message:'+data.message.id,response.noteId);
-    const offerNote=lane!=='foreground'&&response.noteId?store.offerableNote(id,store.note(id,response.noteId)):null;
-    const learningOffer=offerNote?{at:Date.now(),messageId:data.message.id,noteId:offerNote.id,sourceId:offerNote.source_id,ownerAnchor:socialStatus(j,f.domain,id,settings).ownerAnchor,text:response.text,question:offerNote.data.researchQuestion??offerNote.data.title,routeText:(offerNote.data.researchQuestion??'')+' '+offerNote.data.title}:null;
+    const contactTime=Date.now(),ownerAnchor=lane==='foreground'?null:socialStatus(j,f.domain,id,settings).ownerAnchor;
+    const learningOffer=lane==='foreground'?null:learningOfferReceipt(agent,response,data.message.id,ownerAnchor,contactTime);
     if(response.localMessageId)j.put(id,'local-admitted:'+data.message.id,admitted.map(m=>m.id));
     bindOwnerResponse(agent,ownerBatch,message.id);
-    j.stageResponse(id,response.rid,turn,epoch,'MESSAGE',{data,usage:response.usage,textChars:response.text.length,reasoningChars:response.reasoningChars,...(response.dialogueState?{dialogueCommit:{assistantMessageId:data.message.id,state:response.dialogueState}}:{}),...(response.relationshipDecision?{relationshipCommit:{...response.relationshipDecision,assistantMessageId:data.message.id}}:{}),...(response.learningFollowUp?{learningFollowUpCommit:{...response.learningFollowUp,assistantMessageId:data.message.id}}:{}),...(ownerBatch?{ownerBatch:{id:ownerBatch.id,inputIds:ownerBatch.inputIds}}:{}),...(lane!=='foreground'?{autonomyCommit:{contactAt:Date.now(),noteId:response.noteId??null,...(learningOffer?{learningOffer}:{}),careAnchor:task?.kind==='care'?task.checkpoint.anchor:null,social:{at:Date.now(),messageId:data.message.id,taskId:task?.id,kind:task?.kind??'autonomous',topicKey:task?.checkpoint.plan?.topicKey??(response.noteId?'insight:'+response.noteId:task?.kind??'autonomous'),question:task?.checkpoint.plan?.question?.slice(0,240)??'',ownerAnchor:socialStatus(j,f.domain,id,settings).ownerAnchor}}}:{})});stageId=response.rid;
+    j.stageResponse(id,response.rid,turn,epoch,'MESSAGE',{data,usage:response.usage,textChars:response.text.length,reasoningChars:response.reasoningChars,...(response.dialogueState?{dialogueCommit:{assistantMessageId:data.message.id,state:response.dialogueState}}:{}),...(response.relationshipDecision?{relationshipCommit:{...response.relationshipDecision,assistantMessageId:data.message.id}}:{}),...(response.learningFollowUp?{learningFollowUpCommit:{...response.learningFollowUp,assistantMessageId:data.message.id}}:{}),...(ownerBatch?{ownerBatch:{id:ownerBatch.id,inputIds:ownerBatch.inputIds}}:{}),...(lane!=='foreground'?{autonomyCommit:{contactAt:contactTime,noteId:response.noteId??null,...(learningOffer?{learningOffer}:{}),careAnchor:task?.kind==='care'?task.checkpoint.anchor:null,social:{at:contactTime,messageId:data.message.id,taskId:task?.id,kind:task?.kind??'autonomous',topicKey:task?.checkpoint.plan?.topicKey??(response.noteId?'insight:'+response.noteId:task?.kind??'autonomous'),question:task?.checkpoint.plan?.question?.slice(0,240)??'',ownerAnchor}}}:{})});stageId=response.rid;
     valid(agent,signal,epoch);agent.session.append('assistant/message',data,{surfaceOp:'append'});await agent.flush();j.reconcile(agent.session);
     j.put(id,'lastError',null);store.completeEvents(id,task?.checkpoint.eventIds??[]);phase('idle');
   }catch(error){

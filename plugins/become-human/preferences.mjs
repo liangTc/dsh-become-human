@@ -12,7 +12,7 @@ function listedValues(value){
   return [...new Map(values.map(part=>[preferenceKey(part),part])).values()];
 }
 export function preferenceStatements(body){
-  if(typeof body!=='string'||developmentInput(body)||/[?？]|假设|比如|测试|如果|怎样|什么/u.test(body))return [];
+  if(typeof body!=='string'||developmentInput(body)||/[?？]|假设|比如|如果|怎样|什么/u.test(body))return [];
   const result=[];let ownerStatement=false;
   for(const clause of body.split(/[。！!\n，,；;]/u)){
     const text=clause.trim();

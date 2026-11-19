@@ -50,9 +50,13 @@ export async function apply(ctx,config){
   const remoteFailure=(error,operation)=>{lastRemoteError={at:Date.now(),code:safeOperationCode(error,'REMOTE_OPERATION_FAILED'),operation};try{remote.recordError(error,{operation});}catch(storageError){runtime.recordLifecycle('remote-error-store-failed',{code:safeOperationCode(storageError,'REMOTE_ERROR_STORE_FAILED'),originalCode:lastRemoteError.code});}};
   const remoteStatus=()=>{try{return remote.status();}catch(error){remoteFailure(error,'remote-status');return {sessionMode:'single',unavailable:true,lastError:latestRemoteError(),channels:[],deliveries:[],deliveryParts:[]};}};
   const schedule=()=>{if(closing)return;tick=setTimeout(async()=>{try{if(!updater.blocksRuntime&&!onboarding.required&&runtime.cookie)await remote.tick();}catch(error){remoteFailure(error,'remote-tick');}finally{schedule();}},1500);};schedule();
-  async function state(){
-    try{const s=await runtime.state(),remoteState=remoteStatus();let imState;try{imState=await im.describe();}catch(error){remoteFailure(error,'im-describe');imState={error:safeOperationCode(error,'IM_STATUS_FAILED'),channels:[],paired:[]};}const health=runtime.health(s);if(health.status==='healthy'&&(remoteState.unavailable||imState.error))health.status='degraded';return {...s,setup:onboarding.describe(),manager:{version:'0.7.0-beta.39',independentProcess:true,sessionMode:'single',modelSelection:runtime.selection,health,lastRemoteError:latestRemoteError(remoteState.lastError)},remote:remoteState,im:imState};}
-    catch{return {version:'0.7.0-beta.39',setup:onboarding.describe(),sessionId:null,desired:'paused',status:'unavailable',agentBusy:false,canThink:false,interactiveOnly:true,provider:'尚未配置',model:'',used:0,budget:config.tokenBudget,remaining:0,successes:0,intervalMs:config.intervalMs,inbox:0,persona:'',memory:'',messages:[],memories:[],attempts:[],audit:[],receipt:0,manager:{version:'0.7.0-beta.39',independentProcess:true,sessionMode:'single',error:bootError??runtime.lastError??(onboarding.required?'SETUP_REQUIRED':'WORKER_UNAVAILABLE'),health:runtime.health(),lastRemoteError:latestRemoteError()},remote:remoteStatus()};}
+  async function state(mode='full'){
+    if(mode==='chat-state'){
+      try{const chat=await runtime.state(mode);return {...chat,setup:onboarding.describe(),manager:{version:manifest.version,health:runtime.health(chat)}};}
+      catch(error){return {status:'unavailable',sessionId:null,setup:onboarding.describe(),manager:{version:manifest.version,error:bootError??safeOperationCode(error,'WORKER_UNAVAILABLE'),health:runtime.health()}};}
+    }
+    try{const s=await runtime.state(),remoteState=remoteStatus();let imState;try{imState=await im.describe();}catch(error){remoteFailure(error,'im-describe');imState={error:safeOperationCode(error,'IM_STATUS_FAILED'),channels:[],paired:[]};}const health=runtime.health(s);if(health.status==='healthy'&&(remoteState.unavailable||imState.error))health.status='degraded';return {...s,setup:onboarding.describe(),manager:{version:manifest.version,independentProcess:true,sessionMode:'single',modelSelection:runtime.selection,health,lastRemoteError:latestRemoteError(remoteState.lastError)},remote:remoteState,im:imState};}
+    catch{return {version:manifest.version,setup:onboarding.describe(),sessionId:null,desired:'paused',status:'unavailable',agentBusy:false,canThink:false,interactiveOnly:true,provider:'尚未配置',model:'',used:0,budget:config.tokenBudget,remaining:0,successes:0,intervalMs:config.intervalMs,inbox:0,persona:'',memory:'',messages:[],memories:[],attempts:[],audit:[],receipt:0,manager:{version:manifest.version,independentProcess:true,sessionMode:'single',error:bootError??runtime.lastError??(onboarding.required?'SETUP_REQUIRED':'WORKER_UNAVAILABLE'),health:runtime.health(),lastRemoteError:latestRemoteError()},remote:remoteStatus()};}
   }
   let operations=Promise.resolve();
   const mutate=input=>operations=operations.catch(()=>{}).then(async()=>{
@@ -62,7 +66,7 @@ export async function apply(ctx,config){
     if(updater.busy||updater.blocksRuntime)throw new Error('UPDATE_RESTART_OR_RECOVERY_REQUIRED');
     if(input.op==='extension-stage'){if(onboarding.required)throw new Error('SETUP_REQUIRED');return extensions.stageArchive(input);}
     if(input.op==='extension-apply'){if(onboarding.required)throw new Error('SETUP_REQUIRED');const job=await extensions.submit(input);return {extensionJob:job};}
-    if(extensions.active)throw new Error('EXTENSION_OPERATION_BUSY');
+    if(extensions.active&&!(extensions.waitingForIdle&&['message','pause','remote-reply'].includes(input.op)))throw new Error('EXTENSION_OPERATION_BUSY');
     if(extensions.blocked&&!['runtime-stop','remote-reply','delivery-confirm'].includes(input.op))throw new Error('EXTENSION_RECOVERY_REQUIRED');
     if(input.op==='setup-refresh'){await onboarding.refresh();return state();}
     if(input.op==='setup-reset'){await onboarding.reset(input);bootError=null;return state();}
@@ -89,13 +93,13 @@ export async function apply(ctx,config){
   });
   async function read(input){
     if(input.kind==='update')return updater.status();
-    if(input.kind==='state')return state();
+    if(input.kind==='state'||input.kind==='chat-state')return state(input.kind==='chat-state'?'chat-state':'full');
     if(input.kind==='setup')return onboarding.refresh();
     if(input.kind==='plugin-center'){const installed=await extensions.list();let lifecycle=[],pages={pages:[],error:null};try{[lifecycle,pages]=await Promise.all([runtime.read({kind:'plugin-catalog'}),pageBridge.catalog(installed)]);}catch{pages.error='后台暂时不可用，请检查运行状态。';}return {...installed,pages:pages.pages,lifecycle,pageError:pages.error};}
     if(input.kind==='extensions')return extensions.list();
     if(input.kind==='extension-pages')return pageBridge.catalog();
     if(input.kind==='extension-page-call')return pageBridge.call(input,'read');
-    const current=await runtime.state();if(input.sessionId&&input.sessionId!==current.sessionId)throw new Error('STALE_SESSION');
+    const current=await runtime.state('runtime-status');if(input.sessionId&&input.sessionId!==current.sessionId)throw new Error('STALE_SESSION');
     if(input.kind==='delivery-review')return remote.deliveryReview(input);
     if(input.kind==='activity'){
       const [worker,local]=await Promise.all([runtime.read({...input,sessionId:current.sessionId}),Promise.resolve(remote.events.query(current.sessionId,input))]);
