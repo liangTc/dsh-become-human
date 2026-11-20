@@ -2635,8 +2635,8 @@
     },
     {
       "path": "plugins/become-human-web/native-extension-pages.tsx",
-      "bytes": 4403,
-      "sha256": "2e92fbb929afa71cb7733fc5a8cd364c7488269380c513d6783799eefb67e8cf"
+      "bytes": 4668,
+      "sha256": "79d0d565deaf30dcd1f495bffa26ec82474d411409a2689400315bd334b2ca4b"
     },
     {
       "path": "plugins/become-human-web/native-extensions.tsx",

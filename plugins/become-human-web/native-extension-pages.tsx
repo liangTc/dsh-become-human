@@ -11,7 +11,12 @@ export default function PluginWorkspace({api,s,ui,renderSlot,pageSlot}:any){
  const selected=data?.items.find((item:any)=>item.name===active),lifecycle=data?.lifecycle?.find((entry:any)=>entry.owner===active),pages=(data?.pages??[]).filter((page:any)=>page.packageName===active),page=pages.find((p:any)=>p.key===pageKey)??pages[0];
  const sections=[{id:'install',title:'安装与管理',description:'为 Human 添加可选能力，已有会话与记忆继续沿用。',group:'管理',keywords:'安装 更新 恢复 插件'},...(data?.items??[]).map((item:any)=>({id:item.name,title:item.title??item.name,description:item.description,group:'已安装',keywords:item.name}))];
  const choose=(key:string)=>navigation.navigate(()=>{setActive(key);setPageKey('');});
- return <SectionWorkspace kind="插件" sections={sections} active={active} onSelect={choose} headerActions={<Button onClick={reload}>刷新</Button>}>
+ return <SectionWorkspace kind="插件" sections={sections} active={active} onSelect={choose} headerActions={
+  <div className="hn-row">
+   <a className="hn-link" href="https://liangtc.github.io/dsh-become-human/" target="_blank" rel="noopener noreferrer" title="在新窗口打开插件开发手册">插件开发手册 <span aria-hidden="true">↗</span></a>
+   <Button onClick={reload}>刷新</Button>
+  </div>
+ }>
   {error&&<Band>{error}</Band>}{!data?<p role="status">正在读取插件…</p>:<>
    {active==='install'?<Extensions {...{api,s,ui}} embedded catalog={data} onReload={reload}/>:!selected?<Band>该插件已移除，请从左侧选择其他插件。</Band>:<>
     <Extensions key={active} {...{api,s,ui}} embedded selected={active} catalog={data} onReload={reload}/>
