@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "package": "dsh-become-human-web",
-  "version": "0.7.0-beta.40",
+  "version": "0.7.0-beta.43",
   "upstream": {
     "name": "dsh-im",
     "version": "4.39.0",
@@ -1960,7 +1960,7 @@
   },
   "client": {
     "file": "../im-client.js",
-    "sha256": "7b3e8d90cf5ae23849e8d78f3a33dc8dee0e2b9684c3e1613c7e6dbfb0f668b7",
+    "sha256": "19da5f5b5c621021a94fc97fc2de08a6efa1d8b48f34cd4a7e86ae4f65f9ae12",
     "inputs": [
       {
         "file": "im/node_modules/semver/classes/semver.js",

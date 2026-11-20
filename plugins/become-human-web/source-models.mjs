@@ -3,10 +3,11 @@ import path from 'node:path';
 import {createRequire} from 'node:module';
 import {pathToFileURL} from 'node:url';
 import {readSourceCredentialReferences} from './source-credentials.mjs';
+import {resolveDshManifest} from './dsh-launch.mjs';
+import {supportedRuntimeVersion} from './runtime/dsh-compatibility.mjs';
 
 // These APIs are part of the DSH ABI declared by this package. Reading the
 // composition never boots a profile or imports any source-profile plugin.
-const DSH_ABI='0.2.0-rc.2';
 const nativeProvider='deepseek-official';
 const providerFields=['apiKeyEnv','displayName','api','baseURL','models','modelOverrides','compat','defaultContextWindow','defaultMaxTokens','reasoning','thinkingBudgets','timeoutMs','streamIdleTimeoutMs'];
 const nativeFields=['apiKeyEnv','baseURL','thinking','reasoningEffort','maxTokens','defaultContextWindow','models','streamIdleTimeoutMs','maxRequestFilesBytes','maxInlineRequestImageBytes','maxImagesPerRequest','imageOffloadByteQuantum','inlineImageOffloadByteQuantum','imageOffloadCountQuantum','filesApiTimeoutMs','fileExpiresAfterSeconds','fileRefreshMarginSeconds','fileQuotaCleanupBatch','retryPolicy'];
@@ -14,14 +15,17 @@ const credentialName=value=>typeof value==='string'&&/^\w+$/.test(value);
 const record=value=>!!value&&typeof value==='object'&&!Array.isArray(value);
 const modalities=model=>{const value=model.inputModalities??model.input;return Array.isArray(value)?{inputModalities:[...new Set(value.filter(value=>value==='text'||value==='image'))]}:{};};
 
-async function officialModules(){
+async function officialModules(config){
   try{
-    const local=createRequire(import.meta.url),installAnchor=local.resolve('@deepseek-ai/dsh/package.json'),installation=createRequire(installAnchor);
+    const installAnchor=config.sourceInstallAnchor??resolveDshManifest(),installation=createRequire(installAnchor);
+    const dshManifest=installation.resolve('@deepseek-ai/dsh/package.json');
+    const {version}=JSON.parse(await fs.readFile(dshManifest,'utf8'));
+    if(!supportedRuntimeVersion(version))throw new Error('SOURCE_NATIVE_ADAPTER_UNSUPPORTED');
     const baseAnchor=installation.resolve('@deepseek-ai/dsh-base/package.json'),base=createRequire(baseAnchor);
     const load=async name=>{
       let manifestFile;try{manifestFile=installation.resolve(name+'/package.json');}catch{manifestFile=base.resolve(name+'/package.json');}
       const manifest=JSON.parse(await fs.readFile(manifestFile,'utf8'));
-      if(manifest.version!==DSH_ABI)throw new Error('SOURCE_NATIVE_ADAPTER_UNSUPPORTED');
+      if(manifest.version!==version)throw new Error('SOURCE_NATIVE_ADAPTER_UNSUPPORTED');
       return import(pathToFileURL(createRequire(manifestFile).resolve(name)).href);
     };
     return {installAnchor,boot:await load('@deepseek-ai/dsh-app-boot'),native:()=>load('@deepseek-ai/dsh-llm-deepseek-api-key')};
@@ -30,7 +34,7 @@ async function officialModules(){
 
 async function exists(file){try{await fs.access(file);return true;}catch(error){if(error.code==='ENOENT')return false;throw error;}}
 async function composition(config,modules){
-  const dir=path.join(config.sourceHome,'profiles',config.sourceProfile),manifestFile=path.join(dir,'package.json'),boot=modules.boot;
+  const dir=config.sourceProfileDir??path.join(config.sourceHome,'profiles',config.sourceProfile),manifestFile=path.join(dir,'package.json'),boot=modules.boot;
   let profile;
   try{
     if(await exists(manifestFile)){
@@ -38,7 +42,7 @@ async function composition(config,modules){
     }else{
       // A shipped profile's first launch initializes exactly these bundles.
       // Discover the same defaults without creating files in the source home.
-      const template=boot.PROFILE_TEMPLATES[config.sourceProfile];
+      const template=boot.PROFILE_TEMPLATES?.[config.sourceProfile];
       if(!template)throw new Error('SOURCE_PROFILE_NOT_FOUND');
       const layers=[],skippedBundles=[];
       for(const packageName of template.bundles){
@@ -79,7 +83,7 @@ function containsInlineCredentials(value,seen=new Set()){
 /** Return detached model configuration and credential references, never values. */
 export async function readSourceModelConfiguration(config){
   if(!path.isAbsolute(config.sourceHome??'')||typeof config.sourceProfile!=='string'||!/^[a-zA-Z0-9_-]+$/.test(config.sourceProfile))throw new Error('INVALID_RUNTIME_CONFIG');
-  const modules=await officialModules(),{entries,warnings}=await composition(config,modules);
+  const modules=await officialModules(config),{entries,warnings}=await composition(config,modules);
   const providers=Object.create(null),readyProviders=Object.create(null),nativeProviders=Object.create(null),readyNativeProviders=Object.create(null),models=[];
   const pi=findRow(entries,'llm-pi-ai'),rawProviders=pi&&!pi.disabled?pi.config?.providers??{}:{};
   if(!record(rawProviders))throw new Error('SOURCE_MODEL_CONFIGURATION_INVALID');

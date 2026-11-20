@@ -12,12 +12,19 @@ export function runStatus(state,now=Date.now()){
   else if(!settings.enabled)activity='自主未开启';
   else{
     next=quietEnd??(state.nextTickAt>0?state.nextTickAt:null);
+    const retryAt=autonomy.modelRetryAt;
+    if(retryAt>now){
+      const earliest=Math.max(retryAt,next??0);
+      next=quietUntil(settings,earliest)??earliest;
+    }
     if(quietEnd!==null)activity='安静时段';
     else if(autonomy.pendingBudgetRequest)activity='自主等待补额';
     else if(state.activeLane&&state.activeLane!=='foreground')activity='正在处理任务';
+    else if(retryAt>now)activity='模型暂时未完成，下次自动检查';
     else activity='自主待机';
   }
   const offset=next===null?0:quietOffset(settings,next);
   const nextLabel=next!==null?new Date(next+offset*60000).toISOString().slice(5,16).replace('T',' '):null;
-  return {chat,activity,nextCheckAt:next,text:[chat,activity,...(nextLabel?['下次检查 '+nextLabel]:[])].join(' · ')};
+  const nextHint=autonomy.modelRetryAt>now?'最早再试 ':'下次检查 ';
+  return {chat,activity,nextCheckAt:next,text:[chat,activity,...(nextLabel?[nextHint+nextLabel]:[])].join(' · ')};
 }

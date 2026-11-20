@@ -30,6 +30,19 @@ async function fixture(){
 }
 async function test(name,fn){let f;try{f=await fixture();await fn(f);results.push({name,passed:true});}catch(e){results.push({name,passed:false,error:e.stack});}finally{await f?.updater.close();}console.log(JSON.stringify(results.at(-1)));}
 await test('Inspection binds actual host profile without mutating or model calls',async f=>{const s=await f.updater.status();assert.equal(s.installedVersion,old);assert.equal(s.canInstall,false);assert.equal(f.stops,0);assert.equal(f.calls.length,0);});
+await test('Desktop delegates updates to its own host without touching the Web profile',async f=>{
+ const desktop=new HumanUpdateRuntime({home:f.home,profileContext:{name:'desktop',dir:path.join(f.dir,'desktop-project')},loadedDir:f.pkgDir,run(){assert.fail('Unexpected package operation');}});
+ const updater=await new HumanUpdater({...f.options,root:path.join(f.dir,'desktop-manager'),adapter:desktop,fetchImpl(){assert.fail('Unexpected registry access');}}).init();
+ try{
+  const status=await updater.check('beta');
+  assert.equal(status.profileName,'desktop');assert.equal(status.installedVersion,old);
+  assert.equal(status.blockedReason,'UPDATE_DESKTOP_HOST_MANAGED');assert.equal(status.canInstall,false);
+  await assert.rejects(()=>updater.submit({requestId:request(),action:'install',confirm:true}),/UPDATE_DESKTOP_HOST_MANAGED/);
+  await assert.rejects(()=>desktop.install('fake.tgz'),/UPDATE_DESKTOP_HOST_MANAGED/);
+  await assert.rejects(()=>desktop.restore(),/UPDATE_DESKTOP_HOST_MANAGED/);
+  assert.equal((await f.adapter.inspect()).installedVersion,old);assert.equal(f.stops,0);
+ }finally{await updater.close();}
+});
 await test('Reject foreign profile and source directory',async f=>{const a=new HumanUpdateRuntime({home:f.home,profileContext:{name:'other',dir:f.profile},loadedDir:f.pkgDir});assert.equal((await a.inspect()).blockedReason,'UPDATE_PROFILE_UNAVAILABLE');const b=new HumanUpdateRuntime({home:f.home,profileContext:{name:'web',dir:f.profile},loadedDir:f.dir});assert.equal((await b.inspect()).blockedReason,'UPDATE_INSTALLATION_CHANGED');});
 await test('Metadata locks official package and tarball origin',async f=>{f.release.json.dist.tarball='https://example.com/f.tgz';await assert.rejects(()=>f.updater.check('beta'),/RELEASE_INVALID/);f.release.json.name='other';await assert.rejects(()=>f.updater.check('beta'),/RELEASE_INVALID/);});
 await test('Missing tag and network failures are distinct and sanitized',async f=>{await assert.rejects(()=>fetchHumanRelease('beta',{fetchImpl:async()=>new Response('',{status:404}),dshVersion:'0.2.0-rc.2'}),/RELEASE_NOT_FOUND/);f.networkError=true;await assert.rejects(()=>f.updater.check('beta'),/UPDATE_DOWNLOAD_FAILED/);assert.equal(f.stops,0);});

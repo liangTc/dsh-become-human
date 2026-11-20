@@ -1,6 +1,7 @@
 import React,{useEffect,useRef,useState} from 'react';
 
 const messages:Record<string,string>={
+ UPDATE_DESKTOP_HOST_MANAGED:'请打开 DSH Desktop 左侧的「插件」，在「已安装插件」中找到 dsh-become-human-web，按宿主提示管理版本。',
  UPDATE_SOURCE_INSTALL:'当前为源码或外部链接安装，请通过原安装方式更新，以免覆盖开发文件。',
  UPDATE_PROFILE_UNAVAILABLE:'无法确认当前 DSH 安装环境，请使用命令行更新。',
  UPDATE_INSTALLATION_INVALID:'当前安装文件不完整，请先修复安装。',
@@ -32,13 +33,31 @@ const phases:Record<string,string>={preparing:'下载并校验安装包',install
 export default function HumanUpdate({api,ui}:any){
  const {Button,Select,Field,Band,Detail}=ui,[data,setData]=useState<any>(null),[error,setError]=useState(''),[pending,setPending]=useState(false),[confirm,setConfirm]=useState(false),[channel,setChannel]=useState('beta');
  const alive=useRef(true),request=useRef<any>(null),refreshing=useRef(false),initialized=useRef(false);
- useEffect(()=>{alive.current=true;async function load(){if(refreshing.current)return;refreshing.current=true;try{const next=await api.read({kind:'update'});if(alive.current){setData(next);if(!initialized.current){setChannel(next.channel);initialized.current=true;}}}catch(e:any){if(alive.current)setError(e.message);}finally{refreshing.current=false;}}void load();const timer=setInterval(load,3000);return ()=>{alive.current=false;clearInterval(timer);};},[api]);
+ useEffect(()=>{
+  alive.current=true;
+  let disposed=false;
+  async function load(){
+   if(refreshing.current)return;
+   refreshing.current=true;
+   try{
+    const next=await api.read({kind:'update'});
+    if(disposed)return;
+    setData(next);
+    if(!initialized.current){setChannel(next.channel);initialized.current=true;}
+    if(next.blockedReason==='UPDATE_DESKTOP_HOST_MANAGED')clearInterval(timer);
+   }catch(e:any){if(!disposed)setError(e.message);}finally{refreshing.current=false;}
+  }
+  const timer=setInterval(load,3000);
+  void load();
+  return ()=>{disposed=true;alive.current=false;clearInterval(timer);};
+ },[api]);
  async function perform(work:()=>Promise<any>){setPending(true);setError('');try{const next=await work();if(alive.current)setData(next);}catch(e:any){if(alive.current)setError(e.message);}finally{if(alive.current)setPending(false);}}
  const busy=pending||data?.busy,job=data?.job,restart=['restart-required','rollback-restart-required'].includes(job?.state),text=(value:string)=>messages[value]??value;
+ if(data?.blockedReason==='UPDATE_DESKTOP_HOST_MANAGED')return <section className="hn-update"><h3>版本与更新</h3><p>当前运行版本 <strong>{data.runningVersion}</strong></p><p>{messages.UPDATE_DESKTOP_HOST_MANAGED}</p></section>;
  return <section className="hn-update"><h3>版本与更新</h3><p className="hn-help">在当前 DSH 中更新 Human 管理页面和后台模块，保留人物、记忆、会话及手机绑定。</p>
  <div className="hn-update-versions"><div><span>当前运行</span><strong>{data?.runningVersion??'读取中…'}</strong></div><div><span>可用版本</span><strong>{data?.latestVersion??'尚未检查'}</strong></div></div>
  <Field label="更新通道" hint="测试版包含新功能和修复，仍可能存在问题。"><Select aria-label="更新通道" value={channel} disabled={busy||restart} options={[["beta","测试版 Beta"],["latest","正式版"]]} onChange={(value:string)=>{setChannel(value);setData((previous:any)=>({...previous,canInstall:false,latestVersion:null}));}}/></Field>
- <div className="hn-row hn-update-buttons"><Button disabled={busy||restart} onClick={()=>perform(()=>api.control({op:'update-check',channel}))}>检查更新</Button><Button primary disabled={busy||!data?.canInstall||channel!==data?.channel} onClick={()=>{request.current=null;setConfirm(true);}}>一键更新</Button></div>
+ <div className="hn-row hn-update-buttons"><Button disabled={!data||busy||restart} onClick={()=>perform(()=>api.control({op:'update-check',channel}))}>检查更新</Button><Button primary disabled={busy||!data?.canInstall||channel!==data?.channel} onClick={()=>{request.current=null;setConfirm(true);}}>一键更新</Button></div>
  {data?.checkedAt&&<p className="hn-help">上次检查：{new Date(data.checkedAt).toLocaleString('zh-CN')}{data.latestVersion===data.runningVersion?' · 已是该通道最新版本':''}</p>}
  {data?.blockedReason&&!restart&&<Band>{text(data.blockedReason)}</Band>}
  {error&&<Band><span role="alert">{text(error)}</span></Band>}

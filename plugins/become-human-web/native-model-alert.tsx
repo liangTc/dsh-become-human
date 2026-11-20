@@ -17,10 +17,10 @@ export default function ModelAlerts({s,onSection}:any){
    <dt>发生时间</dt><dd>{item.at?new Date(item.at).toLocaleString('zh-CN',{hour12:false}):'旧记录未保存'}</dd>
    <dt>错误码</dt><dd>{item.code}{item.upstreamCode?' · 上游 '+item.upstreamCode:''}</dd>
    <dt>HTTP 状态</dt><dd>{item.httpStatus??'上游未提供或旧版本未保存'}</dd>
-   <dt>上游说明（已脱敏）</dt><dd>{item.upstreamMessage||'没有保留可展示的上游说明，不能确认是否为模型下线。'}</dd>
+   {item.upstreamMessage&&<><dt>上游说明（已脱敏）</dt><dd>{item.upstreamMessage}</dd></>}
    <dt>调用编号</dt><dd>{item.attemptId??'请求准备阶段，尚无调用编号'}</dd>
   </dl>{item.legacy&&<p>这是旧版本的失败记录，无法补回当时丢失的上游信息。</p>}
-  <p>{item.scope==='autonomous'?'自主选题和后续行动已暂停；你仍可输入聊天，但若共用故障模型，回复也可能失败。':'本轮未取得成功回复；请先处理模型问题，再明确重试。'}会话与记忆已保留，不会自动重发失败请求。</p></details>
+  <p>{item.scope==='autonomous'?'当前自主活动已暂停。可在运行诊断中核对原因并恢复。':item.chatAvailable?'聊天仍在线。需要重新处理这条消息时，可手动重试。':'可在运行诊断中查看此次调用并手动重试。'}</p></details>
   <div className="hn-row"><button type="button" className="hn-button" onClick={()=>navigate('model')}>检查模型设置</button><button type="button" className="hn-button" onClick={()=>navigate('runtime')}>诊断与恢复</button></div>
  </section>;})}</aside>;
 }

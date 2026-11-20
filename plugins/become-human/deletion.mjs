@@ -5,7 +5,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {Context} from '@deepseek-ai/cordis';
-import Jsonl from '@deepseek-ai/dsh-session-persistence-jsonl';
+import * as Jsonl from '@deepseek-ai/dsh-session-persistence-jsonl';
 import {Session} from '@deepseek-ai/dsh-session';
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const developmentTables=['human_plugin_schedule','human_activity_feedback','human_strategy_use','human_attention_window','human_plugin_event',...workObservationTableNames,'human_memory_overlay','human_memory_batch','human_memory_summary','human_memory_lifecycle_audit','human_persona_development_state','human_persona_development_review','human_persona_development_change'];
@@ -15,7 +15,7 @@ export class DeletionLab {
     journal.db.exec(`CREATE TABLE IF NOT EXISTS deletion_fixture(id TEXT PRIMARY KEY,root TEXT,state TEXT);
       CREATE TABLE IF NOT EXISTS managed_artifact(agent TEXT,path TEXT,kind TEXT,PRIMARY KEY(agent,path));`);
   }
-  async init(){await fs.mkdir(this.root,{recursive:true});this.fiber=await this.ctx.plugin(Jsonl,{root:path.join(this.root,'sessions'),compression:'none'});try{await this.recover();}catch{this.lastError='DELETE_RECOVERY_BLOCKED';}return this;}
+  async init(){await fs.mkdir(this.root,{recursive:true});this.fiber=await this.ctx.plugin(Jsonl.default??Jsonl,{root:path.join(this.root,'sessions'),compression:'none'});try{await this.recover();}catch{this.lastError='DELETE_RECOVERY_BLOCKED';}return this;}
   fixture(id){const row=this.journal.db.prepare('SELECT * FROM deletion_fixture WHERE id=?').get(id);if(!row||!/^human-delete-fixture-[a-f0-9-]{36}$/.test(id))throw new Error('NOT_DISPOSABLE_FIXTURE');return row;}
   gate(id){this.fixture(id);this.journal.assertAdmitted(id);}
   async checked(file,{missing=false}={}){

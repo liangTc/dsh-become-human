@@ -18,10 +18,23 @@ export function safeProviderMessage(value){
   if(/(?:["']?(?:messages|prompt|input|requestBody|request_body|headers)["']?\s*[:=]|<html|<!doctype)/i.test(text))return '上游附带了请求或页面内容，已隐藏；请根据错误分类和状态码排查。';
   return text.slice(0,600);
 }
-export function modelFailureDiagnostic(failure,localCode='MODEL_EXECUTION_FAILED'){
+const transientCategories=new Set(['empty','timeout','network','incomplete-stream','rate-limit','provider-unavailable']);
+export function transientModelFailure(entry){
+  if(!entry)return false;
+  if(entry.httpStatus>=400)return entry.httpStatus===408||entry.httpStatus===429||entry.httpStatus>=500&&entry.httpStatus<=599;
+  if(entry.category&&entry.category!=='unknown')return transientCategories.has(entry.category);
+  return ['EMPTY_MODEL_OUTPUT','REQUEST_TIMEOUT','NETWORK_ERROR'].includes(entry.code);
+}
+export function modelFailureDiagnostic(failure,localCode='MODEL_EXECUTION_FAILED',streamFacts={}){
   const raw=plain(failure?.message),code=cleanCode(failure?.code),status=Number.isInteger(failure?.status)&&failure.status>=400&&failure.status<=599?failure.status:undefined;
   const text=(raw+' '+(code??'')).toLowerCase();let category='unknown',summary='模型调用未完成，现有证据不足以确认原因。',suggestion='先核对模型配置和服务商状态；需要时明确进行一次连接测试。';
-  if(localCode==='EMPTY_MODEL_OUTPUT'){category='empty';summary='模型结束了请求，但没有返回可用正文。';suggestion='检查模型与接口协议是否兼容、服务商是否只返回了推理内容；这不是笔记证据检查失败。';}
+  if(localCode==='EMPTY_MODEL_OUTPUT'||code==='EMPTY_RESPONSE'){
+    category='empty';
+    if(streamFacts.textChars>0)summary='Human 收到的模型正文只含空白字符。';
+    else if(streamFacts.reasoningChars>0)summary='Human 收到了推理内容，未读到可用正文。';
+    else summary='模型响应已结束，Human 未读到可用正文。';
+    suggestion='可在日志中核对本次流式返回记录。';
+  }
   else if(localCode==='OUTPUT_LIMIT'){category='output-limit';summary='模型因输出长度限制而结束。';suggestion='核对服务商的输出限制和本次任务长度。';}
   else if(localCode==='INVALID_TASK_OUTPUT'){category='validation';summary='模型已返回内容，但结果未通过任务格式或证据校验。';suggestion='在任务日志查看具体校验原因；这与模型下线、余额不足或空正文是不同的问题。';}
   else if(localCode==='INVALID_CONVERSATION_REVIEW'){category='review-protocol';summary='回复检查返回了无法解析的检查结果，没有取得有效结论。';suggestion='检查调用的原始返回与接口兼容性；无法解析不等于回复内容不合格。';}
@@ -37,7 +50,7 @@ export function modelFailureDiagnostic(failure,localCode='MODEL_EXECUTION_FAILED
   else if(status>=500){category='provider-unavailable';summary='上游服务暂时无法完成请求。';suggestion='检查服务商状态，恢复后再明确重试。';}
   else if(localCode==='REQUEST_TIMEOUT'||/timeout|timed out|超时/.test(text)){category='timeout';summary='等待模型响应超时。';suggestion='检查网络、代理和服务商状态。';}
   else if(/fetch failed|network|econn|enotfound|socket|certificate/.test(text)){category='network';summary='连接模型服务时发生网络错误。';suggestion='检查网络、DNS、代理和证书配置。';}
-  return {category,summary,suggestion,...status?{httpStatus:status}:{},...code?{upstreamCode:code}:{},upstreamMessage:safeProviderMessage(raw)};
+  return {category,summary,suggestion,...status?{httpStatus:status}:{},...code?{upstreamCode:code}:{},upstreamMessage:raw.trim()===localCode?'':safeProviderMessage(raw)};
 }
 export function modelFailureStage(entry){
   return ({'conversation-review':'回复检查','conversation-summary':'对话摘要','conversation-style-repair':'回复调整','learning-selection-review':'学习选题检查'})[entry.purpose]
@@ -46,8 +59,8 @@ export function modelFailureStage(entry){
 // Old persisted alerts can be explained using their saved evidence without
 // rewriting the historical attempt or manufacturing a new failure event.
 export function explainModelFailure(entry){
-  const diagnostic=modelFailureDiagnostic({message:entry.upstreamMessage,status:entry.httpStatus,code:entry.upstreamCode},entry.code);
-  const result={...entry,...(!entry.category||entry.category==='unknown'?diagnostic:{})};
+  const diagnostic=modelFailureDiagnostic({message:entry.upstreamMessage,status:entry.httpStatus,code:entry.upstreamCode},entry.code,entry);
+  const result={...entry,...(!entry.category||entry.category==='unknown'||entry.category==='empty'?diagnostic:{})};
   if(entry.purpose==='conversation-review')result.summary=(entry.disposition==='degraded'?'回复检查暂不可用，本轮改用基础校验继续处理已生成回复。':'回复检查未完成，已生成的回复尚未投递。')+result.summary;
   return result;
 }
@@ -67,8 +80,15 @@ export function modelFailureNotification(entry){
 export function saveModelFailure(journal,id,entry,{notify=true}={}){
   if(nonFailures.has(entry.code))return;
   const save=()=>{
-    const rows=journal.value(id,'modelFailures',{});journal.put(id,'modelFailures',{...rows,[entry.lane??'foreground']:entry});
-    if(!notify)return;
+    const rows=journal.value(id,'modelFailures',{}),lane=entry.lane??'foreground',previous=rows[lane];
+    const sameIncident=lane!=='foreground'&&transientModelFailure(entry)&&previous&&
+      ['purpose','provider','model','code','category'].every(key=>previous[key]===entry[key]);
+    const lastNotice=sameIncident?previous.noticeAt:undefined;
+    const recent=Number.isFinite(lastNotice)&&entry.at>=lastNotice&&entry.at-lastNotice<60*60*1000;
+    const send=notify&&!recent;
+    const noticeAt=send?entry.at:lastNotice;
+    journal.put(id,'modelFailures',{...rows,[lane]:{...entry,...(Number.isFinite(noticeAt)?{noticeAt}:{})}});
+    if(!send)return;
     // An attempt is a stable identity across polling and restarts. Preparation
     // failures have no attempt yet, so use the failure occurrence's identity.
     const identity=entry.attemptId??'prepare:'+JSON.stringify([entry.at,entry.lane,entry.purpose,entry.code]);

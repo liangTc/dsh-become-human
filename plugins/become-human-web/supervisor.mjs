@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {spawn} from 'node:child_process';
-import {createRequire} from 'node:module';
+import {resolveDshEntry,nodeChild} from './dsh-launch.mjs';
 import {createServer} from 'node:net';
 import {prepareRuntimeProfile} from './runtime-profile.mjs';
 import {readSourceModelConfiguration} from './source-models.mjs';
@@ -97,8 +97,7 @@ export class RuntimeSupervisor {
       await this.prepare();
       const launchFile=path.join(this.config.runtimeHome,'become-human/launch.json');
       await fs.unlink(launchFile).catch(error=>{if(error.code!=='ENOENT')throw error;});
-      const require=createRequire(import.meta.url),dshManifest=require.resolve('@deepseek-ai/dsh/package.json');
-      const dshEntry=path.join(path.dirname(dshManifest),JSON.parse(await fs.readFile(dshManifest,'utf8')).bin.dsh);
+      const dshEntry=resolveDshEntry(this.config.sourceInstallAnchor);
       const selection=JSON.parse(await fs.readFile(path.join(this.config.runtimeHome,'runtime-selection.json'),'utf8'));
       const credentials=await readSourceCredentialReferences(this.config,selection.apiKeyEnvs);
       if(!credentials.get(selection.apiKeyEnv))throw new Error('MODEL_CREDENTIAL_MISSING');
@@ -109,23 +108,27 @@ export class RuntimeSupervisor {
         for(const key of Object.keys(childEnv))if(process.platform==='win32'?key.toUpperCase()===ref.toUpperCase():key===ref)delete childEnv[key];
         if(credentials.has(ref))childEnv[ref]=credentials.get(ref);
       }
-      const child=spawn(process.execPath,[path.join(import.meta.dirname,'worker.mjs')],{windowsHide:true,stdio:['ignore','pipe','pipe','ipc'],env:{...childEnv,BH_DSH_ENTRY:dshEntry,BH_RUNTIME_HOME:this.config.runtimeHome,BH_RUNTIME_PROFILE:this.config.runtimeProfile,BH_RUNTIME_PORT:String(this.config.runtimePort)}});this.child=child;this.installCapabilityBridge(child);
+      const launch=nodeChild(path.join(import.meta.dirname,'worker.mjs'),[],{...childEnv,BH_DSH_ENTRY:dshEntry,BH_RUNTIME_HOME:this.config.runtimeHome,BH_RUNTIME_PROFILE:this.config.runtimeProfile,BH_RUNTIME_PORT:String(this.config.runtimePort)});
+      const child=spawn(process.execPath,launch.args,{windowsHide:true,stdio:['ignore','pipe','pipe','ipc'],env:launch.env});this.child=child;this.installCapabilityBridge(child);
       startingChild=child;
       this.recordLifecycle('worker-spawned',{runtimePort:this.config.runtimePort});
-      await fs.writeFile(path.join(this.config.runtimeHome,'manager-process.json'),JSON.stringify({managerPid:process.pid,workerPid:child.pid,runtimePort:this.config.runtimePort,source:'manager-owned child process'}));
-      let launchReady=false;
-      for(const [name,stream] of [['stdout',child.stdout],['stderr',child.stderr]])stream.on('data',chunk=>{const text=String(chunk);if(text.includes('dsh web:'))launchReady=true;this.logs.output(name,text,child.pid);});
+      for(const [name,stream] of [['stdout',child.stdout],['stderr',child.stderr]])stream.on('data',chunk=>this.logs.output(name,String(chunk),child.pid));
       child.once('error',error=>{if(this.child===child){this.lastError='WORKER_SPAWN_FAILED';this.lastErrorAt=Date.now();}this.recordLifecycle('worker-spawn-error',{code:safeOperationCode(error,'WORKER_SPAWN_FAILED'),workerPid:child.pid??null});});
       child.once('exit',(exitCode,signal)=>{const exit={at:Date.now(),exitCode,signal:signal??null,expected:this.closed||child.__humanStopRequested===true};this.lastExit=exit;if(this.child===child){if(!exit.expected){this.lastError=signal?'WORKER_EXIT_SIGNAL':'WORKER_EXIT_'+exitCode;this.lastErrorAt=exit.at;}this.cookie=null;}this.recordLifecycle('worker-exited',{...exit,workerPid:child.pid??null});});
+      await fs.writeFile(path.join(this.config.runtimeHome,'manager-process.json'),JSON.stringify({managerPid:process.pid,workerPid:child.pid,runtimePort:this.config.runtimePort,source:'manager-owned child process'}));
       for(let i=0;i<150;i++){
-        if(child.exitCode!==null||this.lastError==='WORKER_SPAWN_FAILED')throw new Error(this.lastError??'WORKER_EXIT');
-        if(launchReady){
-          let link;try{link=JSON.parse(await fs.readFile(launchFile,'utf8'));}catch(error){if(error.code==='ENOENT'){await sleep(200);continue;}throw error;}
-          const login=new URL(link.url);if(login.hostname!=='127.0.0.1'||Number(login.port)!==this.config.runtimePort)throw new Error('INVALID_WORKER_LOGIN');login.pathname='/';
-          const result=await fetch(login,{redirect:'manual'});if(result.status!==303){await sleep(200);continue;}
+        if(child.exitCode!==null||child.signalCode!==null||this.lastError==='WORKER_SPAWN_FAILED')throw new Error(this.lastError??'WORKER_EXIT');
+        if(!this.cookie){
+          // The worker writes this fresh file when its routes are installed.
+          // CLI output and the timing of the host's ready gate vary by host.
+          let link;try{link=JSON.parse(await fs.readFile(launchFile,'utf8'));}catch(error){if(error.code==='ENOENT'||error instanceof SyntaxError){await sleep(200);continue;}throw error;}
+          const login=new URL(link.url);if(login.origin!==this.base)throw new Error('INVALID_WORKER_LOGIN');login.pathname='/';
+          const result=await fetch(login,{redirect:'manual',signal:AbortSignal.timeout(2000)}).catch(error=>{if(error.cause?.code==='ECONNREFUSED')return null;throw error;});
+          if(result?.status!==303){await sleep(200);continue;}
           this.cookie=result.headers.getSetCookie().map(r=>r.split(';')[0]).join('; ');
-          try{const state=await this.state();this.workerBootId=state.bootId??null;this.lastReadyAt=Date.now();this.recordLifecycle('worker-ready',{sessionId:state.sessionId,desired:state.desired,recoveryPolicy:'manual-paused'});return;}catch(error){if(error.status===404||error.status===401){this.cookie=null;await sleep(200);continue;}throw error;}
         }
+        try{const state=await this.state();this.workerBootId=state.bootId??null;this.lastReadyAt=Date.now();this.recordLifecycle('worker-ready',{sessionId:state.sessionId,desired:state.desired,recoveryPolicy:'manual-paused'});return;}
+        catch(error){if(error.status===401)this.cookie=null;else if(error.status!==404&&error.status!==503)throw error;}
         await sleep(200);
       }
       throw new Error('WORKER_START_TIMEOUT');
@@ -146,6 +149,7 @@ export class RuntimeSupervisor {
   read(body){return this.request('read',body);}
   events(after=0){return this.request('events?after='+after);}
   async close({idleState}={}){
+    if(!this.runtimeLease&&!this.child&&!this.waiting&&!this.cookie){this.closed=true;return;}
     if(idleState)await this.control({op:'maintenance-pause-if-idle',sessionId:idleState.sessionId,expectedEpoch:idleState.cancelEpoch});
     this.closed=true;this.recordLifecycle('runtime-stop-requested');
     if(!idleState&&this.cookie)await this.control({op:'pause'}).catch(error=>{this.recordLifecycle('runtime-pause-on-close-failed',{code:safeOperationCode(error,'WORKER_PAUSE_FAILED')});});

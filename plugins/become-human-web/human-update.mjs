@@ -48,7 +48,9 @@ export class HumanUpdater {
  async check(channel){
   if(this.closed)fail('UPDATE_CLOSED');if(this.busy)fail('UPDATE_BUSY');
   this.checked=null;
-  const environment=await this.adapter.inspect(),release=await fetchHumanRelease(channel,{fetchImpl:this.fetchImpl,dshVersion:this.dshVersion});
+  const environment=await this.adapter.inspect();
+  if(environment.blockedReason==='UPDATE_DESKTOP_HOST_MANAGED')return this.status();
+  const release=await fetchHumanRelease(channel,{fetchImpl:this.fetchImpl,dshVersion:this.dshVersion});
   this.checked={id:randomUUID(),at:this.now(),expires:this.now()+600000,identity:environment.identity,release};return this.status();
  }
  submit(input){const op=this.queue.catch(()=>{}).then(()=>this.admit(input));this.queue=op;return op;}
@@ -60,6 +62,7 @@ export class HumanUpdater {
   if(this.job?.recoverRequestId===input.requestId){if(this.job.recoverRequestHash!==requestHash)fail('UPDATE_REQUEST_CONFLICT');return this.status();}
   if(this.busy)fail('UPDATE_BUSY');
   const environment=await this.adapter.inspect();
+  if(environment.blockedReason==='UPDATE_DESKTOP_HOST_MANAGED')fail(environment.blockedReason);
   if(input.action==='recover'){
    if(input.jobId!==this.job?.id||!(await this.status()).canRecover)fail('UPDATE_RECOVERY_UNAVAILABLE');
    if(environment.blockedReason&&environment.blockedReason!=='UPDATE_INSTALLATION_CHANGED')fail(environment.blockedReason);

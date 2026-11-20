@@ -1,3 +1,4 @@
+import {safeStreamCounts,validStreamCount} from './runtime/model-records.mjs';
 import React,{useMemo,useState} from 'react';
 
 const types=[['','全部类型'],['wake','唤醒与等待'],['task','任务'],['action','行动与文件'],['model','模型请求'],['learning','记忆与学习'],['delivery','手机投递'],['message','消息'],['skill','技能'],['configuration','设置与授权'],['system','系统']];
@@ -28,7 +29,7 @@ function safeFields(value:any,depth=0):any{
   if(depth>8)return '[已折叠过深字段]';
   if(typeof value==='string')return value.replace(/([?&](?:token|api_key|access_token)=)[^\s&]+/gi,'$1[已隐藏]').replace(/sk-[\w-]{16,}/g,'[已隐藏]');
   if(Array.isArray(value))return value.map(item=>safeFields(item,depth+1));
-  if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).filter(([key])=>!['reasoning','reasoningtext','reasoningcontent','analysis','analysistext','chainofthought','chainofthoughttext','thought','thoughts','thinking','thoughtprocess','internalreasoning','rawresponse','rawcompletion','rawoutput','messages','systemprompt','apikey','token','password','authorization','headers'].includes(key.toLowerCase().replace(/[_-]/g,''))).map(([key,item])=>[key,safeFields(item,depth+1)]));
+  if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).filter(([key,item])=>key==='reasoningChars'?validStreamCount(item):!['reasoning','reasoningtext','reasoningcontent','analysis','analysistext','chainofthought','chainofthoughttext','thought','thoughts','thinking','thoughtprocess','internalreasoning','rawresponse','rawcompletion','rawoutput','messages','systemprompt','apikey','token','password','authorization','headers'].includes(key.toLowerCase().replace(/[_-]/g,''))).map(([key,item])=>[key,key==='streamCounts'?safeStreamCounts(item):safeFields(item,depth+1)]));
   return value;
 }
 

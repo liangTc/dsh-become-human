@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import {pathToFileURL} from 'node:url';
+import {runProfileCli} from './dsh-launch.mjs';
 const manifest=JSON.parse(await fs.readFile(path.join(process.env.BH_RUNTIME_HOME,'runtime-selection.json'),'utf8'));
 if(!manifest.apiKeyEnv||!/^\w+$/.test(manifest.apiKeyEnv))throw new Error('INVALID_CREDENTIAL_REFERENCE');
 if(!Array.isArray(manifest.apiKeyEnvs)||manifest.apiKeyEnvs.some(ref=>typeof ref!=='string'||!/^\w+$/.test(ref)))throw new Error('INVALID_CREDENTIAL_REFERENCE');
@@ -11,4 +11,4 @@ process.env.DSH_HOME=process.env.BH_RUNTIME_HOME;process.env.DSH_TELEMETRY_ENABL
 for(const key of ['HTTP_PROXY','HTTPS_PROXY','ALL_PROXY','http_proxy','https_proxy','all_proxy'])if(process.env[key]?.includes('127.0.0.1:9'))delete process.env[key];
 const original=process.stdout.write.bind(process.stdout);process.stdout.write=(chunk,...args)=>original(String(chunk).replace(/([?&]token=)[^\s"'<>]+/g,'$1[REDACTED]'),...args);
 process.argv=[process.execPath,'dsh','--profile',process.env.BH_RUNTIME_PROFILE,'--no-open','--port',process.env.BH_RUNTIME_PORT];
-const {runCli}=await import(pathToFileURL(process.env.BH_DSH_ENTRY).href);await runCli();
+await runProfileCli(process.env.BH_DSH_ENTRY);

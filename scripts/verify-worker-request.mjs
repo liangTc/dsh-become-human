@@ -13,6 +13,9 @@ await check('Invalid JSON and stale session are not retried',async()=>{for(const
 await check('Worker replacement prevents replay against a different process',async()=>{let current=true,calls=0;await assert.rejects(()=>workerRequest({...base,sameWorker:()=>current,resource:'state',fetcher:async()=>{calls++;current=false;throw new TypeError('fetch failed');}}));assert.equal(calls,1);});
 await check('Late success from replaced worker is discarded',async()=>{let current=true;await assert.rejects(()=>workerRequest({...base,sameWorker:()=>current,resource:'state',fetcher:async()=>{current=false;return ok();}}),/WORKER_UNAVAILABLE/);});
 const requests=[];
+await check('Boot gate status survives an empty HTTP response',async()=>{
+  await assert.rejects(()=>workerRequest({...base,resource:'state',fetcher:async()=>new Response(null,{status:503})}),{message:'WORKER_REQUEST_FAILED',status:503});
+});
 const server=http.createServer(async(req,res)=>{
   let body='';for await(const part of req)body+=part;
   requests.push({path:req.url,body});

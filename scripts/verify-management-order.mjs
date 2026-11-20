@@ -26,16 +26,36 @@ function fixture(){
   return {id,request,get journal(){return journal;},get goals(){return goals;},get management(){return management;},get domain(){return domain;},count:table=>journal.db.prepare('SELECT count(*) n FROM '+table).get().n,reopen(){journal.close();build();},close(){journal.close();}};
 }
 async function withFixture(body){const f=fixture();try{return await body(f);}finally{f.close();}}
-function hostFixture({nextAfterCancel=false,replaceOnInspect=false,noAgent=false}={}){
+function hostFixture({nextAfterCancel=false,replaceOnInspect=false,noAgent=false,observationApi=false}={}){
   let events=[{seq:0,type:'turn/start',data:{turn:1}}],inspections=0,cancels=0,legacyCancels=0,policy;
   const session={id:'external-test',header:{id:'external-test'},snapshotEvents:()=>events};
   const agent={session,status:'running',cancel(cause,options){assert.deepEqual(cause,{kind:'user'});assert.equal(options.keepInbox,true);cancels++;events.push({seq:events.length,type:'turn/end',data:{turn:1,reason:{kind:'aborted',reason:{kind:'user'}}}});if(nextAfterCancel)events.push({seq:events.length,type:'turn/start',data:{turn:2}});else this.status='idle';}};
   const controller={page:async()=>({records:[]}),list:async()=>({items:[{sessionId:'external-test',running:agent.status==='running'}]}),inspect:async()=>{inspections++;if(replaceOnInspect&&inspections===1)events=[...events,{seq:1,type:'turn/end',data:{turn:1}},{seq:2,type:'turn/start',data:{turn:2}}];return {meta:{id:'external-test'},events:[...events]};},cancel(){legacyCancels++;throw Error('UNSAFE_SESSION_ONLY_CANCEL');}};
-  const host=createHostCapabilities({sessionController:controller,agents:{get:()=>noAgent?undefined:agent}},{getHumanSessionId:()=> 'human-main'});
+  let observations=0,disposals=0;
+  const ctx={sessionController:controller,agents:{get:()=>noAgent?undefined:agent}};
+  if(observationApi){
+    delete controller.inspect;
+    ctx.sessionQuery={async observeSession(id,{signal,projectionMode}){
+      assert.equal(id,session.id);assert.equal(projectionMode,'none');signal.throwIfAborted();observations++;
+      return {header:session.header,events:[...events],[Symbol.dispose](){disposals++;}};
+    }};
+  }
+  const host=createHostCapabilities(ctx,{getHumanSessionId:()=> 'human-main'});
   policy={sessionReadEnabled:true,sessionWriteEnabled:true,allowedSessionIds:['external-test']};host.configure(policy);
   const input={sessionId:'external-test',expectedTurn:1,expectedTurnStartSeq:0};
-  return {host,agent,input,get events(){return events;},get cancels(){return cancels;},get legacyCancels(){return legacyCancels;},switchTurn(){events.push({seq:events.length,type:'turn/end',data:{turn:1}},{seq:events.length+1,type:'turn/start',data:{turn:2}});},cancel:()=>host.handle({operation:'dsh-session-cancel',input,context:{agent:'human-main',jobId:'synthetic-job'}},new AbortController().signal)};
+  return {host,agent,input,get observations(){return observations;},get disposals(){return disposals;},get events(){return events;},get cancels(){return cancels;},get legacyCancels(){return legacyCancels;},switchTurn(){events.push({seq:events.length,type:'turn/end',data:{turn:1}},{seq:events.length+1,type:'turn/start',data:{turn:2}});},cancel:()=>host.handle({operation:'dsh-session-cancel',input,context:{agent:'human-main',jobId:'synthetic-job'}},new AbortController().signal)};
 }
+await test('Desktop host reads immutable session snapshots and releases every observation',async()=>{
+ const h=hostFixture({observationApi:true});
+ try{
+  const signal=new AbortController().signal,context={agent:'human-main',jobId:'synthetic-job'};
+  const read=await h.host.handle({operation:'dsh-session-read',input:{sessionId:'external-test'},context},signal);
+  assert.deepEqual(read.activeTurn,{turn:1,turnStartSeq:0});assert.equal(read.activatedAgent,false);
+  await assert.rejects(()=>h.host.handle({operation:'dsh-session-read',input:{sessionId:'not-allowed'},context},signal),/CAPABILITY_SCOPE_DENIED/);
+  const result=await h.cancel();assert.equal(result.observedTurnEndSeq,1);
+  assert(h.observations>=3);assert.equal(h.disposals,h.observations);
+ }finally{await h.host.close();}
+});
 await test('Concurrent same-key owner creates produce one durable goal and one source',()=>withFixture(async f=>{const r=f.request(),rows=await Promise.all(Array.from({length:6},()=>f.management.mutate(f.id,r)));assert.equal(new Set(rows.map(r=>r.id)).size,1);for(const table of ['goal_record','source_record','human_goal_request'])assert.equal(f.count(table),1);}));
 await test('Same key with changed content is rejected without another source',()=>withFixture(async f=>{const r=f.request();await f.management.mutate(f.id,r);await assert.rejects(f.management.mutate(f.id,{...r,description:'Changed content'}),/REQUEST_ID_CONFLICT/);assert.equal(f.count('source_record'),1);assert.equal(f.count('goal_record'),1);}));
 await test('Canonical object key ordering preserves request identity',()=>withFixture(async f=>{const r=f.request({acceptance:{ownerReview:true,minNotes:1}}),g=await f.management.mutate(f.id,r),again=await f.management.mutate(f.id,{...r,acceptance:{minNotes:1,ownerReview:true},milestones:r.milestones.map(({question,kind})=>({question,kind}))});assert.equal(again.id,g.id);}));

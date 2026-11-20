@@ -31,6 +31,48 @@ function fixture(){
   const call=(lane='foreground',purpose)=>modelRequest(agent,controller.signal,{turn:1,epoch:1,lane,messages,purpose,taskId:lane==='foreground'?undefined:'task-fixture'});
   return {id,db,ledger,journal,domain,agent,controller,messages,call,stats,audit,ends,reservations,configure,metadata,setPrepared:(value,window)=>{preparedConfig=value;context=window;},setReply:value=>{reply=value;},setFinish:value=>{finishReason=value;},onStream:value=>{onStream=value;},prepareFailure:value=>{prepareError=value;}};
 }
+function streamFixture(f,frames){
+  const prepare=f.agent.ctx.llm.prepareCall;
+  f.agent.ctx.llm.prepareCall=async(...args)=>({
+    ...await prepare(...args),
+    async *stream(){yield* frames;}
+  });
+}
+const stop={type:'finish',reason:{kind:'stop'}};
+const textEnd=(index,text)=>({type:'block-end',index,block:{type:'text',text}});
+await test('a terminal-only text block supplies the original selection exactly once',async f=>{
+  const answer='{"decision":"wait","reason":"等待"}';
+  streamFixture(f,[{type:'block-start',index:0,blockType:'text'},textEnd(0,answer),stop]);
+  assert.equal((await f.call('selection')).text,answer);
+  assert.equal(f.ends.at(-1).responseText,answer);
+});
+await test('a final snapshot replaces its deltas and duplicate closes are ignored',async f=>{
+  streamFixture(f,[{type:'text-delta',text:'原文'},textEnd(0,'改正'),textEnd(0,'重复关闭'),
+    {type:'text-delta',index:0,text:'迟到'}, {type:'text-delta',index:1,text:'完成'},stop]);
+  assert.equal((await f.call()).text,'改正完成');
+});
+await test('reasoning-only completion stores numeric evidence without supplying a reply',async f=>{
+  const thought='private-reasoning-fixture';
+  streamFixture(f,[{type:'reasoning-delta',index:0,text:thought.slice(0,2)},
+    {type:'block-end',index:0,block:{type:'reasoning',text:thought}},stop]);
+  await assert.rejects(f.call('selection'),e=>e.code==='EMPTY_MODEL_OUTPUT'&&e.modelFailure?.lane==='selection');
+  const end=f.ends.at(-1);
+  assert.equal(end.failureFacts.reasoningChars,thought.length);
+  assert.equal(end.failureFacts.textChars,0);
+  assert.equal(end.failureFacts.finalTextChars,0);
+  assert(!JSON.stringify(end).includes(thought));
+  assert(!JSON.stringify(f.metadata.get('modelFailures')).includes(thought));
+});
+await test('reasoning and tools stay out of a delta-only answer; a finish signal is still required',async f=>{
+  streamFixture(f,[{type:'reasoning-delta',text:'thought'},{type:'text-delta',text:'visible'},
+    {type:'block-end',index:2,block:{type:'tool-call',arguments:'private-tool-argument'}}]);
+  await assert.rejects(f.call('selection'),e=>e.code==='MODEL_EXECUTION_FAILED'&&e.modelFailure.category==='incomplete-stream');
+  const end=f.ends.at(-1);
+  assert.equal(end.responseText,'visible');
+  assert.equal(end.failureFacts.textDeltaChars,7);
+  assert.equal(end.failureFacts.reasoningChars,7);
+  assert.equal(end.failureFacts.streamCounts.finish,0);
+});
 await test('empty terminal response remains failed but settles reported usage instead of full reservation',async f=>{
  f.setReply('');await assert.rejects(f.call('selection'),/EMPTY_MODEL_OUTPUT/);
  const end=f.ends.at(-1);assert.equal(end.state,'failed');assert.equal(end.usageConfidence,'reported');assert.equal(end.failureFacts.textChars,0);assert.equal(end.failureFacts.streamCounts.finish,1);

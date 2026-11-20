@@ -1,5 +1,5 @@
 import React from 'react';
-import portrait from './docs/assets/avatar-pixel-complete.png';
+import portrait from './docs/assets/avatar-pixel-icon.png';
 
 // Product artwork only. Names, personality and relationships still come from
 // the active Human configuration; this component never changes model prompts.

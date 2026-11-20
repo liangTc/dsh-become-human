@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import {createRequire} from 'node:module';
+import {webServiceEntry} from './dsh-launch.mjs';
 import {pathToFileURL} from 'node:url';
 import {acquireRunningLock,releaseRunningLock} from './operations-log.mjs';
 const options={};for(let i=2;i<process.argv.length;i+=2){if(!['--home','--profile','--port'].includes(process.argv[i])||!process.argv[i+1])throw Error('INVALID_SERVICE_ARGUMENTS');options[process.argv[i].slice(2)]=process.argv[i+1];}
@@ -13,6 +13,6 @@ const processRecord=path.join(process.env.DSH_HOME,'.human-service-process.json'
 const hostStartedAt=new Date().toISOString();let recorded=false;
 process.on('exit',()=>{try{const record=JSON.parse(fs.readFileSync(processRecord,'utf8'));if(record.pid===process.pid)fs.unlinkSync(processRecord);}catch{}try{releaseRunningLock(hostLease);}catch{}});
 for(const stream of [process.stdout,process.stderr]){const write=stream.write.bind(stream);stream.write=(chunk,...rest)=>{const text=String(chunk).replace(/([?&]token=)[^\s"'<>]+/g,'$1[REDACTED]');if(!recorded&&text.includes('dsh web:')){const running=JSON.parse(fs.readFileSync(path.join(process.env.DSH_HOME,'.human-running.lock'),'utf8'));if(running.pid!==process.pid||fs.existsSync(path.join(process.env.DSH_HOME,'.human-offline.lock')))throw Error('SERVICE_RUNNING_LOCK_MISSING');fs.writeFileSync(processRecord,JSON.stringify({pid:process.pid,home:process.env.DSH_HOME,entry:import.meta.filename,startedAt:hostStartedAt}));recorded=true;}return write(text,...rest);};}
-const require=createRequire(import.meta.url),manifest=require.resolve('@deepseek-ai/dsh/package.json'),entry=path.join(path.dirname(manifest),JSON.parse(fs.readFileSync(manifest,'utf8')).bin.dsh);
+const entry=webServiceEntry(process.env.DSH_HOME,options.profile??'web');
 process.argv=[process.execPath,'dsh','--profile',options.profile??'web','--no-open','--port',options.port??'3090'];
 try{const {runCli}=await import(pathToFileURL(entry).href);await runCli();}catch(e){console.error(/^[A-Z_]{3,80}$/.test(e?.message??'')?e.message:'SERVICE_BOOT_FAILED');process.exitCode=1;}

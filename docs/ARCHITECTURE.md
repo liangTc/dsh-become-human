@@ -182,7 +182,7 @@ IM 构建读取本包开发依赖；日历规则来自精确版本的 `@deepseek
 ## 当前交付边界
 
 - 完整运行依赖 Windows DPAPI；跨平台与跨机密钥迁移未完成。
-- 兼容性固定 DSH `0.2.0-rc.2`；不能推定兼容未来 rc 或 Desktop。
+- Windows 管理端支持 Web `0.2.0-rc.2` 与 Desktop `0.2.2-rc.3`、`0.2.2-rc.5`。Desktop 使用官方应用资源内的 DSH 和 Electron Node 模式启动独立工作进程，在桌面专用目录保存 Human 的会话和 IM 状态。其他 DSH 版本仍需单独验证。
 - 一个 Human 绑定一个 IM，更换会替换旧绑定；12 种聊天适配与 Office 连接器存在不等于每个平台已完成真实验收。
 - 开源发行排除 WhatsApp 及其 GPL 依赖链与 QQ 的未授权扫码连接器；QQ 使用手动 AppID / AppSecret。
 - Human 不注册浏览器页面或标签页控制工具；旧配置字段被忽略，历史审计记录保留。

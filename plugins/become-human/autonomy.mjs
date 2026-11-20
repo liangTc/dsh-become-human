@@ -23,6 +23,7 @@ import {learningEngagementSnapshot,explicitLearningNoteRequest,delegateLearningL
 import {structured,claimTextProjection,assertAgentExperience,outputDiagnostic,requireOutputText} from './learning.mjs';
 import {expressionPrompt} from './expression.mjs';
 import {autonomousBudgetEstimate} from './model-policy.mjs';
+import {transientModelFailure} from './model-failure.mjs';
 import {quotaAllows,roundDuration} from './quota.mjs';
 import {contextMessages} from './context.mjs';
 import {socialStatus,socialDelay,assertSocialNovelty} from './social.mjs';
@@ -34,6 +35,16 @@ const key=value=>createHash('sha256').update(value).digest('hex');
 
 const failure=(code)=>Object.assign(new Error(code),{code});
 const contractFailure=(field,reason,extra={})=>Object.assign(failure('INVALID_TASK_OUTPUT'),{validationDiagnostic:{field,reason,...extra}});
+
+function deferAutonomousModel(journal,id,modelFailure,wakeIntervalMs){
+  const previous=journal.value(id,'autonomyModelBackoff',null);
+  const consecutiveFailures=(previous?.consecutiveFailures??0)+1;
+  const at=Date.now();
+  const interval=Math.max(60_000,wakeIntervalMs);
+  const delay=Math.min(3_600_000,interval*2**Math.min(consecutiveFailures-1,6));
+  journal.put(id,'autonomyModelBackoff',{at,until:at+delay,consecutiveFailures,lane:modelFailure.lane,code:modelFailure.code});
+  journal.put(id,'autonomyWait','model-backoff');
+}
 
 function foregroundSystem(agent,admitted){
   const skill=agent.factory.management?.skills.prompt(agent.id,'foreground',admitted.map(m=>m.content.filter(c=>c.type==='text').map(c=>c.text).join('')).join(' '))??expressionPrompt('foreground');
@@ -92,6 +103,9 @@ export async function runAutonomyTurn(agent,signal){
       if(!settings.enabled){phase('idle');return;}
       agent.activeLane='autonomous';
       if(j.value(id,'autonomyPaused',false)||j.value(id,'autonomyError',null)){phase('autonomy-paused');return;}
+      if(j.value(id,'autonomyModelBackoff',null)?.until>Date.now()){
+        j.put(id,'autonomyWait','model-backoff');phase('waiting');return;
+      }
       drainActivityFeedback(f,id);f.goals?.reconcile(id);const next=await candidate(agent,signal,settings);valid(agent,signal,epoch);
       if(!next){const social=socialStatus(j,f.domain,id,settings);j.audit(id,'brain-wait',{reason:'no-eligible-event',turn,social:{reason:social.reason,nextEligibleAt:social.nextEligibleAt,unanswered:social.unanswered}});j.put(id,'autonomyWait','no-eligible-event');phase('waiting');store.completeEvents(id,store.events(id).filter(event=>event.kind!=='plugin').map(event=>event.id));return;}
       if(next.kind==='write-report'){
@@ -199,14 +213,26 @@ export async function runAutonomyTurn(agent,signal){
   }catch(error){
     const roundTimeout=roundSignal?.aborted&&!parentSignal.aborted;
     const code=roundTimeout?'AUTONOMOUS_ROUND_TIMEOUT':parentSignal.aborted?'USER_PREEMPTED':error.code??error.message;
+    const transient=!parentSignal.aborted&&!roundTimeout&&!stageId&&error.modelFailure&&transientModelFailure(error.modelFailure);
+    const backoff=transient&&task&&(error.modelFailure.lane==='selection'||error.modelFailure.lane==='executor'&&task.kind!=='behavior');
     if(ownerBatch){if(parentSignal.aborted||code==='CONTEXT_BUDGET_TOO_SMALL')restoreOwnerBatch(agent,ownerBatch);else j.put(id,'ownerBatch',{...ownerBatch,failed:true});}
     if(code==='CONTEXT_BUDGET_TOO_SMALL'&&lane==='foreground')for(const message of [...admitted].reverse())if(![...agent.inbox.nextTurn,...agent.inbox.nextStep].some(m=>m.id===message.id))agent.inbox.prepend('next-turn',message);
-    if(task&&store.getTask(task.id)?.status!=='completed')store.update(task.id,parentSignal.aborted?'suspended':code==='MATTER_NO_LONGER_ACTIVE'?'cancelled':code==='AUTONOMOUS_BUDGET_EXHAUSTED'?'waiting-budget':'failed',{...store.getTask(task.id).checkpoint,reason:/^[A-Z_]{3,64}$/.test(code)?code:'TASK_EXECUTION_FAILED'});
+    if(task)j.transaction(()=>{
+      const current=store.getTask(task.id);
+      if(current&&current.status!=='completed')store.update(task.id,parentSignal.aborted?'suspended':code==='MATTER_NO_LONGER_ACTIVE'?'cancelled':code==='AUTONOMOUS_BUDGET_EXHAUSTED'?'waiting-budget':'failed',{...current.checkpoint,reason:/^[A-Z_]{3,64}$/.test(code)?code:'TASK_EXECUTION_FAILED'});
+      if(backoff)deferAutonomousModel(j,id,error.modelFailure,settings.wakeIntervalMs);
+    });
     if(code==='GOAL_NO_LONGER_ACTIVE'||code==='MATTER_NO_LONGER_ACTIVE'){j.put(id,'autonomyWait',code);phase('waiting');}
+    else if(backoff){reason={kind:'error',error:{code:'HUMAN_AUTONOMY_ERROR',message:code}};phase('waiting');}
     else if(task?.kind==='behavior'||['INVALID_BEHAVIOR_SELECTION','BEHAVIOR_UNAVAILABLE','BEHAVIOR_DEFINITION_CHANGED','BEHAVIOR_INPUT_CHANGED'].includes(code)){if(task)store.defer(id,task,code,settings.sourceIntervalMs);j.put(id,'autonomyWait',code);phase('waiting');}
     else if(roundTimeout){store.defer(id,task,'AUTONOMOUS_ROUND_TIMEOUT',settings.sourceIntervalMs);j.put(id,'autonomyWait','AUTONOMOUS_ROUND_TIMEOUT');phase('waiting');}
     else if(parentSignal.aborted){reason=agent.cause?.kind==='owner-supplement'?{kind:'completed'}:{kind:'aborted',reason:agent.cause??{kind:'user'}};phase('preempted');}
     else if(code==='AUTONOMOUS_BUDGET_EXHAUSTED'){const estimate=task?estimateTaskBudget(agent,store.getTask(task.id)):{tokens:0,requests:1};store.requestBudget(id,task?.id??'new-task',autonomousBudgetEstimate(estimate,error.neededTokens));j.put(id,'autonomyWait','autonomous-budget');phase('waiting-budget');}
+    else if(transient&&lane==='foreground'&&ownerBatch){
+      // Consumed owner input stays available for an explicit retry.
+      reason={kind:'error',error:{code:'HUMAN_AUTONOMY_ERROR',message:code}};
+      j.put(id,'lastError',code);phase('idle');
+    }
     else{reason={kind:'error',error:{code:'HUMAN_AUTONOMY_ERROR',message:/^[A-Z_]{3,64}$/.test(code)?code:'TASK_EXECUTION_FAILED'}};if(lane==='foreground'){j.put(id,'lastError',reason.error.message);j.set(id,'paused');j.put(id,'stopReason','error');agent.wake=false;clearTimeout(agent.timer);agent.timer=undefined;}else{j.put(id,'autonomyError',reason.error.message);j.put(id,'autonomyPaused',true);phase('autonomy-error');}}
     j.audit(id,'autonomy-turn-ended',{turn,lane,taskId:task?.id,contextBudget:error.context??null,code:/^[A-Z_]{3,64}$/.test(code)?code:'TASK_EXECUTION_FAILED'});
   }finally{

@@ -4,6 +4,7 @@ import {attachCurrentImages,estimateImageRequestCost,imageContentCount,assertIma
 import {nativeDialogueMessages} from './dialogue-frame.mjs';
 import {recordContext} from './context.mjs';
 import {modelCallOptions,modelOutputReservation,estimateModelCost} from './model-policy.mjs';
+import {ModelStreamOutput} from './model-stream.mjs';
 const failure=code=>Object.assign(new Error(code),{code});
 export function requestCost(input,config={},context){return estimateModelCost(input,config,context)+(Array.isArray(input)?estimateImageRequestCost(input):0);}
 
@@ -19,11 +20,13 @@ export async function modelRequest(agent,signal,{turn,epoch,lane,messages,admitt
   messages=strategyRequest(messages,strategyUses);
   recordContext(agent,messages,{taskId,turn,lane:compacting?'conversation-summary':reviewing?'conversation-review':styleRepair?'conversation-style-repair':learningReview?'learning-selection-review':lane});
   const ownerInputRevision=admittedIds.length?admittedIds.reduce((n,id)=>Math.max(n,j.db.prepare('SELECT rowid AS n FROM user_request WHERE agent=? AND message_id=?').get(agent.id,id)?.n??0),0):j.db.prepare('SELECT COALESCE(max(rowid),0) AS n FROM user_request WHERE agent=?').get(agent.id).n;
-  let rid,amount,usage,finish,text='',reasoningChars=0,dispatched=false,settled=false,route=config;
-  const streamCounts={text:0,reasoning:0,usage:0,finish:0,other:0};
+  let rid,amount,usage,finish,dispatched=false,settled=false,route=config,callingModel=false;
+  const output=new ModelStreamOutput();
   const requestSignal=signal;
   try{
+    callingModel=true;
     const prepared=await agent.ctx.llm.prepareCall(modelCallOptions(config),requestSignal);
+    callingModel=false;
     route=prepared.config;
     assertImageModel(prepared.inputModalities,imageContentCount(messages));
     requestSignal.throwIfAborted();if(agent.desired().epoch!==epoch)throw failure('STALE_EPOCH');
@@ -35,34 +38,43 @@ export async function modelRequest(agent,signal,{turn,epoch,lane,messages,admitt
     j.dispatchAttempt(rid,prepared.config);dispatched=true;await f.allowCall(requestSignal,{agent:agent.id,rid,epoch,config:prepared.config,messages});
     if(strategyUses.length)f.experience.strategies.delivered(agent.id,strategyTask,rid);
     j.audit(agent.id,'dispatch',{attemptId:rid,turn,epoch,lane,budgetClass,taskId,provider:prepared.config.provider,model:prepared.config.model,reserved:amount,admittedIds});
+    callingModel=true;
     for await(const chunk of prepared.stream({...prepared.config,messages,signal:requestSignal})){
-      const category=({'text-delta':'text','reasoning-delta':'reasoning',usage:'usage',finish:'finish'})[chunk.type]??'other';streamCounts[category]++;
-      if(chunk.type==='text-delta')text+=chunk.text;
-      if(chunk.type==='reasoning-delta')reasoningChars+=chunk.text.length;
+      output.push(chunk);
       if(chunk.type==='usage'){const u=chunk.usage;usage=u&&['inputTokens','outputTokens','cacheReadTokens','cacheWriteTokens'].every(k=>k.endsWith('Tokens')&&u[k]===undefined&&k.startsWith('cache')||Number.isFinite(u[k])&&u[k]>=0)?u:undefined;}
       if(chunk.type==='finish')finish=chunk.reason;
     }
     signal.throwIfAborted();requestSignal.throwIfAborted();if(agent.desired().epoch!==epoch)throw failure('STALE_EPOCH');
+    if(!finish)throw Object.assign(new Error('Stream ended without finish_reason'),{code:'MODEL_EXECUTION_FAILED'});
     if(finish?.kind!=='stop'){const error=failure(['length','max-tokens'].includes(finish?.kind)?'OUTPUT_LIMIT':'MODEL_EXECUTION_FAILED');if(Number.isInteger(finish?.failure?.status)&&finish.failure.status>=400&&finish.failure.status<=599)error.status=finish.failure.status;throw error;}
+    const {text,reasoningChars}=output;
     if(!text.trim())throw failure('EMPTY_MODEL_OUTPUT');
+    callingModel=false;
     const total=usage?usage.inputTokens+(usage.cacheReadTokens??0)+(usage.cacheWriteTokens??0)+usage.outputTokens:undefined;
     j.settle(rid,total);settled=true;
     j.endAttempt(rid,{state:internal?'completed':lane==='foreground'?'generated':lane==='selection'?'selected':'executed',usage,usageConfidence:usage?'reported':'unknown',textChars:text.length,reasoningChars,responseText:text});
     j.put(agent.id,'lastUsage',usage??null);j.put(agent.id,'lastUsageConfidence',usage?'reported':'unknown');
     clearModelFailure(j,agent.id,lane);
+    if(lane!=='foreground'&&j.value(agent.id,'autonomyModelBackoff',null)?.lane===lane)j.put(agent.id,'autonomyModelBackoff',null);
     return {rid,text:text.trim(),usage,reasoningChars,provider:prepared.config.provider,model:prepared.config.model,workMemoryRefs:messages.contextReport?.workMemoryRefs??[]};
   }catch(error){
+    const {text,reasoningChars}=output;
     const code=signal.aborted?'USER_PREEMPTED':requestSignal.aborted?'REQUEST_TIMEOUT':error.code??error.message;
     const reportedTerminal=!!usage&&['stop','length','max-tokens'].includes(finish?.kind)&&!signal.aborted;
     if(rid&&!settled){if(dispatched)j.settle(rid,reportedTerminal?usage.inputTokens+(usage.cacheReadTokens??0)+(usage.cacheWriteTokens??0)+usage.outputTokens:undefined);else j.release(rid);}
     const failureFacts={phase:dispatched?'stream':'prepare',...(finish?{streamFinish:['stop','length','max-tokens','error','aborted'].includes(finish.kind)?finish.kind:'other'}:{}),exceptionType:['TypeError','RangeError','SyntaxError','Error'].includes(error.name)?error.name:'ProviderError',missingAssistantSource:messages.filter(message=>message.role==='assistant'&&!message.source).length,...(Number.isInteger(error.status)&&error.status>=400&&error.status<=599?{httpStatus:error.status}:{})};
-    failureFacts.streamCounts=streamCounts;failureFacts.textChars=text.length;failureFacts.reasoningChars=reasoningChars;
+    const streamFacts=output.facts(text);
+    Object.assign(failureFacts,streamFacts);
     if(!signal.aborted&&code!=='AUTONOMOUS_BUDGET_EXHAUSTED'){
-      failureFacts.diagnostic=modelFailureDiagnostic(finish?.failure??error,code);
-      saveModelFailure(j,agent.id,{at:Date.now(),attemptId:rid??null,lane,purpose:purpose??null,taskId:taskId??null,provider:route.provider,model:route.model,code:/^[A-Z_]{3,64}$/.test(code)?code:'MODEL_EXECUTION_FAILED',...failureFacts.diagnostic,streamFinish:failureFacts.streamFinish??null,textChars:text.length,reasoningChars,streamCounts},{notify:!reviewing});
+      failureFacts.diagnostic=modelFailureDiagnostic(finish?.failure??error,code,streamFacts);
+      saveModelFailure(j,agent.id,{at:Date.now(),attemptId:rid??null,lane,purpose:purpose??null,taskId:taskId??null,provider:route.provider,model:route.model,code:/^[A-Z_]{3,64}$/.test(code)?code:'MODEL_EXECUTION_FAILED',...failureFacts.diagnostic,streamFinish:failureFacts.streamFinish??null,...streamFacts},{notify:!reviewing});
     }
     if(rid)j.endAttempt(rid,{state:signal.aborted?'cancelled':'failed',usage,usageConfidence:reportedTerminal?'reported':dispatched?'unknown':'not-dispatched',error:/^[A-Z_]{3,64}$/.test(code)?code:'MODEL_EXECUTION_FAILED',textChars:text.length,reasoningChars,failureFacts,responseText:text});
     else j.audit(agent.id,'model-preparation-rejected',{lane,taskId,code:/^[A-Z_]{3,64}$/.test(code)?code:'MODEL_EXECUTION_FAILED',failureFacts});
-    throw Object.assign(failure(/^[A-Z_]{3,64}$/.test(code)?code:'MODEL_EXECUTION_FAILED'),{attemptId:rid??null},code==='AUTONOMOUS_BUDGET_EXHAUSTED'&&Number.isSafeInteger(error.neededTokens)?{neededTokens:error.neededTokens}:{});
+    const result=failure(/^[A-Z_]{3,64}$/.test(code)?code:'MODEL_EXECUTION_FAILED');
+    result.attemptId=rid??null;
+    if(callingModel&&failureFacts.diagnostic)result.modelFailure={code:result.code,category:failureFacts.diagnostic.category,httpStatus:failureFacts.diagnostic.httpStatus,lane,attemptId:result.attemptId};
+    if(code==='AUTONOMOUS_BUDGET_EXHAUSTED'&&Number.isSafeInteger(error.neededTokens))result.neededTokens=error.neededTokens;
+    throw result;
   }finally{f.tickets.delete(requestSignal);}
 }

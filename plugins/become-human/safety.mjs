@@ -5,7 +5,8 @@ import {protectKey} from './dpapi.mjs';
 import {createHash,createHmac,randomBytes} from 'node:crypto';
 import {DatabaseSync} from 'node:sqlite';
 import {quotaView,quotaAllows} from './quota.mjs';
-import Jsonl from '@deepseek-ai/dsh-session-persistence-jsonl';
+import * as Jsonl from '@deepseek-ai/dsh-session-persistence-jsonl';
+import {Service} from '@deepseek-ai/cordis';
 const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 async function protect(operation,value){
   return protectKey(operation,value);
@@ -137,12 +138,45 @@ export class SafetyLedger {
   status(){return {knowledgeStoreId:this.id,keyBackend:'Windows DPAPI',controlSeq:this.rows.length,verified:!this.blocked,rollbackDetection:'business rollback detected; whole independent safety store rollback needs an external anchor'};}
   close(){this.db?.exec('PRAGMA wal_checkpoint(TRUNCATE)');this.db?.close();}
 }
-export class GuardedJsonl extends Jsonl {
+// Recent DSH releases own the JSONL class and its tracker inside a Cordis
+// plugin. Keep the backend on the same event bus so native session writes
+// and flushes continue to route by session id. Expose only the guarded service.
+const backend=Symbol('native-session-persistence');
+class ScopedJsonl extends Service {
+  constructor(ctx,config){
+    super(ctx,'sessionPersistence');
+    this.identity=Symbol('guarded-session-persistence');
+    const scope=ctx.isolate('sessionPersistence');
+    const fiber=scope.plugin(Jsonl,config);
+    this.backendReady=fiber.await().then(()=>{
+      const native=scope.get('sessionPersistence');
+      for(const method of ['create','open','stat','list','flush','resolveCurrentLog','persistBatch','persistHeader']){
+        if(typeof native?.[method]!=='function')throw Error('GUARDED_STORAGE_BACKEND_UNSUPPORTED');
+      }
+      // The official tracker also writes directly from session/event. Fence
+      // those writes at the same commit boundary used by the legacy subclass.
+      for(const method of ['persistBatch','persistHeader']){
+        const write=native[method].bind(native);
+        native[method]=(header,...args)=>{this.guard(header.id);return write(header,...args);};
+      }
+      this[backend]=native;
+    });
+  }
+  create(...args){return this[backend].create(...args);}
+  open(...args){return this[backend].open(...args);}
+  stat(...args){return this[backend].stat(...args);}
+  list(...args){return this[backend].list(...args);}
+  async flush(){await this.ready;return this[backend].flush();}
+  resolveCurrentLog(...args){return this[backend].resolveCurrentLog(...args);}
+  persistBatch(...args){return this[backend].persistBatch(...args);}
+  persistHeader(...args){return this[backend].persistHeader(...args);}
+}
+export class GuardedJsonl extends (Jsonl.default??ScopedJsonl) {
   static Config=undefined;
   constructor(ctx,config){
     const nativeRoot=config.root??path.join(process.env.DSH_HOME,'sessions');super(ctx,{root:nativeRoot,...(config.compression?{compression:config.compression}:{})});
     this.nativeRoot=path.resolve(nativeRoot);this.safetyRoot=path.resolve(config.safetyRoot??path.join(process.env.DSH_HOME,'become-human-safety'));this.handles=new Set();
-    this.ready=this.initialize();ctx.effect(()=>async()=>{try{await this.ready;}catch{}for(const h of [...this.handles])await h.close().catch(()=>{});this.ledger?.close();await new Promise(resolve=>this.lock?this.lock.close(resolve):resolve());},'becomeHuman.guardedStorage');
+    this.ready=Promise.resolve(this.backendReady).then(()=>this.initialize());ctx.effect(()=>async()=>{try{await this.ready;}catch{}for(const h of [...this.handles])await h.close().catch(()=>{});this.ledger?.close();await new Promise(resolve=>this.lock?this.lock.close(resolve):resolve());},'becomeHuman.guardedStorage');
   }
   async initialize(){
     const parent=path.dirname(this.nativeRoot);await fs.mkdir(parent,{recursive:true});if(await fs.realpath(parent)!==parent)throw new Error('LINKED_STORAGE_ROOT');
@@ -158,7 +192,7 @@ export class GuardedJsonl extends Jsonl {
       async read(...args){storage.guard(native.id);const value=await native.read(...args);storage.guard(native.id);return value;},
       async append(...args){storage.guard(native.id);return native.append(...args);},
       async flush(...args){storage.guard(native.id);return native.flush(...args);},
-      async close(){await native.close();storage.handles.delete(wrapped);}};this.handles.add(wrapped);return wrapped;
+      async close(){await native.close();storage.handles.delete(wrapped);},async [Symbol.asyncDispose](){await this.close();}};this.handles.add(wrapped);return wrapped;
   }
   async stat(id,options){await this.ready;if(this.ledger.retired(id))return undefined;return super.stat(id,options);}
   async list(options){await this.ready;return (await super.list(options)).filter(s=>!this.ledger.retired(s.header.id));}

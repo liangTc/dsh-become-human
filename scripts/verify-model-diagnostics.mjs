@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {modelFailureDiagnostic,safeProviderMessage,saveModelFailure,clearModelFailure} from '../plugins/become-human/model-failure.mjs';
+import {modelFailureDiagnostic,safeProviderMessage,saveModelFailure,clearModelFailure,modelFailureNotification,transientModelFailure} from '../plugins/become-human/model-failure.mjs';
 import {activeModelAlerts} from '../plugins/become-human-web/model-alerts.mjs';
 const cases=[];function check(name,fn){fn();cases.push(name);}
 for(const [name,failure,category]of [
@@ -23,8 +23,33 @@ check('request dumps hidden',()=>assert(!safeProviderMessage('HTTP error message
 check('JSON keeps only error message',()=>assert.equal(safeProviderMessage(JSON.stringify({error:{message:'Model no longer available'},request:{messages:['private conversation']}})),'Model no longer available'));
 check('unknown codes and invalid statuses not exposed',()=>{const d=modelFailureDiagnostic({code:'SUPPLIER_PRIVATE_CODE',status:900});assert.equal(d.upstreamCode,undefined);assert.equal(d.httpStatus,undefined);});
 const values=new Map(),j={value:(_,key,fallback)=>values.get(key)??fallback,put:(_,key,value)=>values.set(key,value)};
+check('receipts describe observed stream output and omit local error echoes',()=>{
+ const local='EMPTY_MODEL_OUTPUT';
+ const notice=facts=>modelFailureNotification({lane:'selection',code:local,at:1,...modelFailureDiagnostic(Error(local),local,facts),...facts});
+ assert.match(notice({textChars:0,reasoningChars:10}),/收到.*推理/);
+ assert.match(notice({textChars:2,reasoningChars:0}),/空白/);
+ assert.doesNotMatch(notice({textChars:0}),/只.*推理|说明：EMPTY_MODEL_OUTPUT/);
+});
+check('recoverable selection failures coalesce until recovery, route change or next hourly notice',()=>{
+ const state={},sent=[],journal={value:(_id,key,fallback)=>state[key]??fallback,put:(_id,key,val)=>{state[key]=val;},publish:(_id,_msg,_kind,identity)=>sent.push(identity)};
+ const report=(attemptId,at,patch={})=>saveModelFailure(journal,'human',{provider:'p',model:'m',purpose:null,lane:'selection',code:'EMPTY_MODEL_OUTPUT',category:'empty',attemptId,at,...patch});
+ report('a',10);report('b',25);report('c',3599999);
+ assert.equal(state.modelFailures.selection.attemptId,'c');assert.deepEqual(sent,['model-error:a']);
+ report('d',3600010);report('e',3600015,{model:'different'});clearModelFailure(journal,'human','selection');report('f',3600017,{model:'different'});
+ report('g',3600020,{lane:'foreground'});report('h',3600021,{lane:'foreground'});
+ assert.deepEqual(sent,['a','d','e','f','g','h'].map(id=>'model-error:'+id));
+ assert(transientModelFailure({code:'EMPTY_MODEL_OUTPUT'}));
+ assert(transientModelFailure({code:'MODEL_EXECUTION_FAILED',category:'incomplete-stream'}));
+ assert(!transientModelFailure({code:'EMPTY_MODEL_OUTPUT',httpStatus:401}));
+ assert(!transientModelFailure({code:'MODEL_EXECUTION_FAILED',category:'unknown'}));
+});
 check('one successful lane cannot hide another lane failure',()=>{saveModelFailure(j,'same',{lane:'selection',code:'MODEL_EXECUTION_FAILED',at:10});saveModelFailure(j,'same',{lane:'foreground',code:'EMPTY_MODEL_OUTPUT',at:20});clearModelFailure(j,'same','foreground');assert(values.get('modelFailures').selection);assert(!values.get('modelFailures').foreground);});
 check('active error shown and resolved error hidden',()=>{const s={autonomy:{paused:true,error:'MODEL_EXECUTION_FAILED'},modelFailures:values.get('modelFailures')};assert.equal(activeModelAlerts(s).length,1);assert.equal(activeModelAlerts({...s,autonomy:{paused:false,error:null}}).length,0);});
+check('a foreground failure on a running worker keeps chat available in the alert',()=>{
+ const s={desired:'running',lastError:'EMPTY_MODEL_OUTPUT',autonomy:{paused:false},modelFailures:{foreground:{code:'EMPTY_MODEL_OUTPUT',lane:'foreground',category:'empty',reasoningChars:5}}};
+ const [alert]=activeModelAlerts(s);assert.equal(alert.scope,'foreground');assert.equal(alert.chatAvailable,true);
+ assert.match(alert.summary,/推理/);assert.equal(activeModelAlerts({...s,desired:'paused'})[0].chatAvailable,false);
+});
 check('old records keep evidence limits',()=>{const [d]=activeModelAlerts({autonomy:{paused:true,error:'MODEL_EXECUTION_FAILED'},attempts:[{id:'old',trigger:'autonomous-tick',error:'MODEL_EXECUTION_FAILED',config:'{"provider":"old-provider","model":"old-model"}',failure_facts:'{"streamFinish":"error"}',ended:123}]});assert.equal(d.category,'unknown');assert.equal(d.legacy,true);assert.equal(d.model,'old-model');assert.equal(d.at,123);});
 check('old saved stream error includes review stage without rewriting evidence',()=>{const entry={attemptId:'old-review',lane:'foreground',code:'MODEL_EXECUTION_FAILED',category:'unknown',upstreamMessage:'Stream ended without finish_reason'},s={lastError:entry.code,modelFailures:{foreground:entry},attempts:[{id:'old-review',purpose:'conversation-review'}]};const [d]=activeModelAlerts(s);assert.equal(d.category,'incomplete-stream');assert.match(d.summary,/回复检查/);assert.equal(entry.category,'unknown');});
 console.log(JSON.stringify({passed:cases.length,cases,scope:'synthetic errors and actual diagnostic functions; no provider requests'}));

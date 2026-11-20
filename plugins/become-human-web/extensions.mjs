@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
 import {DatabaseSync} from 'node:sqlite';
-import {createRequire} from 'node:module';
+import {resolveDshEntry,nodeChild} from './dsh-launch.mjs';
 import {spawn,execFile} from 'node:child_process';
 import {setTimeout as delay} from 'node:timers/promises';
 import {gunzipSync} from 'node:zlib';
@@ -45,7 +45,8 @@ export function archiveManifest(bytes){
 export async function runExtensionCli({entry,home,profile,args,signal}){
   const env={};for(const key of ['PATH','Path','PATHEXT','SYSTEMROOT','SystemRoot','WINDIR','COMSPEC','ComSpec','TEMP','TMP','USERPROFILE','APPDATA','LOCALAPPDATA','HOME','HTTPS_PROXY','HTTP_PROXY','NO_PROXY'])if(process.env[key])env[key]=process.env[key];
   return new Promise((resolve,reject)=>{
-    const child=spawn(process.execPath,[path.join(import.meta.dirname,'extension-worker.mjs'),entry,home,profile,...args],{env,windowsHide:true,stdio:'ignore',shell:false});let aborted=false;
+    const launch=nodeChild(path.join(import.meta.dirname,'extension-worker.mjs'),[entry,home,profile,...args],env);
+    const child=spawn(process.execPath,launch.args,{env:launch.env,windowsHide:true,stdio:'ignore',shell:false});let aborted=false;
     const abort=()=>{aborted=true;if(!child.pid)return;if(process.platform==='win32')execFile('taskkill',['/PID',String(child.pid),'/T','/F'],{windowsHide:true},()=>{});else child.kill('SIGTERM');};
     signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)abort();
     child.once('error',()=>{signal?.removeEventListener('abort',abort);reject(Error('EXTENSION_CLI_START_FAILED'));});
@@ -85,7 +86,7 @@ export class RuntimeExtensions {
   get blocked(){return this.jobs.findLast(j=>j.recovery&&!['committed','restored'].includes(j.recovery.status))??null;}
   canRecover(job){return !!job?.recovery&&['failed','prepared'].includes(job.recovery.status)&&!!job.recovery.after;}
   async cli(args,signal){
-    const manifestFile=createRequire(import.meta.url).resolve('@deepseek-ai/dsh/package.json'),manifest=JSON.parse(await fs.readFile(manifestFile,'utf8')),entry=path.resolve(path.dirname(manifestFile),manifest.bin.dsh);
+    const entry=resolveDshEntry(this.runtime.config.sourceInstallAnchor);
     const text=await regular(path.join(this.profile,'node_modules','.modules.yaml'),{optional:true}),modules=text?YAML.parse(text.toString()):null,store=modules?.storeDir;
     const storeArgs=typeof store==='string'&&path.isAbsolute(store)?['--store-dir='+(/^v\d+$/.test(path.basename(store))?path.dirname(store):store)]:[];
     return this.run({entry,home:this.runtime.config.runtimeHome,profile:this.runtime.config.runtimeProfile,args:[...args,...storeArgs,...(args[0]==='remove'?[]:this.cliOptions)],signal:AbortSignal.any([signal,AbortSignal.timeout(180000)])});

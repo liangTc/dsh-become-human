@@ -9,18 +9,15 @@
 
 A digital companion living in DSH: remembering shared experiences, developing its own tendencies, choosing actions in an event loop, and gaining capabilities through plugins.
 
-> **Test release `0.7.0-beta.41` · Work in progress.** [GitHub Release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.41) · [npm package](https://www.npmjs.com/package/dsh-become-human-web/v/0.7.0-beta.41) · [Verification scope](docs/RELEASE_BETA41.md)
+> **Test release `0.7.0-beta.43` · Work in progress.** [GitHub Release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.43) · [npm package](https://www.npmjs.com/package/dsh-become-human-web/v/0.7.0-beta.43) · [Verification scope](docs/RELEASE_BETA43.md)
 
 [简体中文](README.md) · [Installation](docs/INSTALLATION.md) · [Usage](docs/USAGE.md) · [Configuration](docs/CONFIGURATION.md) · [Testing status](docs/TESTING_STATUS.md) · [Architecture](docs/ARCHITECTURE.md)
-
-> [!WARNING]
-> **Test release · Development is incomplete.** The current public test release is `0.7.0-beta.41` (GitHub Prerelease). Windows, Node.js 24+, and DSH `0.2.0-rc.2` are required. Complete acceptance and long-running reliability remain unverified, including the fresh-DSH native DeepSeek flow; see [testing status](docs/TESTING_STATUS.md).
-
-The 0.7.0-beta.41 prerelease fixes duplicate replies after an explicit retry, conversation memory, rolling budgets, extension recovery and daylight-saving handling for quiet hours.
+**Supported Windows hosts** include the official DSH Desktop `0.2.2-rc.3` and `0.2.2-rc.5`, and DSH Web `0.2.0-rc.2` on Node.js 24+. This prerelease adds Desktop installation and retries autonomous topic selection after transient model failures.
 
 | Version | Availability and status |
 | --- | --- |
-| `0.7.0-beta.41` | Current test release on npm and GitHub. The upgrade from beta.40 was checked with the DSH CLI and Chrome. |
+| `0.7.0-beta.43` | Desktop installation and chat tested with a local model fixture. Cold restarts restored the original session on both Desktop versions and on Web. |
+| `0.7.0-beta.41` | Previous Web prerelease. The upgrade from beta.40 was checked with the DSH CLI and Chrome. |
 | `0.7.0-beta.40` | Published test release with local builds, upgrades and limited real-model/Web checks; available as a GitHub Prerelease and npm package |
 | `0.7.0-beta.5` | Historical test release, with a prebuilt bundle and SHA-256 file; see installation below |
 | `0.7.0-beta.4` | Historical test release; its package does not include beta.5 additions |
@@ -31,7 +28,7 @@ The 0.7.0-beta.41 prerelease fixes duplicate replies after an explicit retry, co
 
 Become Human adds an event loop to a persistent DSH conversation. It uses **the current persona → valid memories, feedback, and goals → model choice** to decide whether to wait, check in, chat, or use an enabled capability. Goals and learning are optional activities, not a fixed identity or a mandatory task list.
 
-DSH Web is the management surface. A paired phone is another channel into the same conversation. Persona configuration guides expression and topic selection; code handles scheduling, budgets, execution boundaries, and records. This project explores persistent, contextual agent behavior. It does not claim consciousness, genuine emotions, or verified long-term personality development.
+DSH Web and Desktop provide the management interface. A paired phone is another channel into the same conversation. Persona configuration guides expression and topic selection; code handles scheduling, budgets, execution boundaries, and records. This project explores persistent, contextual agent behavior. It does not claim consciousness, genuine emotions, or verified long-term personality development.
 
 ## Personality that persists across experiences
 
@@ -101,24 +98,26 @@ A manager bundle integrates with DSH Web. A separate runtime process owns the Hu
 
 ## Quick start
 
+On Windows Desktop, download the tarball and choose **Plugins → Add plugin** in the sidebar. Enter the absolute tarball path, select **Install** and **Enable now**, and restart if prompted. Open **Human** to complete setup. Desktop stores its Human session and IM binding separately from Web. [Download the installation package](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.43/dsh-become-human-web-0.7.0-beta.43.tgz) · [Desktop installation](docs/INSTALLATION.md#desktop-windows)
+
 Install the current test release into DSH Web:
 
 ```powershell
-npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add dsh-become-human-web@0.7.0-beta.41 --registry=https://registry.npmjs.org/
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add dsh-become-human-web@0.7.0-beta.43 --registry=https://registry.npmjs.org/
 ```
 
 To install from a downloaded tarball, use the matching release files:
 
-Use the prebuilt bundle from the [v0.7.0-beta.41 prerelease](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.41). One `.tgz` installs both the Web plugin and its bundled runtime:
+Use the prebuilt bundle from the [v0.7.0-beta.43 prerelease](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.43). One `.tgz` installs both the Web plugin and its bundled runtime:
 
-1. Download the [installation package](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.41/dsh-become-human-web-0.7.0-beta.41.tgz) and its [SHA-256 file](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.41/dsh-become-human-web-0.7.0-beta.41.tgz.sha256).
+1. Download the [installation package](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.43/dsh-become-human-web-0.7.0-beta.43.tgz) and its [SHA-256 file](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.43/dsh-become-human-web-0.7.0-beta.43.tgz.sha256).
 2. Verify the checksum as described in the [installation guide](docs/INSTALLATION.md#使用预构建包推荐), then run this from your download directory:
 
 ```powershell
-npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./dsh-become-human-web-0.7.0-beta.41.tgz
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./dsh-become-human-web-0.7.0-beta.43.tgz
 ```
 
-The current npm package is beta.41; the tarball above contains the same plugin. The Git repository and GitHub source ZIP omit generated bundles and cannot be installed directly as a prebuilt plugin. Developers can [build a `.tgz` from source](docs/INSTALLATION.md#从源码构建). The detailed guides are currently in Chinese.
+The npm package and the downloadable tarball contain the same plugin. To build from the GitHub source archive, follow the [source installation guide](docs/INSTALLATION.md#从源码构建).
 
 **Known beta.5 fresh-install issue:** initial Human creation can fail because of initialization order. The fix is in beta.6 development source, and is included in this release. Read the [testing status](docs/TESTING_STATUS.md) before installing; existing-install upgrade checks do not establish clean-install success.
 

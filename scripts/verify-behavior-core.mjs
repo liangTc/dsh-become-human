@@ -29,6 +29,76 @@ await test('Events arriving during an action are not acknowledged by its complet
 await test('Unapproved custom tools are absent; explicitly autonomous reads execute once',async f=>{let calls=0;const register=(name,autonomous)=>f.f.tools.register(name,{description:'读取测试索引。'.repeat(200),inputSchema:schema,effect:'read',autonomous,execute:async()=>{calls++;return {entries:2,excerpt:"x".repeat(32000)};}});register('private-read',false);register('approved-read',true);syncCapabilityBehaviors(f.f,f.id);assert.equal(f.f.behaviors.definition(f.agent,'tool.private-read'),null);const definition=f.f.behaviors.definition(f.agent,'tool.approved-read'),task=taskFor(f,{kind:'behavior',behaviorId:definition.id,behaviorFingerprint:definition.fingerprint,question:'读取索引'},{input:{value:'index'}});const first=await f.f.behaviors.execute(f.agent,task,context),second=await f.f.behaviors.execute(f.agent,task,context);assert.equal(first.status,'completed');assert.equal(first.jobId,second.jobId);assert.equal(calls,1);assert.equal(first.preview.text.length,1200);assert.equal(first.preview.truncated,true);assert.equal(first.result,undefined);f.f.autonomy.update(task.id,'completed',{...task.checkpoint,behaviorResult:first});f.f.experience.recordTask(f.id,task.id);assert.equal(f.f.experience.context(f.id).experiences[0].behaviorResult.preview.evidenceStatus,'tool-returned-unverified');});
 await test('Experience reflection behavior registers without a scheduler change',f=>{registerExperienceBehavior(f.f);assert(f.f.behaviors.definition(f.agent,'reflect-experience'));});
 
+await test('Temporary model failures back off without pausing the session or replaying failed work',async f=>{
+  const {runAutonomyTurn}=await import('../plugins/become-human/autonomy.mjs');
+  const {SafetyLedger}=await import('../plugins/become-human/safety.mjs');
+  const {ReminderStore}=await import('../plugins/become-human/reminders.mjs');
+  f.j.safety=await SafetyLedger.open(path.join(f.dir,'safety'));
+  try{
+    await f.f.autonomy.configure(f.id,{enabled:true,quotaEnabled:false,learningEnabled:false,searchEnabled:false,socialEnabled:false,proactiveEnabled:false,wakeIntervalMs:600000,quietStart:0,quietEnd:0});
+    f.register();
+    f.f.reminders=new ReminderStore(f.j);
+    f.f.config={provider:'fixture',model:'fixture',domainEnabled:true};
+    f.f.tickets=new WeakMap();
+    f.f.allowCall=async()=>{};
+    f.j.set(f.id,'running');f.j.put(f.id,'remaining',null);
+    const events=[];
+    f.agent.session={id:f.id,snapshotEvents:()=>events,append(type,data){events.push({type,data,time:Date.now()});}};
+    f.agent.desired=()=>f.j.get(f.id);
+    f.agent.flush=async()=>{};
+    f.agent.events={emit(){}};
+    const inbox={nextStep:[],nextTurn:[],splice(target,start,count,messages){return this[target==='next-turn'?'nextTurn':'nextStep'].splice(start,count,...messages);}};
+    f.agent.inbox=inbox;
+    let mode='empty',calls=0;
+    const prepareCall=async()=>({config:{provider:'fixture',model:'fixture'},async *stream(){
+      calls++;
+      if(mode==='wait')yield {type:'text-delta',text:JSON.stringify({decision:'wait',reason:'暂时没有需要推进的事情'})};
+      if(mode==='network')throw new TypeError('fetch failed');
+      if(mode==='auth'){yield {type:'finish',reason:{kind:'error',failure:{status:401}}};return;}
+      yield {type:'usage',usage:{inputTokens:10,outputTokens:2}};
+      yield {type:'finish',reason:{kind:'stop'}};
+    }});
+    f.agent.ctx={sessionProjections:{stateOf:()=>({lastTurn:events.filter(e=>e.type==='turn/end').length})},llm:{prepareCall}};
+    const run=()=>runAutonomyTurn(f.agent,new AbortController().signal);
+    const retry=()=>f.j.value(f.id,'autonomyModelBackoff',null);
+    const expire=()=>f.j.put(f.id,'autonomyModelBackoff',{...retry(),until:Date.now()-1});
+    const states=()=>f.j.db.prepare('SELECT id,status FROM autonomy_task ORDER BY rowid').all();
+    await run();
+    assert.equal(f.j.value(f.id,'autonomyPaused',false),false);
+    assert.equal(f.j.get(f.id).desired,'running');
+    assert.equal(states()[0].status,'failed');
+    const first=retry();assert.equal(first?.code,'EMPTY_MODEL_OUTPUT');
+    assert.equal(first.until-first.at,600000);
+    const reload=new ControlJournal(path.join(f.dir,'test.sqlite'));
+    try{assert.deepEqual(reload.value(f.id,'autonomyModelBackoff',null),first);}finally{reload.close();}
+    await run();assert.equal(calls,1);assert.equal(states().length,1);
+    inbox.nextTurn.push({id:randomUUID(),role:'user',content:[{type:'text',text:'普通聊天'}]});
+    await run();
+    assert.equal(calls,2,'a real owner turn bypasses autonomous backoff');
+    assert.equal(inbox.nextTurn.length,0);assert.equal(f.j.get(f.id).desired,'running');
+    assert.deepEqual(retry(),first);
+    await run();assert.equal(calls,2,'failed owner input is not resent');
+    mode='network';expire();await run();
+    assert.equal(calls,3);assert.equal(retry().consecutiveFailures,2);
+    assert.equal(retry().until-retry().at,1200000);
+    assert.deepEqual(states().map(r=>r.status),['failed','failed']);
+    for(const [failures,minutes] of [[3,40],[4,60],[5,60]]){
+      expire();await run();assert.equal(retry().consecutiveFailures,failures);
+      assert.equal(retry().until-retry().at,minutes*60000);
+    }
+    expire();f.j.put(f.id,'autonomyPaused',true);await run();
+    assert.equal(calls,6,'a user pause survives expiry');
+    f.j.put(f.id,'autonomyPaused',false);mode='wait';await run();
+    assert.equal(calls,7);assert.equal(retry(),null);
+    assert.deepEqual(states().map(r=>r.status),['failed','failed','failed','failed','failed','cancelled']);
+    // A fresh event must still surface credential problems as actionable.
+    f.j.put(f.id,'autonomyDeferrals',[]);f.f.autonomy.event(f.id,'fixture:fresh','configuration',{});
+    mode='auth';await run();assert.equal(calls,8);
+    assert.equal(f.j.value(f.id,'autonomyPaused',false),true);
+    assert.equal(retry(),null);
+  }finally{f.j.safety.close();}
+});
+
 await test('Whole autonomous turn selects and executes a non-learning behavior with one model call',async f=>{
   const {SafetyLedger}=await import('../plugins/become-human/safety.mjs'),{runAutonomyTurn}=await import('../plugins/become-human/autonomy.mjs');
   f.j.safety=await SafetyLedger.open(path.join(f.dir,'safety'));

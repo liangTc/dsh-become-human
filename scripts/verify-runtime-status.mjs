@@ -30,6 +30,11 @@ assert.match(runStatus(state,night).text,/安静时段.*11-20 08:00/);
 assert.match(runStatus({...state,autonomy:{settings,paused:true,error:'MODEL_EXECUTION_FAILED'}},night).text,/聊天在线.*自主保护暂停.*MODEL_EXECUTION_FAILED/);
 assert.equal(runStatus({...state,desired:'paused'},night).nextCheckAt,null);
 assert.match(runStatus({...state,autonomy:{settings,pendingBudgetRequest:{id:'test'}}},daytime).activity,/补额/);
+const retryUntil=daytime+1200000;
+const cooling={...state,autonomy:{settings,modelRetryAt:retryUntil}};
+assert.match(runStatus(cooling,daytime).text,/聊天在线.*下次自动检查.*17:20/);
+assert.match(runStatus(cooling,retryUntil).activity,/自主待机/);
+assert.equal(runStatus({...cooling,autonomy:{...cooling.autonomy,paused:true}},daytime).nextCheckAt,null);
 console.log('PASS retry visibility, superseded inputs, source withdrawal and shared run status');
 
 const protectedState={...state,sessionId:'fixture-human',autonomy:{settings,paused:true,error:'MODEL_EXECUTION_FAILED'}};

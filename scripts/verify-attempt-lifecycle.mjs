@@ -9,7 +9,7 @@ import {pathToFileURL} from 'node:url';
 // Only bare imports fall back; maintained relative source imports stay intact.
 const anchor=process.env.BH_TEST_DEPENDENCY_ANCHOR;
 const hook=anchor?registerHooks({resolve(specifier,context,next){try{return next(specifier,context);}catch(error){if(error.code!=='ERR_MODULE_NOT_FOUND'||specifier.startsWith('.')||specifier.startsWith('/')||specifier.includes(':'))throw error;return next(specifier,{...context,parentURL:pathToFileURL(anchor).href});}}}):null;
-const {ControlJournal}=await import('../plugins/become-human/driver.mjs');
+const {ControlJournal,HumanAgent}=await import('../plugins/become-human/driver.mjs');
 hook?.deregister();
 const {DomainMemory}=await import('../plugins/become-human/domain.mjs');
 const {ToolExecutor}=await import('../plugins/become-human/tool-executor.mjs');
@@ -33,6 +33,39 @@ function fixture(){
  return {id,owner,usage,ids,agent,tools,dialogue,generated,reopen,row,get journal(){return journal;},get executions(){return executions;}};
 }
 const call=tool=>JSON.stringify({capability:{tool,input:{}}});
+await test('legacy foreground remains available after an empty response and accepts a terminal-only reply to the next input',async f=>{
+ const {agent,journal,id}=f,events=[],queue=[];
+ const message=()=>({id:randomUUID(),role:'user',content:[{type:'text',text:'本轮测试输入'}]});
+ journal.put(id,'remaining',null);
+ journal.put(id,'humanExecution',{conversation:{enabled:false}});
+ Object.assign(agent.factory,{config:{provider:'fixture',model:'fixture'},management:{assertReasoningEffort(){}},allowCall:async()=>{}});
+ agent.factory.autonomy.persona=()=>agent.factory.domain.persona(id);
+ agent.session={id,snapshotEvents:()=>events,append:(type,data)=>events.push({seq:events.length+1,type,data,time:Date.now()})};
+ agent.inbox={nextTurn:queue,nextStep:[],splice:(_target,start,count,inserted)=>queue.splice(start,count,...inserted)};
+ agent.events={emit(){}};
+ agent.flush=async()=>{};
+ let frames=[],requests=0;
+ agent.ctx={sessionProjections:{stateOf:()=>({lastTurn:requests})},llm:{prepareCall:async()=>({
+   config:agent.factory.config,
+   async *stream(){requests++;yield* frames;yield {type:'finish',reason:{kind:'stop'}};}
+ })}};
+ const first=message();
+ queue.push(first);
+ await HumanAgent.prototype.drive.call(agent,new AbortController().signal);
+ assert.equal(journal.get(id).desired,'running');
+ assert.equal(queue.length,0);
+ const failed=journal.db.prepare("SELECT request,error FROM attempt WHERE state='failed'").get();
+ assert.equal(failed.error,'EMPTY_MODEL_OUTPUT');
+ assert.deepEqual(JSON.parse(failed.request).admittedIds,[first.id]);
+ const second=message();
+ queue.push(second);
+ frames=[{type:'block-end',index:0,block:{type:'text',text:'只回复这一次。'}}];
+ await HumanAgent.prototype.drive.call(agent,new AbortController().signal);
+ assert.equal(requests,2);
+ assert.equal(journal.get(id).desired,'running');
+ assert.deepEqual(events.filter(e=>e.type==='assistant/message').map(e=>e.data.message.content[0].text),['只回复这一次。']);
+ assert.equal(journal.db.prepare("SELECT count(*) n FROM attempt WHERE state='failed'").get().n,1);
+});
 await test('Reconciliation consumes the suffix across restart and commits the cursor with the outbox',async f=>{
  const events=[],reads=[],session={id:f.id,get seq(){return events.length;},snapshotEvents(from,to){reads.push([from,to]);return events.slice(from,to);}};
  const user=id=>({id,role:'user',content:[{type:'text',text:id}]});

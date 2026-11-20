@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
-import {createRequire} from 'node:module';
+import {resolveDshEntry} from './dsh-launch.mjs';
 import {gunzipSync} from 'node:zlib';
 import semver from 'semver';
 import YAML from 'yaml';
@@ -61,6 +61,13 @@ export class HumanUpdateRuntime {
  constructor({profileContext,home,loadedDir=import.meta.dirname,run=runExtensionCli}){this.context=profileContext;this.home=home;this.loadedDir=loadedDir;this.run=run;}
  async inspect(){
   try{
+   if(this.context?.name==='desktop'){
+    // Desktop owns its profile, package manager, and reload lifecycle. Only
+    // report the version loaded here; its project directory may be external
+    // to DSH_HOME/profiles and belongs exclusively to the host updater.
+    const loaded=JSON.parse(await fs.readFile(path.join(this.loadedDir,'package.json'),'utf8'));
+    return {installedVersion:loaded.name===HUMAN_PACKAGE&&semver.valid(loaded.version)?loaded.version:null,profileName:'desktop',blockedReason:'UPDATE_DESKTOP_HOST_MANAGED'};
+   }
    const p=this.context;if(!p||!path.isAbsolute(p.dir??'')||!path.isAbsolute(this.home??'')||!/^[a-zA-Z0-9_-]{1,64}$/.test(p.name??''))fail('UPDATE_PROFILE_UNAVAILABLE');
    this.profile=await fs.realpath(p.dir);
    const declared=await fs.realpath(path.join(this.home,'profiles',p.name)).catch(()=>fail('UPDATE_PROFILE_UNAVAILABLE'));
@@ -78,7 +85,8 @@ export class HumanUpdateRuntime {
   }catch(e){return {installedVersion:null,blockedReason:/^UPDATE_[A-Z_]+$/.test(e.message)?e.message:'UPDATE_INSTALLATION_INVALID'};}
  }
  async cli(args,signal){
-  const require=createRequire(import.meta.url),file=require.resolve('@deepseek-ai/dsh/package.json'),pkg=JSON.parse(await fs.readFile(file)),entry=path.resolve(path.dirname(file),pkg.bin.dsh);
+  if(this.context?.name==='desktop')fail('UPDATE_DESKTOP_HOST_MANAGED');
+  const entry=resolveDshEntry(this.context.installAnchor);
   const modules=await recoveryFile(path.join(this.profile,'node_modules','.modules.yaml')),store=modules?YAML.parse(modules)?.storeDir:null;
   const storeArgs=typeof store==='string'&&path.isAbsolute(store)?['--store-dir='+(/^v\d+$/.test(path.basename(store))?path.dirname(store):store)]:[];
   return this.run({entry,home:this.home,profile:this.context.name,args:[...args,...storeArgs],signal});

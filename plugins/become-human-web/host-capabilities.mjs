@@ -98,11 +98,24 @@ export function createHostCapabilities(ctx,{getHumanSessionId,home}={}){
     if(!Array.isArray(result?.items))fail('DSH_SESSION_READ_UNAVAILABLE');
     return result.items.filter(row=>ordinaryHostSession(row)&&typeof row.sessionId==='string'&&row.sessionId!==human);
   }
+  async function inspectSession(sessionId,signal){
+    const service=controller();
+    if(typeof service.inspect==='function')return service.inspect(sessionId,signal);
+    // rc.3 exposes immutable observations through sessionQuery. Capturing the
+    // header and events does not activate an Agent for a stored session.
+    const query=ctx.get?.('sessionQuery')??ctx.sessionQuery;
+    if(typeof query?.observeSession!=='function')fail('DSH_SESSION_READ_UNAVAILABLE');
+    const observation=await query.observeSession(sessionId,{signal,projectionMode:'none'});
+    try{
+      signal.throwIfAborted();
+      return {meta:observation.header,events:observation.events};
+    }finally{observation[Symbol.dispose]();}
+  }
   async function inspectAllowed(sessionId,write,signal,expected){
     await assertAllowed(sessionId,write);assertCurrent(signal,expected);
     const rows=await visibleSessions(signal,expected);
     if(!rows.some(row=>row.sessionId===sessionId))fail('DSH_SESSION_NOT_VISIBLE');
-    const inspection=await hostRead(()=>controller().inspect(sessionId,signal));assertCurrent(signal,expected);
+    const inspection=await hostRead(()=>inspectSession(sessionId,signal));assertCurrent(signal,expected);
     if(!ordinaryHostSession(inspection?.meta))fail('CAPABILITY_SCOPE_DENIED');
     if(inspection.meta.id!==sessionId)fail('DSH_SESSION_NOT_VISIBLE');
     await assertAllowed(sessionId,write);assertCurrent(signal,expected);return inspection;
@@ -198,7 +211,7 @@ export function createHostCapabilities(ctx,{getHumanSessionId,home}={}){
       // Observe this exact turn's end, even if another task has since started.
       const until=Date.now()+4000;
       while(true){
-        const inspection=await service.inspect(sessionId,signal);assertCurrent(signal,expected);
+        const inspection=await inspectSession(sessionId,signal);assertCurrent(signal,expected);
         const end=inspection?.events?.find(event=>event.type==='turn/end'&&event.seq>turn.turnStartSeq&&event.data?.turn===turn.turn);
         if(end)return {accepted:true,status:'cancellation-requested-and-observed-turn-end',receipt,observedAt:Date.now(),observedTurnEndSeq:end.seq,endReason:end.data.reason?.kind??'unknown',pendingInboxRetained:true,taskCompleted:false,metadata:{externalModel:true},meaning:'已请求取消并观察到指定轮次结束；不表示原任务成功，也不表示后续队列已停止。'};
         if(Date.now()>=until)throw unknown(undefined,receipt);

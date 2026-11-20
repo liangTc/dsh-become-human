@@ -1,9 +1,10 @@
+import {safeStreamCounts,validStreamCount} from './runtime/model-records.mjs';
 const hidden=new Set(['apikey','token','password','authorization','headers','secret','credential','credentials','systemprompt','prompt','reasoning','reasoningtext','reasoningcontent','chainofthought','thoughtprocess','internalreasoning','rawresponse','rawcompletion']);
 export function readableRecord(value,depth=0){
  if(depth>20)return '[嵌套内容过深]';
  if(typeof value==='string')return value.replace(/([?&](?:token|api_key|access_token)=)[^\s&]+/gi,'$1[已隐藏]').replace(/sk-[\w-]{16,}/g,'[已隐藏]');
  if(Array.isArray(value))return value.map(v=>readableRecord(v,depth+1));
- if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).filter(([key])=>!hidden.has(key.toLowerCase().replace(/[_-]/g,''))).map(([key,v])=>[key,readableRecord(v,depth+1)]));
+ if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).filter(([key,v])=>key==='reasoningChars'?validStreamCount(v):!hidden.has(key.toLowerCase().replace(/[_-]/g,''))).map(([key,v])=>[key,key==='streamCounts'?safeStreamCounts(v):readableRecord(v,depth+1)]));
  return value;
 }
 export const recordLabels={id:'编号',taskId:'任务编号',roundId:'轮次编号',requestId:'请求编号',attemptId:'调用编号',eventId:'事件编号',messageId:'消息编号',memoryId:'记忆编号',noteId:'笔记编号',goalId:'目标编号',summary:'摘要',text:'内容',content:'内容',question:'本次问题',answer:'回答',result:'结果',reason:'原因',error:'错误',code:'错误码',title:'标题',name:'名称',description:'说明',status:'状态',state:'状态',kind:'类型',type:'类别',created:'创建时间',updated:'更新时间',started:'开始时间',ended:'结束时间',completed:'完成时间',time:'时间',changed:'修改时间',expires:'到期时间',version:'版本',origin:'来源',lane:'执行阶段',data:'记录内容',usage:'用量',inputTokens:'输入 token',outputTokens:'输出 token',cacheReadTokens:'缓存读取 token',cacheWriteTokens:'缓存写入 token',totalTokens:'总 token',usage_confidence:'计量依据',plan:'执行计划',candidate:'候选方向',checkpoint:'保存的进度',behaviorResult:'行为结果',refs:'依据编号',quotes:'原文摘录',evidence:'依据',sources:'来源',source:'来源',url:'来源链接',before:'修改前',after:'修改后',feedback:'反馈',annotations:'人工批注',notes:'笔记',nextAction:'下一步',why:'选择原因',value:'内容',items:'条目',changes:'变更',intent:'意图',method:'方法',outcome:'结果',expectedValue:'预期价值',failed:'失败',success:'成功',confidence:'可信程度',request:'请求',actionId:'产物编号',memoryRefs:'原记忆依据',batchId:'批次编号',summaryId:'摘要编号',memoryIds:'原记忆编号'};

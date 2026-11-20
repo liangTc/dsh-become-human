@@ -7,6 +7,7 @@ import path from 'node:path';
 import z from '@deepseek-ai/schemastery';
 import {getDshRuntimeVersion} from '@deepseek-ai/dsh-app-boot';
 import {RuntimeSupervisor} from './supervisor.mjs';
+import {rememberWebServiceHost} from './dsh-launch.mjs';
 import {saveConfiguration} from './configuration-save.mjs';
 import {RuntimeExtensions} from './extensions.mjs';
 import {HumanOnboarding} from './onboarding.mjs';
@@ -18,20 +19,33 @@ import {safeOperationCode,assertOfflineStoreUnlocked,acquireRunningLock,adoptRun
 export const name='become-human-manager';
 export const inject=['connection','webServer','sessionController','agents'];
 export const Config=z.object({sourceHome:z.string().required(false),sourceProfile:z.string().required(false),runtimeHome:z.string().required(false),runtimeProfile:z.string().required(false),runtimePort:z.number().required(false),provider:z.string().required(false),model:z.string().required(false),intervalMs:z.number().default(600000),tokenBudget:z.number().default(40000),localQuotaEnabled:z.boolean().default(false),budgetRound:z.string().default('interactive-v1'),maxTokens:z.number().required(false),maxCycles:z.number().default(1),requestTimeoutMs:z.number().required(false),interactiveOnly:z.boolean().default(true)});
+export function managerStoreHome(hostHome,profileName){
+  if(typeof hostHome!=='string'||!path.isAbsolute(hostHome))throw new Error('INVALID_MANAGER_HOME');
+  return profileName==='desktop'?path.join(hostHome,'become-human-desktop'):hostHome;
+}
 export async function apply(ctx,config){
-  const runtimeVersion=getDshRuntimeVersion();
-  const managerHome=ctx.profileContext?.home??process.env.DSH_HOME??config.sourceHome;
-  if(typeof managerHome!=='string'||!path.isAbsolute(managerHome))throw new Error('INVALID_MANAGER_HOME');
+  const profile=ctx.profileContext;
+  const hostHome=profile?.home??process.env.DSH_HOME??config.sourceHome;
+  const managerHome=managerStoreHome(hostHome,profile?.name);
+  // Web and Desktop both supply the booting CLI's manifest. An older plugin
+  // installation can retain a second app-boot peer of a different version.
+  let runtimeVersion=getDshRuntimeVersion();
+  if(profile?.installAnchor){
+    const hostPackage=JSON.parse(await fs.readFile(profile.installAnchor,'utf8'));
+    if(hostPackage.name!=='@deepseek-ai/dsh')throw new Error('INVALID_DSH_INSTALL_ANCHOR');
+    runtimeVersion=hostPackage.version;
+  }
   assertOfflineStoreUnlocked(managerHome);
   const bootstrapHome=process.env.BH_SERVICE_MANAGER_LOCK_HOME,bootstrapNonce=process.env.BH_SERVICE_MANAGER_LOCK_NONCE;delete process.env.BH_SERVICE_MANAGER_LOCK_HOME;delete process.env.BH_SERVICE_MANAGER_LOCK_NONCE;
   const managerLease=bootstrapHome===path.resolve(managerHome)&&bootstrapNonce?adoptRunningLock(managerHome,bootstrapNonce):acquireRunningLock(managerHome);let startupRuntime,startupRemote,startupIm,startupHost,startupExtensions,startupUpdater;
   try{
   const root=path.join(managerHome,'become-human-manager');await fs.mkdir(root,{recursive:true});
+  if(profile?.name&&profile.installAnchor&&profile.name!=='desktop')await rememberWebServiceHost(root,profile.name,profile.installAnchor);
   // Keep launch-time provenance private: flattened process.env may include
   // .env values that must not take precedence over managed credentials.
-  const onboarding=await HumanOnboarding.create({root,config:{...config,sourceLaunchEnvironment:ctx.get('launchEnvironment')},profileContext:ctx.profileContext??{home:managerHome},runtimeVersion});
+  const onboarding=await HumanOnboarding.create({root,config:{...config,sourceLaunchEnvironment:ctx.get('launchEnvironment')},profileContext:profile??{home:hostHome},runtimeVersion});
   const runtime=new RuntimeSupervisor(onboarding.config);
-  const hostCapabilities=createHostCapabilities(ctx,{home:managerHome,getHumanSessionId:async()=>JSON.parse(await fs.readFile(path.join(runtime.config.runtimeHome,'become-human/agent.json'),'utf8')).sessionId});
+  const hostCapabilities=createHostCapabilities(ctx,{home:hostHome,getHumanSessionId:async()=>JSON.parse(await fs.readFile(path.join(runtime.config.runtimeHome,'become-human/agent.json'),'utf8')).sessionId});
   startupHost=hostCapabilities;
   runtime.capabilityHandler=(packet,signal)=>{hostCapabilities.configure(packet.context.policy,{revision:packet.context.policyRevision});return hostCapabilities.handle(packet,signal);};
   startupRuntime=runtime;
@@ -39,7 +53,7 @@ export async function apply(ctx,config){
   onboarding.attach(runtime,input=>remote.controlRuntime(input));
   startupRemote=remote;startupIm=im;
   const extensions=await new RuntimeExtensions({root,runtime,remote}).init();startupExtensions=extensions;const pageBridge=new ExtensionPageBridge(extensions,runtime);
-  const updater=await new HumanUpdater({root,adapter:new HumanUpdateRuntime({home:managerHome,profileContext:ctx.profileContext}),runtime,remote,runningVersion:manifest.version,dshVersion:runtimeVersion}).init();startupUpdater=updater;
+  const updater=await new HumanUpdater({root,adapter:new HumanUpdateRuntime({home:hostHome,profileContext:profile}),runtime,remote,runningVersion:manifest.version,dshVersion:runtimeVersion}).init();startupUpdater=updater;
   ctx.provide('becomeHumanImIngress',im);
   ctx.plugin(FullImPlugin,{dshHome:path.join(root,'im-home')});
   ctx.provide('becomeHumanRemote',Object.freeze({contractVersion:1,registerAdapter:(kind,adapter)=>remote.register(kind,adapter),receive:(channelId,envelope)=>remote.receive(channelId,envelope)}));
@@ -134,8 +148,8 @@ export async function apply(ctx,config){
   }});
   serve('/become-human','./runtime/panel.html','text/html',async html=>html.replace('</main>',(await fs.readFile(new URL('./remote-panel.html',import.meta.url),'utf8'))+'</main>').replace('</body>','<script src="/become-human-remote.js" defer></script></body>'));
   serve('/become-human-client.js','./runtime/client.js','text/javascript');serve('/become-human-remote.js','./remote-client.js','text/javascript');
-  await fs.writeFile(path.join(root,'launch.json'),JSON.stringify({url:ctx.connection.authenticatedUrl('http://127.0.0.1:'+ctx.webServer.port+'/')}));
-  ctx.effect(()=>async()=>{closing=true;clearTimeout(tick);runtime.recordLifecycle('manager-shutdown-requested');await im.close();await operations.catch(error=>runtime.recordLifecycle('manager-control-failed-on-close',{code:safeOperationCode(error,'MANAGER_CONTROL_FAILED')}));await updater.close();await extensions.close();await hostCapabilities.close();await remote.close();await runtime.close();releaseRunningLock(managerLease);});
+  if(profile?.name!=='desktop')await fs.writeFile(path.join(root,'launch.json'),JSON.stringify({url:ctx.connection.authenticatedUrl('http://127.0.0.1:'+ctx.webServer.port+'/')}));
+  ctx.effect(()=>async()=>{closing=true;clearTimeout(tick);if(runtime.runtimeLease)runtime.recordLifecycle('manager-shutdown-requested');await im.close();await operations.catch(error=>runtime.recordLifecycle('manager-control-failed-on-close',{code:safeOperationCode(error,'MANAGER_CONTROL_FAILED')}));await updater.close();await extensions.close();await hostCapabilities.close();await remote.close();await runtime.close();releaseRunningLock(managerLease);});
   }catch(error){
     let stopped=true;for(const component of [startupUpdater,startupExtensions,startupHost,startupIm,startupRemote,startupRuntime])if(component)try{await component.close();}catch(closeError){stopped=false;startupRuntime?.recordLifecycle('manager-start-cleanup-failed',{code:safeOperationCode(closeError,'MANAGER_CLEANUP_FAILED')});}
     if(stopped)releaseRunningLock(managerLease);throw error;

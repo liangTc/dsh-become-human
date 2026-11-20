@@ -1,36 +1,44 @@
 # 安装与升级
 
-> **测试版 0.7.0-beta.41。** [GitHub Release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.41) · [npm 安装包](https://www.npmjs.com/package/dsh-become-human-web/v/0.7.0-beta.41) · [本版发行说明](https://github.com/liangTc/dsh-become-human/blob/v0.7.0-beta.41/docs/RELEASE_BETA41.md)
+> **测试版 0.7.0-beta.43。** [GitHub Release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.43) · [npm 安装包](https://www.npmjs.com/package/dsh-become-human-web/v/0.7.0-beta.43) · [本版发行说明](https://github.com/liangTc/dsh-become-human/blob/v0.7.0-beta.43/docs/RELEASE_BETA43.md)
 
 [返回首页](../README.md) · [配置说明](CONFIGURATION.md) · [使用指南](USAGE.md) · [测试状态](TESTING_STATUS.md)
 
-> [!WARNING]
-> **`0.7.0-beta.41` 是测试版本（Prerelease），尚未开发完成。** 本页是公开发行的安装流程，不表示干净机器安装与全部能力已完成验收。
-
-本页公开下载链接指向 beta.41 组合包；源码构建使用所下载源码的版本，以 `package.json` 为准，两者不可混用。beta.41 组合包见本页顶部发行链接。历史 beta.4 包仍可查阅，但不包含 beta.5 的新增能力。原生 DeepSeek 最终发行包的全新安装整链仍保留待测；发布测试包不等于该流程已经通过。
-
-**已知问题：** beta.5 首次创建 Human 可能因初始化顺序失败；修复自 beta.6 起进入开发源码。需要后续修复、可选行为包和扩展页面时，请按下方步骤构建对应开发源码，并核对版本与测试记录。最新干净安装仍需单独验收。
+**本版仍在测试。** Windows 上的独立 profile 已验证首次安装与冷重启。原生 DeepSeek 的新机器无缓存安装、真实供应商调用及长期运行仍有待验证。
 
 ## 支持范围
 
 | 项目 | 当前要求 |
 | --- | --- |
 | 操作系统 | Windows；密钥保护使用 Windows DPAPI，Linux / macOS 尚未完成适配 |
-| Node.js | 24 或以上 |
-| DeepSeek Harness | **0.2.0-rc.2**，当前代码会拒绝其他版本 |
-| DSH profile | `web` |
+| Node.js | Web 使用 Node.js 24 或更高版本，Desktop 使用应用自带的运行环境 |
+| DeepSeek Harness | 官方 Windows Desktop `0.2.2-rc.3` 或 `0.2.2-rc.5`，Windows Web `0.2.0-rc.2` |
+| DSH profile | Web 选择 `web`，Desktop 使用宿主提供的 `desktop` |
 | 安装单元 | `plugins/become-human-web` 生成的组合包 |
 | 模型 | 源 DSH profile 的兼容第三方模型或 DSH 原生 DeepSeek API Key 通道；原生全新安装整链待测 |
 
-当前实机验证环境为 **Windows + Node.js 24 + DSH `0.2.0-rc.2` 的 `web` profile**，包括已有安装升级、模型与微信流程；这不代表所有系统、干净机器或全部渠道均已验收。
+Desktop 首次设置可选择宿主模型，退出并重新启动后回到原会话。Web 版也验证了首次安装与常驻入口重启。[验收记录](TESTING_STATUS.md)
 
 先使用独立数据目录尝试，再决定是否用于长期运行。源码内的 `plugins/become-human` 是内部运行模块，**不要把它单独安装到日常 DSH profile**；其隔离配置会禁用普通工具与默认 Agent 循环。
 
 安装流程是：**安装一个组合包 → 打开 Human 完成首次设置 → 创建并启动**。组合包已经包含后台代码；插件自动准备专用运行目录和内部 profile，复用宿主的 Node 与 DSH 启动后台，无需另装第二套 Human 程序。
 
-安装入口为 [v0.7.0-beta.41 测试发行](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.41) 的预构建 `.tgz` 与 SHA-256 文件。npm beta.41 已发布；社区登记的提交或合并不替代本页的版本与安装要求。
+下载并保留与版本对应的 `.tgz` 与 SHA-256 文件。[beta.43 Release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.43)
 
-## 1. 准备 DSH 与模型
+<a id="desktop-windows"></a>
+
+## 在 Windows Desktop 安装
+
+1. 在官方 DSH Desktop 的「关于」确认版本为 `0.2.2-rc.3` 或 `0.2.2-rc.5`，在宿主的模型设置中配置要使用的模型。
+2. 下载 `dsh-become-human-web-0.7.0-beta.43.tgz`，并用同版 `.sha256` 核对文件。[安装包](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.43/dsh-become-human-web-0.7.0-beta.43.tgz) · [SHA-256](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.43/dsh-become-human-web-0.7.0-beta.43.tgz.sha256)
+3. 从 Desktop 左侧进入「插件 → 添加插件」，在「包名或地址」填入安装包的**绝对路径**，点击「安装」，再选择「立即启用」。若宿主提示重启，退出并重新打开 Desktop。
+4. 从左侧栏打开 **Human**，选择宿主模型并完成首次设置。Desktop 使用应用自带的 Electron/Node 和 DSH 启动独立后台。以后在 Desktop 的插件管理中更新。
+
+完全退出 Desktop 时，它启动的 Human 后台会一同退出。下次打开会恢复这次会话。需要全天在线时，可以让 Desktop 持续运行，或使用现有 Web 常驻方案。
+
+**已有 Web Human 的用户**：Desktop 首次打开会创建自己的 Human。Web 继续使用 `DSH_HOME/become-human-manager`，Desktop 使用 `DSH_HOME/become-human-desktop/become-human-manager`。即使共用 DSH 数据根目录，各自的会话、运行锁及 IM 绑定也分别保存。无需移动 Web 的数据或解除微信绑定。直接将现有 Web Human 迁入 Desktop 的流程尚未提供。
+
+## 1. 准备 DSH Web 与模型
 
 在 PowerShell 中启动指定版本：
 
@@ -62,7 +70,7 @@ npx @deepseek-ai/dsh@0.2.0-rc.2 web
 停止要更新的 DSH 服务后执行（与下方 `.tgz` 方式二选一）：
 
 ```powershell
-npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add dsh-become-human-web@0.7.0-beta.41 --registry=https://registry.npmjs.org/
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add dsh-become-human-web@0.7.0-beta.43 --registry=https://registry.npmjs.org/
 ```
 
 安装后直接进入第 4 步启动与配置，无需重复安装本地包。首次发布时镜像可能延迟，示例指定 npm 官方仓库。
@@ -71,16 +79,16 @@ npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add dsh-become-human-web@0.
 
 ### 使用预构建包
 
-从 [v0.7.0-beta.41 Release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.41) 下载以下两个附件，并保存到同一目录：
+从 [v0.7.0-beta.43 Release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.43) 下载以下两个附件，并保存到同一目录：
 
-- [dsh-become-human-web-0.7.0-beta.41.tgz](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.41/dsh-become-human-web-0.7.0-beta.41.tgz)
-- [dsh-become-human-web-0.7.0-beta.41.tgz.sha256](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.41/dsh-become-human-web-0.7.0-beta.41.tgz.sha256)
+- [dsh-become-human-web-0.7.0-beta.43.tgz](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.43/dsh-become-human-web-0.7.0-beta.43.tgz)
+- [dsh-become-human-web-0.7.0-beta.43.tgz.sha256](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.43/dsh-become-human-web-0.7.0-beta.43.tgz.sha256)
 
 在该目录打开 PowerShell，校验后再安装：
 
 ```powershell
-$humanExpectedSha = ((Get-Content -LiteralPath './dsh-become-human-web-0.7.0-beta.41.tgz.sha256' -Raw).Trim() -split '\s+')[0]
-$humanActualSha = (Get-FileHash -LiteralPath './dsh-become-human-web-0.7.0-beta.41.tgz' -Algorithm SHA256).Hash
+$humanExpectedSha = ((Get-Content -LiteralPath './dsh-become-human-web-0.7.0-beta.43.tgz.sha256' -Raw).Trim() -split '\s+')[0]
+$humanActualSha = (Get-FileHash -LiteralPath './dsh-become-human-web-0.7.0-beta.43.tgz' -Algorithm SHA256).Hash
 if ($humanExpectedSha -notmatch '^[a-fA-F0-9]{64}$' -or $humanActualSha -ine $humanExpectedSha) {
   throw '安装包校验失败，请重新核对下载来源和文件。'
 }
@@ -106,14 +114,14 @@ npm run release:package
 
 以上命令构建开发分支，不承诺与公开 Release 相同的验收状态。若需复现历史 beta.5 源码，可将克隆分支改为 `v0.7.0-beta.5`。不要混用不同版本的安装包和校验文件。
 
-本版 Release 另附 `dsh-human-learning-0.2.0.tgz` 和 `dsh-human-experience-0.1.0.tgz` 及各自 SHA-256 文件。按需下载并校验后，在 **插件 → 安装与管理** 安装可信本地包；已有学习包需更新为 0.2.0 才有专属设置页面。也可使用 `npm run release:behaviors` 自行打包；这不是从 npm 安装同名公开包。学习包安装后默认停用，需要分别启用扩展和学习设置，旧笔记不会因此删除。包协议、信任边界和配置见[行为扩展 API](BEHAVIOR_API.md)。
+可选行为包可以用 `npm run release:behaviors` 构建。产物为 `dsh-human-learning-0.2.0.tgz` 和 `dsh-human-experience-0.1.0.tgz` 及各自的 SHA-256 文件。校验后，在 **插件 → 安装与管理** 安装可信本地包。学习包从 0.2.0 起提供专属设置页，首次安装默认停用。需要学习时，分别启用该扩展和学习设置。包协议、信任边界和配置见[行为扩展 API](BEHAVIOR_API.md)。
 
 ## 3. 安装到 web profile
 
 在安装包所在目录执行，文件名替换为实际文件名：
 
 ```powershell
-npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./dsh-become-human-web-0.7.0-beta.41.tgz
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./dsh-become-human-web-0.7.0-beta.43.tgz
 ```
 
 这是 DSH 官方组合包安装路径，会更新 profile 的依赖与 bundle 列表。不要用普通 `npm install` 代替 profile 注册，也不要只复制 `manager.mjs`。[官方打包与安装说明](https://deepseek-harness.github.io/deepseek-harness/develop/basic/publish) 说明了 `.tgz`、本地目录和 profile 的区别。

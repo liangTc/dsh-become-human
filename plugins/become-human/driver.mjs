@@ -3,7 +3,8 @@ import {HumanPlugins} from './plugin-lifecycle.mjs';
 import {logSafe} from './model-records.mjs';
 import {DatabaseSync} from 'node:sqlite';
 import {createHash} from 'node:crypto';
-import {modelFailureDiagnostic,saveModelFailure,clearModelFailure} from './model-failure.mjs';
+import {modelFailureDiagnostic,saveModelFailure,clearModelFailure,transientModelFailure} from './model-failure.mjs';
+import {ModelStreamOutput} from './model-stream.mjs';
 import {Service,createScope,agentEvents,z,createAssistantMessage,interruptedTurnClosers} from './api.mjs';
 import {DomainMemory} from './domain.mjs';
 import {RelationshipChoice} from './relationship-choice.mjs';
@@ -466,6 +467,10 @@ export class HumanAgent {
     if(reminderOnly&&!this.inbox.nextTurn.length&&!this.inbox.nextStep.length)return;
     const ownerPending=this.inbox.nextTurn.length||this.inbox.nextStep.length;
     if(!ownerPending&&!manualCheck&&quietUntil(this.factory.autonomy.settings(this.id))!==null)return;
+    if(!ownerPending&&this.factory.journal.value(this.id,'remaining',0)===null){
+      const retry=this.factory.journal.value(this.id,'autonomyModelBackoff',null);
+      if(retry?.until>Date.now())return;
+    }
     if(!ownerPending&&this.factory.journal.value(this.id,'remaining',0)===null&&await runWorkObservation(this,signal))return;
     if(!ownerPending&&this.factory.journal.value(this.id,'remaining',0)===null&&await runDevelopmentReview(this,signal))return;
     if(this.factory.autonomy.settings(this.id).enabled||this.factory.config.interactiveOnly&&ownerPending)return runAutonomyTurn(this,signal);
@@ -485,6 +490,8 @@ export class HumanAgent {
     if(remaining!==null&&remaining<=0){journal.set(this.id,'paused');return;}
     const turn=(this.ctx.sessionProjections.stateOf(this.session,'turnBoundary')?.lastTurn??0)+1;
     let entered=false,rid,usage,finish,dispatched=false,staged=false,countedCycle=false,admitted=[],ownerBatch,text='',reasoningChars=0,requestSignal,outcome='failed',errorCode,failureFacts,reason={kind:'completed'};
+    const output=new ModelStreamOutput();
+    let readingModel=false;
     this.session.append('turn/start',{turn});
     try{
       // Legacy text turns use the base route; reject an incompatible native
@@ -523,13 +530,14 @@ export class HumanAgent {
       journal.dispatchAttempt(rid,prepared.config);dispatched=true;
       await this.factory.allowCall(requestSignal,{agent:this.id,rid,epoch,config:prepared.config,messages});
       journal.audit(this.id,'dispatch',{attemptId:rid,turn,epoch,provider:prepared.config.provider,model:prepared.config.model,maxTokens:prepared.config.maxTokens,reasoningEffort:prepared.config.reasoningEffort,reserved:amount,promptBytes:Buffer.byteLength(JSON.stringify(messages),'utf8'),admittedIds:admitted.map(m=>m.id)});
+      readingModel=true;
       for await(const chunk of prepared.stream({...prepared.config,messages,signal:requestSignal})){
-        if(chunk.type==='text-delta')text+=chunk.text;
-        if(chunk.type==='reasoning-delta')reasoningChars+=chunk.text.length;
+        output.push(chunk);
         if(chunk.type==='usage')usage=chunk.usage;
         if(chunk.type==='finish')finish=chunk.reason;
       }
       signal.throwIfAborted();requestSignal.throwIfAborted();
+      if(!finish)throw Object.assign(new Error('Stream ended without finish_reason'),{code:'MODEL_EXECUTION_FAILED'});
       if(finish?.kind!=='stop'){
         const f=finish?.failure,description=String(f?.message??'').toLowerCase();
         failureFacts=f?{code:f.code,status:f.status,mentionsThinking:/thinking|reasoning/.test(description),mentionsAuth:/credential|api.?key|unauthorized/.test(description),mentionsQuota:/quota|balance|credit|insufficient/.test(description),mentionsMessages:/message|system|role/.test(description),mentionsNetwork:/fetch|connect|network|socket|certificate|proxy/.test(description)}:undefined;
@@ -537,7 +545,9 @@ export class HumanAgent {
       }
       if(this.desired().desired!=='running'||this.desired().epoch!==epoch)throw new Error('STALE_RESULT');
       if(this.factory.domain.persona(this.id).version!==persona.version)throw new Error('STALE_PERSONA');
-      if(!text.trim())throw new Error('EMPTY_MODEL_OUTPUT');
+      ({text,reasoningChars}=output);
+      if(!text.trim())throw Object.assign(new Error('EMPTY_MODEL_OUTPUT'),{code:'EMPTY_MODEL_OUTPUT'});
+      readingModel=false;
       const kind=text.trim()==='[WAIT]'?'WAIT':'MESSAGE';
       journal.audit(this.id,'decision',{epoch,kind});
       const data=kind==='MESSAGE'?{turn,step:1,message:createAssistantMessage({content:[{type:'text',text}],source:{provider:prepared.config.provider,model:prepared.config.model}}),stream:[],...(usage?{usage}:{})}:null;
@@ -557,19 +567,27 @@ export class HumanAgent {
       journal.put(this.id,'lastError',null);
       clearModelFailure(journal,this.id,'foreground');
     }catch(e){
+      ({text,reasoningChars}=output);
       errorCode=signal.aborted?'USER_STOPPED':requestSignal?.aborted?'REQUEST_TIMEOUT':typeof e.code==='string'?e.code:'DRIVER_ERROR';
       if(!signal.aborted&&!staged){
-        const diagnostic=modelFailureDiagnostic(finish?.failure??e,errorCode);
-        failureFacts={...failureFacts,diagnostic};
+        const streamFacts=output.facts(text);
+        const diagnostic=modelFailureDiagnostic(finish?.failure??e,errorCode,streamFacts);
+        failureFacts={...failureFacts,...streamFacts,streamFinish:finish?.kind??null,diagnostic};
         const route=rid?JSON.parse(journal.db.prepare('SELECT config FROM attempt WHERE id=?').get(rid)?.config??'{}'):config;
-        saveModelFailure(journal,this.id,{at:Date.now(),attemptId:rid??null,lane:'foreground',provider:route.provider,model:route.model,code:errorCode,...diagnostic,streamFinish:finish?.kind??null});
+        saveModelFailure(journal,this.id,{at:Date.now(),attemptId:rid??null,lane:'foreground',provider:route.provider,model:route.model,code:errorCode,...diagnostic,streamFinish:finish?.kind??null,...streamFacts});
       }
       outcome=signal.aborted?'cancelled':errorCode==='OUTPUT_LIMIT'?'output-limit':'failed';
       reason=signal.aborted?(this.cause?.kind==='owner-supplement'?{kind:'completed'}:{kind:'aborted',reason:this.cause??{kind:'user'}}):{kind:'error',error:{code:'HUMAN_DRIVER_ERROR',message:e.code??e.name}};
       if(signal.aborted)restoreOwnerBatch(this,ownerBatch);else if(ownerBatch)journal.put(this.id,'ownerBatch',{...ownerBatch,failed:true});
       journal.audit(this.id,'failure',{attemptId:rid,code:errorCode,aborted:signal.aborted});
       // Keep provider bodies and credentials out of public errors.
-      if(!signal.aborted){this.lastError=errorCode;journal.put(this.id,'lastError',this.lastError);journal.set(this.id,'paused');journal.put(this.id,'stopReason','error');this.wake=false;clearTimeout(this.timer);this.timer=undefined;}
+      if(!signal.aborted){
+        this.lastError=errorCode;journal.put(this.id,'lastError',this.lastError);
+        const canContinue=readingModel&&admitted.length>0&&!staged&&transientModelFailure({code:errorCode,...failureFacts?.diagnostic});
+        if(!canContinue){
+          journal.set(this.id,'paused');journal.put(this.id,'stopReason','error');this.wake=false;clearTimeout(this.timer);this.timer=undefined;
+        }
+      }
     }finally{
       const usageConfidence=!signal.aborted&&usage&&['stop','length','max-tokens'].includes(finish?.kind)?'reported':dispatched?'unknown':'not-dispatched';
       if(rid&&!staged){if(dispatched)journal.settle(rid,usageConfidence==='reported'?usage.inputTokens+(usage.cacheReadTokens??0)+(usage.cacheWriteTokens??0)+usage.outputTokens:undefined);else journal.release(rid);

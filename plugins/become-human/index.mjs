@@ -9,6 +9,7 @@ import path from 'node:path';
 import z from '@deepseek-ai/schemastery';
 import {conversationPolicy,conversationalText,conversationOptions} from './conversation.mjs';
 import {getDshRuntimeVersion} from '@deepseek-ai/dsh-app-boot';
+import {supportedRuntimeVersion} from './dsh-compatibility.mjs';
 import {HumanFactory} from './driver.mjs';
 import {DeletionLab} from './deletion.mjs';
 import {SessionRetirement} from './retirement.mjs';
@@ -29,7 +30,7 @@ export async function apply(ctx,config){
     scoped.effect(()=>()=>{expressionRegistryRegistered=false;});
   });
   const runtimeVersion=getDshRuntimeVersion();
-  if(runtimeVersion!=='0.2.0-rc.2')throw new Error('Unsupported DSH runtime version');
+  if(!supportedRuntimeVersion(runtimeVersion))throw new Error('UNSUPPORTED_DSH_VERSION');
   const storage=ctx.sessionPersistence;if(typeof storage.guard!=='function')throw new Error('P0_REQUIRES_GUARDED_STORAGE');await storage.ready;
   if(!Number.isInteger(config.intervalMs)||config.intervalMs<5000||config.intervalMs>3600000)throw new Error('Invalid interval');
   if(!Number.isInteger(config.maxCycles)||config.maxCycles<0||config.maxCycles>2880)throw new Error('Invalid cycles');
@@ -107,6 +108,7 @@ export async function apply(ctx,config){
         inbox:agent.inbox.nextStep.length+agent.inbox.nextTurn.length,canThink:true,stopReason:journal.value(id,'stopReason',null),pauseRevision:journal.value(id,'pauseRevision',0),lastError:journal.value(id,'lastError',null),
         ownerInputRevision:journal.db.prepare('SELECT COALESCE(max(rowid),0) AS n FROM user_request WHERE agent=?').get(id).n,latestSeq:journal.db.prepare('SELECT COALESCE(max(seq),0) AS n FROM outbox WHERE agent=?').get(id).n,
         driveMode:journal.value(id,'driveMode','bounded'),cycleLimit:journal.value(id,'driveMode','bounded')==='continuous'?null:settings.enabled?1:config.maxCycles||null,autonomy:autonomyBrief};
+      autonomyBrief.modelRetryAt=journal.value(id,'autonomyModelBackoff',null)?.until??null;
       const run=runStatus(brief);
       if(mode==='runtime-status')return {...brief,run,management:{data:factory.management.dataSettings(id)}};
       const rows=journal.db.prepare('SELECT * FROM outbox WHERE agent=? ORDER BY seq DESC LIMIT 30').all(id).reverse().map(row=>{const request=row.event_key?.startsWith('user:')?journal.db.prepare('SELECT request_id FROM user_request WHERE agent=? AND message_id=?').get(id,row.event_key.slice(5)):null;return {...row,attachments:row.kind==='user'?factory.media.messageDescriptors(id,row.event_key?.slice(5)):[],origin:request?journal.value(id,'origin:'+request.request_id,'web'):row.kind==='status'?'system':'agent'};});
@@ -122,7 +124,7 @@ export async function apply(ctx,config){
         management:{profile:{name:factory.management.profile(id).name},revision:factory.management.revision(id),execution:{conversation:conversationSettings(journal,id)}}};
       const attempts=journal.db.prepare("SELECT id,turn,state,trigger,config,usage,usage_confidence,error,text_chars,reasoning_chars,failure_facts,started,ended,json_extract(CASE WHEN json_valid(request) THEN request ELSE '{}' END,'$.purpose') AS purpose FROM attempt WHERE agent=? ORDER BY started DESC LIMIT 8").all(id);
       const modelFailures=journal.value(id,'modelFailures',{});
-      const autonomy={...factory.autonomy.snapshot(id),learningPack:{available:!!factory.learningPack.provider,active:factory.learningPack.available(factory.autonomy.settings(id))}},autonomyEnabled=autonomy.settings.enabled;
+      const autonomy={...factory.autonomy.snapshot(id),modelRetryAt:autonomyBrief.modelRetryAt,learningPack:{available:!!factory.learningPack.provider,active:factory.learningPack.available(factory.autonomy.settings(id))}},autonomyEnabled=autonomy.settings.enabled;
       return lastSafeState={...brief,publicSources:factory.publicSources.status(),workObservation:factory.workObservation.indicator(id),plugin:'dsh-become-human',run,expression:expressionStatus(expressionRegistryRegistered),management:factory.management.snapshot(id),revision:journal.db.prepare('SELECT total_changes() AS n').get().n+storage.ledger.rows.length,runtime:runtimeVersion,reasoningEffort:config.reasoningEffort??'provider-default',retryableInput:retryIds().length>0,localQuotaEnabled:false,modelLimitPolicy:'host-provider-defaults',used:storage.ledger.used()-storage.ledger.budget.base,cumulativeUsed:storage.ledger.used(),budgetRound:journal.value(id,'budgetRound','legacy'),budget:null,remaining:journal.value(id,'remaining',0),longRun:journal.longRunStats(id),successes:journal.value(id,'successes',0),intervalMs:factory.config.intervalMs,interactiveOnly:autonomyEnabled?false:config.interactiveOnly,lastUsage:journal.value(id,'lastUsage',null),lastUsageConfidence:journal.value(id,'lastUsageConfidence','legacy-unverified'),persona:factory.domain.persona(id).core,memory:journal.value(id,'memory','尚无简记。'),receipt:journal.value(id,'receipt',0),messages:rows,attempts,modelFailures,responseRecovery:{pending:journal.staged(id).length,committed:journal.db.prepare("SELECT count(*) AS n FROM response_stage WHERE agent=? AND state='committed'").get(id).n},deletion:{...deletionLab.status(),preview:deletionPreview?.expires>Date.now()?deletionPreview:null},safety:storage.ledger.status(),retirement:{operations:retirement.status(),preview:retirementPreview?.expires>Date.now()?retirementPreview:null},memories:factory.domain.list(id,{limit:20}),personaState:factory.domain.persona(id),goals:factory.domain.context(id).goals,reminders:factory.reminders.list(id),autonomy,modelGate:{inflight:factory.inflight,unbudgetedCalls:'denied',tools:autonomyEnabled?'public-research-and-exact-approved-report':'disabled',nativeUpload:'disabled',fork:'disabled',embedding:'disabled'},audit:journal.db.prepare('SELECT seq,kind,data FROM audit WHERE agent=? ORDER BY seq DESC LIMIT 12').all(id)};
     }
     let operations=Promise.resolve();
@@ -191,11 +193,15 @@ export async function apply(ctx,config){
         factory.autonomy.clearDeferral(id,task.checkpoint);
         if(task.kind==='research'){delete checkpoint.discovery;delete checkpoint.researchReads;checkpoint.source=null;}
         factory.autonomy.clearDeferral(id,checkpoint);
-        factory.autonomy.update(task.id,'ready',checkpoint);journal.put(id,'autonomyPaused',false);journal.put(id,'autonomyError',null);journal.put(id,'autonomyPhase','waiting');journal.put(id,'autonomyWait',null);
+        factory.autonomy.update(task.id,'ready',checkpoint);journal.put(id,'autonomyPaused',false);journal.put(id,'autonomyError',null);journal.put(id,'autonomyModelBackoff',null);journal.put(id,'autonomyPhase','waiting');journal.put(id,'autonomyWait',null);
         factory.autonomy.event(id,'owner-retry:'+task.id+':'+Date.now(),'owner-retry',{taskId:task.id});
       }else if(['autonomy-pause','autonomy-resume'].includes(input.op)){
         journal.put(id,'autonomyPaused',input.op==='autonomy-pause');
-        if(input.op==='autonomy-resume')journal.put(id,'autonomyError',null);
+        if(input.op==='autonomy-resume'){
+          journal.put(id,'autonomyError',null);
+          journal.put(id,'autonomyModelBackoff',null);
+          if(journal.value(id,'autonomyWait',null)==='model-backoff')journal.put(id,'autonomyWait',null);
+        }
         if(input.op==='autonomy-pause'&&agent.active&&agent.activeLane!=='foreground'){journal.set(id,agent.desired().desired);journal.put(id,'autonomyPhase','preempting');agent.cancelController?.abort({kind:'user'});}
       }else if(input.op==='autonomy-grant'){
         await factory.autonomy.grant(id,input);

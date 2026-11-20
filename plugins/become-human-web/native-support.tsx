@@ -3,7 +3,7 @@ import {useDraftGuard} from './native-shell';
 
 export function Recovery({api,s,ui}:any){
   const {Button,Band}=ui,health=s?.manager?.health;
-  return <section className="hn-group"><h3>运行恢复</h3><Band>状态：{s?.manager?.error??s?.lastError??(s?.stopReason==='user'?'主人已暂停':s?.stopReason)??(s?.status==='unavailable'?'运行模块不可用':s?.desired==='running'?'运行正常':'已暂停')}。重启运行模块后保持暂停，需明确恢复；失败模型任务和未知投递不会自动重试。</Band>{health?.lastExit&&<p>最近退出：{new Date(health.lastExit.at).toLocaleString()} · 退出码 {health.lastExit.exitCode??'未知'} · 信号 {health.lastExit.signal??'无'}</p>}<Button disabled={api.snapshot.busy||s?.agentBusy} onClick={()=>api.run(()=>api.control({op:'runtime-restart'}),'运行模块已重启，保持暂停')}>重启运行模块</Button><Button onClick={()=>api.refresh()}>重新读取状态</Button></section>;
+  return <section className="hn-group"><h3>运行恢复</h3><Band>状态：{s?.manager?.error??(s?.status==='unavailable'?'运行模块不可用':s?.run?.text??(s?.desired==='running'?'正在运行':'已暂停'))}。手动重启运行模块后，需要手动恢复运行。</Band>{health?.lastExit&&<p>最近退出：{new Date(health.lastExit.at).toLocaleString()} · 退出码 {health.lastExit.exitCode??'未知'} · 信号 {health.lastExit.signal??'无'}</p>}<Button disabled={api.snapshot.busy||s?.agentBusy} onClick={()=>api.run(()=>api.control({op:'runtime-restart'}),'运行模块已重启，保持暂停')}>重启运行模块</Button><Button onClick={()=>api.refresh()}>重新读取状态</Button></section>;
 }
 
 export function Readiness({api,s,ui,onSection,initialOpen=false}:any){

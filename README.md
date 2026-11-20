@@ -8,12 +8,11 @@
 
 让数字人生活在 DSH 中：记住共同经历，形成自己的倾向，在事件循环中选择做什么，再通过插件获得新的能力。
 
-> **测试版 `0.7.0-beta.41` · 持续开发中。** [GitHub Release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.41) · [npm 安装包](https://www.npmjs.com/package/dsh-become-human-web/v/0.7.0-beta.41) · [本版验证范围](docs/RELEASE_BETA41.md)
+> **测试版 `0.7.0-beta.43` · 持续开发中。** [GitHub Release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.43) · [npm 安装包](https://www.npmjs.com/package/dsh-become-human-web/v/0.7.0-beta.43) · [本版验证范围](docs/RELEASE_BETA43.md)
 
 [English](README.en.md) · [安装指南](docs/INSTALLATION.md) · [使用指南](docs/USAGE.md) · [配置说明](docs/CONFIGURATION.md) · [测试状态](docs/TESTING_STATUS.md)
 
-> [!WARNING]
-> **测试版，持续开发中。** 支持 Windows、Node.js 24+ 和 DSH `0.2.0-rc.2` 的 Web profile。已验证从公开 beta.40 升级及冷重启；无缓存新装与多日运行仍待验收。
+**支持的 Windows 宿主**为 DSH Desktop `0.2.2-rc.3`、`0.2.2-rc.5`，以及使用 Node.js 24+ 的 DSH Web `0.2.0-rc.2`。Desktop 从左侧「插件 → 添加插件」安装。[Desktop 安装步骤](docs/INSTALLATION.md#desktop-windows)
 
 ## 它是什么
 
@@ -84,18 +83,20 @@ Become Human 是面向 DSH 的数字人插件，包含 Web 管理界面和独立
 
 | 来源 | 当前状态 |
 | --- | --- |
-| 本版源码 `0.7.0-beta.41` | 修复聊天重试、长期记忆、额度与扩展恢复，可从对应标签自行构建 |
+| `0.7.0-beta.43` | Web 和 Desktop 共用安装包，包含自主选题短暂失败后的自动退避与恢复 |
 | [历史测试发行 `0.7.0-beta.5`](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.5) | 提供 `.tgz` 与 SHA-256，但存在首次创建 Human 可能失败的已知初始化问题；修复已进入后续源码 |
-| [npm](https://www.npmjs.com/package/dsh-become-human-web/v/0.7.0-beta.41) | 已发布 0.7.0-beta.41，推荐固定版本安装；仍为测试版 |
+| [npm](https://www.npmjs.com/package/dsh-become-human-web/v/0.7.0-beta.43) | 固定版本安装 `0.7.0-beta.43` 测试版 |
 
-**首次体验请优先使用 beta.41 组合包，或由对应源码构建。** 本地源码、GitHub 分支与 Release 可能不同步，先核对下载源码的 `package.json`；源码 ZIP 本身不是插件安装包。
+GitHub Release 提供可直接安装的 `.tgz` 和配套 SHA-256。需要从源码构建时，请选择同名版本标签。
 
-### 2. 从 npm 安装
+### 2. 安装插件
 
-先配置宿主 DSH 的模型，升级前备份并停止对应服务。执行：
+**Desktop**：下载组合包，在左侧「插件 → 添加插件」中填入文件的绝对路径，安装并启用。按提示重启后从侧栏打开 Human。[下载 beta.43 组合包](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.43/dsh-become-human-web-0.7.0-beta.43.tgz)
+
+**Web**：先在宿主中配置模型。升级前备份并停止对应服务，然后执行以下命令。
 
 ```powershell
-npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add dsh-become-human-web@0.7.0-beta.41 --registry=https://registry.npmjs.org/
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add dsh-become-human-web@0.7.0-beta.43 --registry=https://registry.npmjs.org/
 npx @deepseek-ai/dsh@0.2.0-rc.2 web --no-open
 ```
 

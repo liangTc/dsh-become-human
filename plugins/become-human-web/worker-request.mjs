@@ -13,7 +13,7 @@ export async function workerRequest({base,cookie,resource,body,sameWorker,fetche
       try{
         response=await fetcher(base+'/api/become-human/'+resource,{...(body?{method:'POST',body:JSON.stringify(body)}:{}),headers:{cookie,...(body?{'Content-Type':'application/json'}:{})},redirect:'error',signal});
         const raw=await response.text();
-        try{data=JSON.parse(raw);}catch{throw Error('WORKER_RESPONSE_INVALID');}
+        try{data=JSON.parse(raw);}catch{if(response.ok)throw Error('WORKER_RESPONSE_INVALID');}
       }catch(error){
         if(signal.aborted)throw Error('WORKER_REQUEST_TIMEOUT');
         if(error instanceof TypeError)throw Error('WORKER_CONNECTION_FAILED');
