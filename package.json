@@ -8,6 +8,7 @@
     "node": ">=24"
   },
   "scripts": {
+    "docs:build": "node scripts/build-handbook.mjs",
     "build": "npm run build --prefix plugins/become-human-web",
     "release:source": "node scripts/export-source.mjs",
     "release:licenses": "node scripts/collect-third-party.mjs",

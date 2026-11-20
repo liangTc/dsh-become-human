@@ -1,0 +1,21 @@
+<p class="lead">把「发生了什么」「现在值得做吗」「做完留下什么」写成三个可分别验证的步骤。这样即使模型决定等待，也能查出插件运行到了哪里。</p>
+<h2 id="signal">产生一个有期限的事件</h2>
+<p>在 <code>events</code> 注册编号和负载 schema。示例的 <code>first-tick</code> 在启用 60 秒后向本包的 <code>tick</code> 发布空负载。若事件来自外部服务，可在受支持的适配器中调用注册句柄的 <code>publish(localSource, event)</code>。同一次上游事件重试时复用其键、时间和负载。</p>
+<pre><code>const occurredAt = Date.now();
+plugin.publish('tick', {
+  key: 'calendar-entry-27',
+  occurredAt,
+  expiresAt: occurredAt + 60_000,
+  payload: {},
+});</code></pre>
+<p>这里的 <code>plugin</code> 是 <code>humanPlugins.register</code> 的返回值。时间为毫秒时间戳。正文最长 8 KiB、有效期最长七天，每个来源最多 64 个待处理事件。相同键和内容会复用回执；同键不同内容会产生冲突。外部正文作为待判断的资料进入选择过程。</p>
+<h2 id="choose">提供候选，让模型选择</h2>
+<p><code>opportunities(agent, snapshot)</code> 同步检查当前快照，返回零到八个候选。用 <code>resourceId(owner, 'tick')</code> 筛选自己注册的来源；在 <code>eventIds</code> 中标明依赖。已确定的参数写入 <code>input</code>，避免让模型重新抄写。目标步骤也可能直接调用行为，因此示例用 <code>eventsForInput(input)</code> 声明相同依赖。</p>
+<p>机会描述应表达做这件事的价值。模型根据当前人物、记忆、反馈、目标及其他机会选择，也可以返回 <code>WAIT</code>。此阶段只读本地状态；模型调用和外部操作放到执行阶段。</p>
+<details><summary>展开「节拍观察」的完整可运行代码</summary>{{pulseCode}}</details>
+<h2 id="receipt">执行、取消与回执</h2>
+<p><code>execute(agent, input, context)</code> 收到已校验的参数。长操作传递 <code>context.signal</code>，提交结果前调用 <code>context.valid()</code>。需要模型时使用 <code>await context.request(messages)</code>，同一时刻只发起一次请求。写操作走已获授权的能力流程。</p>
+<dl><dt><code>completed</code></dt><dd>已完成本次动作。返回具体摘要和可追溯的凭据，如示例的 eventId。</dd>
+<dt><code>waiting</code></dt><dd>保留原任务。可实现同步的 <code>readyToResume</code>，等文件、批准或其他条件到位后再推进。</dd>
+<dt><code>failed</code> / <code>unknown</code></dt><dd>明确失败与外部结果未知分开处理。写请求超时后应查询外部回执，再决定是否需要人工重试。</dd></dl>
+<p>结果需要 <code>status</code> 和非空 <code>summary</code>。摘要最多 1,200 字符，整个结果最多 32 KiB。任务完成仅证明执行结果；用户是否喜欢或愿意接收分享，另由实际反馈判断。<a href="{{blob}}/docs/BEHAVIOR_API.md">完整行为合同</a></p>

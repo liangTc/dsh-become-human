@@ -1,0 +1,19 @@
+<p class="lead">先验证安装和注册，再验证行动及回执。拆开这几步，可以判断问题发生在包、调度、模型还是投递环节。</p>
+<h2 id="run">在独立环境复现</h2>
+<p>从项目根目录运行。Node.js 24+ 可使用仓库中的隔离回归。这两个脚本覆盖生命周期和页面 RPC，使用测试数据，不需要模型密钥或手机绑定。</p>
+<pre><code>npm ci --prefix plugins/become-human-web
+node scripts/verify-plugin-lifecycle.mjs
+node scripts/verify-extension-pages.mjs
+npm run docs:build</code></pre>
+<p>生命周期回归在隔离时钟中加载本手册示例，推进到期时间，再检查候选、依赖事件、执行回执与卸载。测试主动选中候选以验证合同；真实人物仍由模型选择行动。页面回归覆盖方法模式、重复写入、取消、超时和过期请求。要检查真实交互，请用独立测试人物完成前两章的操作。</p>
+<h2 id="diagnosis">现象与检查顺序</h2>
+<dl><dt>装完找不到插件或页面</dt><dd>先核对安装位置、任务结果和节点启停。再核对包名、Cordis patch、页面 nodeId、客户端文件是否在 tgz 内。v2 后台必须实际注册清单所声明的方法。</dd>
+<dt>定时到了，却没有对话</dt><dd>按顺序看定时记录、事件、候选、模型选择和执行回执。安静时段、额度、WAIT、已完成的一次性计划或专门的联系策略，都可能解释现象。「节拍观察」只产生本地回执。</dd>
+<dt>升级后旧任务停住</dt><dd>查看提供方是否启用、定义版本是否改变、事件是否过期。恢复相同定义可沿用检查点；含义改变时显式重新规划。</dd>
+<dt>点保存后超时或显示结果未知</dt><dd>先用只读接口查结果，核对请求 ID 对应的外部业务回执。保留失败记录，把明确重试的决定交给操作者。</dd>
+<dt>生命周期回调被挂起</dt><dd>在 Human 日志中定位并导出对应事件，核对阶段、错误码、Promise 返回值、负载大小及来源 ID。修复后重新加载插件，使用新的测试事件检查。</dd></dl>
+<h2 id="publish">交付自己的包</h2>
+<ol><li>在 <code>package.json</code> 设置独立包名、版本、许可证和明确的 <code>files</code>。清单、后端、前端产物及许可文件都应包含；检查 npm 打包清单中是否混入私人数据。</li>
+<li>用 <code>npm pack --ignore-scripts</code> 生成与用户安装相同的归档。在独立人物中依次测试全新安装、停用、重启、再启用、升级、移除。</li>
+<li>可分发已验证的本地 <code>.tgz</code>，也可发布到 npm，再提供带确切版本的包名。写清最低适配版本、模型开销、数据读写范围及结果未知时的处理方式。</li></ol>
+<p>本手册两个示例通过本站分发。Human 管理插件自己的 Desktop / Web 安装流程另见<a href="{{blob}}/docs/INSTALLATION.md">宿主安装指南</a>。提交 Human 宿主插件到 DSH 插件集的步骤见<a href="{{blob}}/docs/PLUGIN_SUBMISSION.md">项目提交说明</a>。</p>

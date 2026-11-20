@@ -34,6 +34,12 @@ npm run release:package
 
 以脚本打印的输出路径为准。干净源码导出与打包不会自动创建 GitHub 仓库、上传 Release、发布 npm 或提交插件集。
 
+## 维护插件开发手册
+
+在 `docs/handbook/` 编辑章节，在仓库根目录运行 `npm run docs:build`，然后用浏览器打开 `dist/handbook/index.html`。构建从示例源码生成代码片段和两个可下载的安装包。修改节拍示例后运行 `node scripts/verify-plugin-lifecycle.mjs`，修改页面合同后运行 `node scripts/verify-extension-pages.mjs`。
+
+合入 main 的相关改动会触发 GitHub Pages 工作流。[在线手册](https://liangtc.github.io/dsh-become-human/) · [部署记录](https://github.com/liangTc/dsh-become-human/actions/workflows/handbook.yml)
+
 ## 修改位置
 
 | 改动 | 主要位置 |

@@ -1,0 +1,17 @@
+<p class="lead">让 Human 多一种可以自己选择的行动。你提供事件、工具或页面，Human 结合当下的人格、记忆和目标，决定何时使用它。</p>
+<p class="actions"><a class="primary" href="start.html">制作第一个插件 →</a> <a href="lifecycle.html">查阅接口</a></p>
+<h2 id="choose">我应该扩展哪一层？</h2>
+<dl class="choices">
+  <dt>想改变完成一件事的方法</dt><dd>用 Skill 写步骤和判断依据。它适合教 Human 如何交流或整理资料；调用外部工具仍需要相应权限。</dd>
+  <dt>想让 Human 会做一件新事</dt><dd>注册行为，给出何时值得行动、要使用的输入以及执行回执。要接入外部变化或时间信号，再注册事件源或定时计划。<a href="behavior.html">为事件设计行为 →</a></dd>
+  <dt>已有可调用的外部服务</dt><dd>优先在 Human 的工具设置接入 MCP，分别配置读取、写入和自主使用。需要专属流程时，再让行为选择已获授权的工具。<a href="{{blob}}/docs/CONFIGURATION.md">配置参考 →</a></dd>
+  <dt>想让用户查看资料、修改插件设置</dt><dd>在包内声明页面。静态说明用 v1；表单、查询或保存操作用 React 页面 v2 和后台方法。<a href="pages.html">开发插件页面 →</a></dd>
+</dl>
+<h2 id="ownership">插件安装在哪里？</h2>
+<p>Become Human 本身是一个 DSH 插件。先在 DSH Web 或 Desktop 的宿主插件管理中安装 Human。随后打开 Human 的<strong>插件 → 安装与管理</strong>，把本手册的扩展安装到该人物使用的独立运行环境。仅在宿主添加行为包，Human 后台无法从自己的注册表找到它。</p>
+<p>插件共用该人物的主会话、执行线和预算。一个动作需要更多上下文时，按执行阶段读取已授权的内容；插件可以保存自己的进度，主人记忆和人格成长仍由核心管理。Web 与 Desktop 可有各自的数据目录，请在要使用的环境中安装。<a href="{{blob}}/docs/INSTALLATION.md">Human 安装指南</a></p>
+<h2 id="examples">从哪份代码开始？</h2>
+<ul><li><a href="start.html">节拍观察</a>。无第三方依赖，串起定时、事件、选择和回执。</li>
+<li><a href="pages.html#counter">React 计数器</a>。读取真实计数、确认写入、关闭后重开。</li>
+<li><a href="{{tree}}/docs/examples/human-public-source-plugin">公开来源观察器</a>。查看来源如何产生事件，以及执行时如何重新取得依据。</li>
+<li><a href="{{tree}}/plugins/become-human/behavior-packs/learning">探索与学习</a>。查看成熟插件如何组合 React 设置、结果回调和反馈。新功能使用通用行为合同；其中的 learning 字段服务于历史任务。</li></ul>

@@ -1,0 +1,22 @@
+{
+  "name": "dsh-human-pulse-example",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "index.mjs",
+  "files": ["index.mjs", "cordis.patch.yml", "README.md", "LICENSE"],
+  "dsh": {
+    "bundle": {"patch": "./cordis.patch.yml"},
+    "human": {
+      "plugin": {"version": 1, "title": "节拍观察"},
+      "pages": [{
+        "version": 1, "id": "overview", "nodeId": "human-extension.pulse-example",
+        "title": "节拍观察",
+        "blocks": [
+          {"type": "text", "text": "启用后安排一次节拍。到期后，Human 可以选择记录，也可以等待。可在日志查看实际结果。"},
+          {"type": "runtime-status"}
+        ]
+      }]
+    }
+  }
+}

@@ -1,0 +1,47 @@
+name: Publish plugin handbook
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/handbook.yml'
+      - 'docs/handbook/**'
+      - 'docs/examples/human-pulse-example/**'
+      - 'docs/assets/avatar-pixel-icon.png'
+      - 'plugins/become-human/behavior-packs/react-page-example/**'
+      - 'scripts/build-handbook.mjs'
+      - 'package.json'
+
+permissions:
+  contents: read
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/configure-pages@v5
+      - run: npm run docs:build
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist/handbook
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

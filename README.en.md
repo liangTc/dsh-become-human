@@ -11,7 +11,7 @@ A digital companion living in DSH: remembering shared experiences, developing it
 
 > **Test release `0.7.0-beta.43` · Work in progress.** [GitHub Release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.43) · [npm package](https://www.npmjs.com/package/dsh-become-human-web/v/0.7.0-beta.43) · [Verification scope](docs/RELEASE_BETA43.md)
 
-[简体中文](README.md) · [Installation](docs/INSTALLATION.md) · [Usage](docs/USAGE.md) · [Configuration](docs/CONFIGURATION.md) · [Testing status](docs/TESTING_STATUS.md) · [Architecture](docs/ARCHITECTURE.md)
+[简体中文](README.md) · [Installation](docs/INSTALLATION.md) · [Usage](docs/USAGE.md) · [Plugin developer handbook (Chinese)](https://liangtc.github.io/dsh-become-human/) · [Configuration](docs/CONFIGURATION.md) · [Testing status](docs/TESTING_STATUS.md) · [Architecture](docs/ARCHITECTURE.md)
 **Supported Windows hosts** include the official DSH Desktop `0.2.2-rc.3` and `0.2.2-rc.5`, and DSH Web `0.2.0-rc.2` on Node.js 24+. This prerelease adds Desktop installation and retries autonomous topic selection after transient model failures.
 
 | Version | Availability and status |

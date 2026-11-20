@@ -1,0 +1,19 @@
+<p class="lead">做一个「节拍观察」插件。启用一分钟后，它提供一次行动机会。Human 选择记录时，你可以在日志里找到对应的任务回执。</p>
+<h2 id="install">先运行示例</h2>
+<ol><li>准备已完成初始化的 Human 测试人物。本手册以 <code>0.7.0-beta.43</code> 为基线；自行打包需要 Node.js 24+ 和 npm。</li>
+<li><a href="downloads/{{pulse}}" download>下载节拍观察安装包（.tgz）</a>。进入 <strong>Human → 插件 → 安装与管理</strong>，选择文件，核对包名 <code>dsh-human-pulse-example</code>，勾选信任并点「安装并应用」。</li>
+<li>在已安装列表中打开「节拍观察」。看到说明和当前人物状态，就已验证页面与节点。若节点被停用，先在该插件详情中启用。</li>
+<li>若要观察行动，确保测试人物的自主活动已开启，当前处于允许的时段，有可用额度。定时到期后先查看<strong>日志</strong>中的定时触发记录，再看随后一轮选择和任务结果。只有被选中且完成时才会出现「已记录一次节拍」。示例的执行代码本身不调用模型；宿主选题仍可能消耗额度。</li></ol>
+<h2 id="files">理解包里的三个文件</h2>
+<dl><dt><code>package.json</code></dt><dd><code>name</code> 是注册时使用的 owner。<code>dsh.bundle.patch</code> 指向安装清单；<code>dsh.human.plugin.version</code> 声明生命周期合同版本。静态页在 <code>dsh.human.pages</code> 中声明。</dd>
+<dt><code>cordis.patch.yml</code></dt><dd>将包添加为运行节点。页面的 <code>nodeId</code> 必须与此处的 <code>id</code> 一致。包改名时同时修改节点名、清单引用和后台 owner。</dd>
+<dt><code>index.mjs</code></dt><dd>Cordis 注入 <code>humanPlugins</code>，<code>apply(ctx)</code> 注册资源。在 effect 的清理函数里调用 <code>dispose()</code>，停用插件时撤销注册。</dd></dl>
+<details><summary>查看示例的完整 package.json</summary>{{pulseManifest}}</details>
+<details><summary>查看实际安装的 Cordis patch</summary>{{pulsePatch}}</details>
+<h2 id="build">改一行，再打包</h2>
+<p>克隆源码后，打开示例的 <code>index.mjs</code>，把 <code>execute</code> 返回的 <code>summary</code> 改成自己的文案。给自己的版本设置新包名或递增版本号，然后在示例目录执行打包。可以先用 <code>--dry-run</code> 检查文件清单。</p>
+<pre><code>git clone https://github.com/liangTc/dsh-become-human.git
+cd dsh-become-human/docs/examples/human-pulse-example
+npm pack --ignore-scripts --dry-run
+npm pack --ignore-scripts</code></pre>
+<p>将生成的 <code>.tgz</code> 安装到测试人物。相同定义的一次性计划会记住完成状态；要从头验证，使用新的测试人物，或为独立的新计划更换定时 ID。<a href="{{mainTree}}/docs/examples/human-pulse-example">打开示例源码</a></p>

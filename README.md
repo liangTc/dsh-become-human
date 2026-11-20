@@ -10,7 +10,7 @@
 
 > **测试版 `0.7.0-beta.43` · 持续开发中。** [GitHub Release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.43) · [npm 安装包](https://www.npmjs.com/package/dsh-become-human-web/v/0.7.0-beta.43) · [本版验证范围](docs/RELEASE_BETA43.md)
 
-[English](README.en.md) · [安装指南](docs/INSTALLATION.md) · [使用指南](docs/USAGE.md) · [配置说明](docs/CONFIGURATION.md) · [测试状态](docs/TESTING_STATUS.md)
+[English](README.en.md) · [安装指南](docs/INSTALLATION.md) · [使用指南](docs/USAGE.md) · [插件开发手册](https://liangtc.github.io/dsh-become-human/) · [配置说明](docs/CONFIGURATION.md) · [测试状态](docs/TESTING_STATUS.md)
 
 **支持的 Windows 宿主**为 DSH Desktop `0.2.2-rc.3`、`0.2.2-rc.5`，以及使用 Node.js 24+ 的 DSH Web `0.2.0-rc.2`。Desktop 从左侧「插件 → 添加插件」安装。[Desktop 安装步骤](docs/INSTALLATION.md#desktop-windows)
 

@@ -1,0 +1,23 @@
+<p class="lead">一个包可以参与多个环节。用一个 owner 注册资源，把定时、读写和清理交给对应的宿主接口。</p>
+<h2 id="resources">注册哪些资源</h2>
+<table><thead><tr><th>字段</th><th>使用场景</th></tr></thead><tbody>
+<tr><td><code>events</code> / <code>sources</code></td><td>前者定义本包可发布的类型化事件，后者注册受管理的公开内容来源。</td></tr>
+<tr><td><code>behaviors</code> / <code>capabilities</code></td><td>行为提供候选和执行方式。能力封装实际工具及其输入、效果与授权要求。</td></tr>
+<tr><td><code>pages</code></td><td>为 React 页面注册后台方法；页面的标题、节点、前端文件和方法模式还要在包清单中声明。</td></tr>
+<tr><td><code>schedules</code></td><td>到期后向同一插件已声明的来源发布事件，供后续选题。</td></tr>
+<tr><td><code>hooks</code></td><td>根据阶段元数据更新插件自己的进度，或提交后续事件。</td></tr></tbody></table>
+<p>统一入口是 <code>ctx.humanPlugins.register(owner, descriptor)</code>，当前 <code>contractVersion</code> 和描述符的 <code>version</code> 均为 1。包名与 owner 相同；资源的本地 ID 以小写字母开头，最长 48 字符，可使用小写字母、数字、点和短横线。跨包引用资源时用 <code>resourceId</code> 生成实际 ID。</p>
+<h2 id="hooks">在什么阶段接收反馈？</h2>
+<dl><dt><code>input</code> / <code>selection</code></dt><dd>用户输入已提交，或开始一轮选择。可以据此更新关注事项。</dd>
+<dt><code>result</code> / <code>delivery</code></dt><dd>分别表示任务产生终态结果、回复已写入主会话。确认手机收到消息需要渠道或用户端的额外证据。</dd>
+<dt><code>feedback</code> / <code>memory</code> / <code>growth</code></dt><dd>接收追问、批注、记忆修订和成长变化等对应的事件元数据，适合更新插件自己的判断依据。</dd></dl>
+<pre><code>hooks: {
+  result(event, {state, now}) {
+    return {state: {...state, lastResultId: event.id, updatedAt: now}};
+  },
+}</code></pre>
+<p>回调同步运行，允许返回 <code>{state?, events?}</code> 或 <code>undefined</code>。输出最多 16 KiB、八个事件。每个事件形如 <code>{source, event}</code>，来源须属于本包。插件状态按人物及 owner 隔离。回调抛错或返回 Promise 时，宿主回滚本次贡献并挂起该回调，日志记录 <code>plugin-hook-held</code>。</p>
+<h2 id="clock">定时、错过与卸载</h2>
+<p>规则支持 <code>after</code>、<code>at</code>、<code>every</code>、<code>daily</code>、<code>weekly</code> 和 <code>cron</code>。例如 <code>{kind: 'every', seconds: 3600}</code> 表示每小时提供一次机会。使用宿主的规则字段与时区。暂停、关闭自主或处于安静时段时，托管定时等待。</p>
+<p><code>missedPolicy: 'latest'</code> 将错过的周期合并为最近一次；选择 <code>'all'</code> 时，每个计划在每轮检查中最多补入一个仍然有效的事件。队列满时保留进度，稍后再检查。相同定义重启后沿用原定时，已完成的一次性定时不会再次触发。</p>
+<p>在 Cordis effect 中返回 <code>() =&gt; plugin.dispose()</code>。卸载撤销资源注册和页面入口，原任务、记录与检查点有各自的保留规则。变更行为语义时递增其定义版本，旧检查点需要重新核对。<a href="{{blob}}/docs/PLUGIN_LIFECYCLE.md">生命周期合同</a> · <a href="{{blob}}/plugins/become-human/plugin-lifecycle.mjs">注册表实现</a></p>

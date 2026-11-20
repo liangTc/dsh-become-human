@@ -1,0 +1,16 @@
+<p class="lead">把设置放进插件自己的页面。读请求可以直接加载数据，写请求由 Human 展示确认，并将结果记入当前会话的操作记录。</p>
+<h2 id="declaration">v1 说明页或 v2 交互页</h2>
+<p>说明文字、清单和运行状态可用 v1 声明式页面，参看「节拍观察」的清单。需要表单或交互时用 v2。两种页面均位于 Human 的插件列表中；停用所属节点后隐藏入口。v2 增加客户端文件以及可调用方法列表。</p>
+<details><summary>查看 React 计数器的真实页面声明</summary>{{counterPage}}</details>
+<h2 id="counter">试一次读取与确认写入</h2>
+<ol><li><a href="downloads/{{counter}}" download>下载 React 计数器示例（.tgz）</a>，通过 Human 的「插件 → 安装与管理」安装。</li>
+<li>打开「交互页面示例」，记下当前数字。点「增加一次」再取消，刷新后应保持原数值。</li>
+<li>再次增加并确认，值应只增加一。关闭页面再打开，确认读取的是同一份计数。这个例子只写插件自己的计数文件。</li></ol>
+<p>客户端是打包的 CommonJS 模块，导出 <code>contractVersion = 2</code> 和默认 React 组件。使用宿主提供的 <code>react</code>、<code>react-dom</code>，构建时将它们标为 external。<code>human.call(method, payload, reviewText?)</code> 发起调用，<code>human.setDirty(boolean)</code> 保护草稿，<code>human.signal</code> 通知页面退出。<a href="{{tree}}/plugins/become-human/behavior-packs/react-page-example">完整前后端源码</a></p>
+<pre><code>const result = await human.call('counter.read');
+// 在用户点击按钮时调用，等待宿主确认
+await human.call('counter.add', {amount: 1}, '计数增加一次');</code></pre>
+<h2 id="rpc">让清单与后台方法一致</h2>
+<p>包清单中的 <code>nodeId</code> 指向本包节点；<code>client</code> 对应已打包文件。每个 <code>methods</code> 条目都要提供 <code>name</code>、<code>mode</code>、<code>description</code>。后台按相同页面 ID 注册同名 handler，模式为 <code>read</code> 或 <code>write</code>。统一合同可在 <code>pages: [{id, handlers}]</code> 中注册；计数器演示的是兼容入口 <code>ctx.humanPages.register(owner, pageId, handlers)</code>。</p>
+<p>handler 的第二个参数含 <code>sessionId</code>、<code>requestId</code> 和 <code>signal</code>。验证输入及取消信号，用 <code>requestId</code> 关联幂等写入。确认票据绑定本次会话、方法和完整参数，有效期 60 秒。接口超时后，先读取业务结果；外部写入状态未知时交给用户核对。</p>
+<p>单个页面最多声明 24 个方法，客户端最大 1 MiB，单次 JSON 输入和输出各限 32 KiB。后台最多同时处理八个调用，超时为十秒。扩展前端与宿主同源，后台以本机权限运行，只安装信任的代码。凭据留在后台。<a href="{{blob}}/docs/EXTENSION_PAGES.md">页面与 RPC 合同</a></p>

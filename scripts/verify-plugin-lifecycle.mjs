@@ -56,4 +56,27 @@ await test('Congested plugin clock retries once capacity returns, including a pr
  x.advance(3600000);x.plugins.register('test',next);x.plugins.pump();
  current=x.plugins.catalog()[0].schedules[0];assert.equal(current.status,'completed');assert.equal(current.error,null);
 });
+await test('Handbook example registers, offers one due event, executes and disposes',async x=>{
+  const {apply}=await import('../docs/examples/human-pulse-example/index.mjs');
+  let stop;
+  apply({humanPlugins:x.plugins.service(),effect:register=>{stop=register();}});
+  const agent={id:x.id,factory:x.f};
+  const opportunities=()=>x.f.behaviors.opportunities(agent,{now:x.now,events:x.f.pluginEvents.events(x.id)});
+  assert.equal(opportunities().length,0);
+  x.advance(60000);
+  x.plugins.pump();
+  const [choice]=opportunities();
+  assert.equal(choice.behaviorId,pluginResourceId('dsh-human-pulse-example','acknowledge'));
+  assert.deepEqual(x.f.behaviors.eventReferences(agent,choice.behaviorId,choice.behaviorInput),choice.eventIds);
+  x.f.pluginEvents.claim(x.id,choice.eventIds);
+  const task={checkpoint:{behaviorId:choice.behaviorId,behaviorFingerprint:choice.behaviorFingerprint,
+    pluginEventIds:choice.eventIds,plan:{input:choice.behaviorInput}}};
+  const result=await x.f.behaviors.execute(agent,task,{valid(){}});
+  assert.equal(result.eventId,choice.eventIds[0]);
+  assert.equal(result.status,'completed');
+  x.f.pluginEvents.complete(x.id,choice.eventIds);
+  stop();
+  assert.deepEqual(x.plugins.catalog(),[]);
+  assert.equal(opportunities().length,0);
+});
 console.log(JSON.stringify({passed:cases.filter(c=>c.passed).length,total:cases.length}));if(cases.some(c=>!c.passed))process.exitCode=1;
