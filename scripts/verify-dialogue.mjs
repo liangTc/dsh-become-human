@@ -10,6 +10,8 @@ import {RollingDialogueSummary} from '../plugins/become-human/dialogue-summary.m
 import {adjacentDialogue} from '../plugins/become-human/dialogue-history.mjs';
 import {expressionSkills} from '../plugins/become-human/expression.mjs';
 import {SkillStore} from '../plugins/become-human/skill-store.mjs';
+import {Context} from '@deepseek-ai/cordis';
+import SkillRegistry from '@deepseek-ai/dsh-skill';
 import {reviewMessages,validateReview,reviewReplyUnits} from '../plugins/become-human/conversation-review.mjs';
 
 // Synthetic reviewer receipts test control flow; their assessment is not a semantic quality verdict.
@@ -350,6 +352,40 @@ await test('One built-in foreground voice guide preserves custom skills and lega
  let prompt=skills.prompt(f.id,'foreground','你好');assert(prompt.includes('<skill name="human-dialogue"'));assert(!prompt.includes('<skill name="zhiqiu-expression"'));assert(prompt.includes('用户自己的表达约定'));assert(!prompt.includes('<skill name="humanizer"'));
  assert(skills.prompt(f.id,'foreground','humanizer').includes('<skill name="humanizer"'));assert(skills.prompt(f.id,'chat').includes('<skill name="zhiqiu-expression"'));
  skills.toggle(f.id,'human-dialogue',false,skills.get(f.id,'human-dialogue').version);prompt=skills.prompt(f.id,'foreground');assert(!prompt.includes('<skill name="human-dialogue"'));assert(prompt.includes('<skill name="zhiqiu-expression"'));assert(prompt.includes('用户自己的表达约定'));
+});
+await test('DSH registry follows persisted built-in skill switches across detach, reattach and local name collisions',async f=>{
+ const ctx=new Context(),fibers=[];
+ f.journal.transaction=fn=>fn();
+ const store=new SkillStore(f.journal);
+ const toggle=(name,enabled)=>store.toggle(f.id,name,enabled,store.get(f.id,name).version);
+ const human={name:'skill-switch-test',inject:['skills'],apply(scoped){
+   scoped.effect(()=>store.attachRegistry(scoped.skills,f.id));
+ }};
+ try{
+   fibers.push(await ctx.plugin(SkillRegistry));
+   fibers.push(await ctx.plugin({name:'independent-skill-test',inject:['skills'],apply(scoped){
+     scoped.skills.register({name:'humanizer',description:'A separate plugin with the same name',content:'Independent skill.',source:'runtime',provider:'another-plugin'});
+   }}));
+   toggle('human-dialogue',false);
+   fibers.push(await ctx.plugin(human));
+   assert.equal(await ctx.skills.get('human-dialogue'),undefined);
+   assert.equal((await ctx.skills.get('humanizer')).provider,'another-plugin');
+   const original=await ctx.skills.get('zhiqiu-expression');
+   assert.equal(original.provider,'become-human-expression');
+   assert.equal(original.resourceBase.kind,'directory');
+   toggle('zhiqiu-expression',false);
+   toggle('humanizer',false);
+   assert.equal(await ctx.skills.get('zhiqiu-expression'),undefined);
+   assert.equal((await ctx.skills.get('humanizer')).provider,'another-plugin');
+   toggle('human-dialogue',true);
+   assert.equal((await ctx.skills.get('human-dialogue')).provider,'become-human-expression');
+   await fibers.pop().dispose();
+   assert.equal(await ctx.skills.get('human-dialogue'),undefined);
+   assert.equal((await ctx.skills.get('humanizer')).provider,'another-plugin');
+   fibers.push(await ctx.plugin(human));
+   assert.equal((await ctx.skills.get('human-dialogue')).provider,'become-human-expression');
+   assert.equal(await ctx.skills.get('zhiqiu-expression'),undefined);
+ }finally{for(const fiber of fibers.reverse())await fiber.dispose();}
 });
 await test('Review cooldown skips only auxiliary calls and recovers after its deadline',async f=>{
  f.agent.factory.conversationReview=true;const input=f.owner('你好');let reviews=0,drafts=0;

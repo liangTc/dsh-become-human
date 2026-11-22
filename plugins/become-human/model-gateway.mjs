@@ -9,7 +9,7 @@ const failure=code=>Object.assign(new Error(code),{code});
 export function requestCost(input,config={},context){return estimateModelCost(input,config,context)+(Array.isArray(input)?estimateImageRequestCost(input):0);}
 
 // All model work stays under the parent driver's single active interval and ticket gate.
-export async function modelRequest(agent,signal,{turn,epoch,lane,messages,admittedIds=[],taskId,purpose}){
+export async function modelRequest(agent,signal,{turn,epoch,lane,messages,admittedIds=[],taskId,purpose,assertMaterialsCurrent}){
   const compacting=purpose==='conversation-summary';
   const reviewing=purpose==='conversation-review',styleRepair=purpose==='conversation-style-repair',learningReview=purpose==='learning-selection-review',internal=compacting||reviewing||styleRepair||learningReview;
   if(lane==='foreground'&&!internal)messages=attachCurrentImages(nativeDialogueMessages(messages),agent,{admittedIds,requireCapability:false});
@@ -27,6 +27,7 @@ export async function modelRequest(agent,signal,{turn,epoch,lane,messages,admitt
     callingModel=true;
     const prepared=await agent.ctx.llm.prepareCall(modelCallOptions(config),requestSignal);
     callingModel=false;
+    assertMaterialsCurrent?.();
     route=prepared.config;
     assertImageModel(prepared.inputModalities,imageContentCount(messages));
     requestSignal.throwIfAborted();if(agent.desired().epoch!==epoch)throw failure('STALE_EPOCH');
@@ -36,6 +37,7 @@ export async function modelRequest(agent,signal,{turn,epoch,lane,messages,admitt
     rid=j.reserve(agent.id,amount,Infinity,{turn,epoch,request:{messages,context:messages.contextReport??null,...(purpose?{purpose}:{}),admittedIds,ownerInputRevision,pauseRevision:j.value(agent.id,'pauseRevision',0),taskId,roundId:lane==='foreground'?undefined:agent.activeRoundId??taskId,lane,budgetClass,budgetTime:b.now,modelLimitPolicy:'host-provider-defaults',outputReservation}});
     if(!rid){j.put(agent.id,'autonomyNeededTokens',amount);throw Object.assign(failure('AUTONOMOUS_BUDGET_EXHAUSTED'),{neededTokens:amount});}
     j.dispatchAttempt(rid,prepared.config);dispatched=true;await f.allowCall(requestSignal,{agent:agent.id,rid,epoch,config:prepared.config,messages});
+    assertMaterialsCurrent?.();
     if(strategyUses.length)f.experience.strategies.delivered(agent.id,strategyTask,rid);
     j.audit(agent.id,'dispatch',{attemptId:rid,turn,epoch,lane,budgetClass,taskId,provider:prepared.config.provider,model:prepared.config.model,reserved:amount,admittedIds});
     callingModel=true;
@@ -58,6 +60,12 @@ export async function modelRequest(agent,signal,{turn,epoch,lane,messages,admitt
     if(lane!=='foreground'&&j.value(agent.id,'autonomyModelBackoff',null)?.lane===lane)j.put(agent.id,'autonomyModelBackoff',null);
     return {rid,text:text.trim(),usage,reasoningChars,provider:prepared.config.provider,model:prepared.config.model,workMemoryRefs:messages.contextReport?.workMemoryRefs??[]};
   }catch(error){
+    if(error.foregroundMaterialsChanged){
+      // Permission or source changed while awaiting preparation or a local
+      // ticket. The provider stream has not started.
+      if(rid){j.settle(rid,0);j.endAttempt(rid,{state:'validation-rejected',usageConfidence:'not-dispatched',error:error.code??error.message,textChars:0,reasoningChars:0});}
+      throw error;
+    }
     const {text,reasoningChars}=output;
     const code=signal.aborted?'USER_PREEMPTED':requestSignal.aborted?'REQUEST_TIMEOUT':error.code??error.message;
     const reportedTerminal=!!usage&&['stop','length','max-tokens'].includes(finish?.kind)&&!signal.aborted;

@@ -2,6 +2,7 @@
 // learning package; this narrow adapter preserves existing notes and settings.
 export const learningSettingKeys=['learningEnabled','searchEnabled','searchProvider','searchEndpoint','sourceIntervalMs','sources','goalAutoActivateEnabled'];
 export function learningRead(factory,id,input={}){
+  if(factory.learningPack&&!factory.learningPack.provider)throw Error('LEARNING_PACK_UNAVAILABLE');
   const {journal,autonomy,management}=factory,db=journal.db;
   if(input.kind==='settings')return {settings:Object.fromEntries(learningSettingKeys.map(k=>[k,autonomy.settings(id)[k]])),revision:management.revision(id)};
   if(input.kind==='notes'){
@@ -17,6 +18,7 @@ export function learningRead(factory,id,input={}){
   throw Error('INVALID_LEARNING_READ');
 }
 export async function learningWrite(factory,id,input){
+  if(factory.learningPack&&!factory.learningPack.provider)throw Error('LEARNING_PACK_UNAVAILABLE');
   if(input.operation==='settings'){
     factory.management.check(id,input.revision);
     if(!input.settings||Object.keys(input.settings).some(k=>!learningSettingKeys.includes(k)))throw Error('INVALID_LEARNING_CONFIGURATION');

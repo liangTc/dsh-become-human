@@ -16,6 +16,7 @@ const {ToolExecutor}=await import('../plugins/become-human/tool-executor.mjs');
 const {capabilityDialogue}=await import('../plugins/become-human/capability-dialogue.mjs');
 const {usageStatistics}=await import('../plugins/become-human/usage-statistics.mjs');
 const {choiceDialogueRequest}=await import('../plugins/become-human/choice-dialogue.mjs');
+const {modelRequest}=await import('../plugins/become-human/model-gateway.mjs');
 const {RemoteGateway}=await import('../plugins/become-human-web/remote.mjs');
 const root=await fs.mkdtemp(path.join(process.env.BH_TEST_TMP??os.tmpdir(),'bh-attempts-')),tests=[];
 async function test(name,fn){let f;try{f=fixture();await fn(f);tests.push({name,passed:true});}catch(e){tests.push({name,passed:false,error:e.stack});}finally{f?.journal.close();}}
@@ -33,6 +34,19 @@ function fixture(){
  return {id,owner,usage,ids,agent,tools,dialogue,generated,reopen,row,get journal(){return journal;},get executions(){return executions;}};
 }
 const call=tool=>JSON.stringify({capability:{tool,input:{}}});
+for(const revokeAt of ['prepare','ticket'])await test('Revoked review material cannot reach a provider after awaiting '+revokeAt,async f=>{
+ const {agent,journal}=f;let allowed=true,streams=0;
+ const config={provider:'fixture',model:'fixture'};
+ Object.assign(agent.factory,{config,tickets:new Map(),allowCall:async()=>{if(revokeAt==='ticket')allowed=false;}});
+ agent.factory.autonomy.budget=()=>({tokenLimit:null,now:Date.now()});
+ agent.ctx={llm:{prepareCall:async()=>{
+   if(revokeAt==='prepare')allowed=false;
+   return {config,async *stream(){streams++;yield {type:'finish',reason:{kind:'stop'}};}};
+ }}};
+ const assertMaterialsCurrent=()=>{if(!allowed)throw Object.assign(new Error('LEARNING_PACK_UNAVAILABLE'),{foregroundMaterialsChanged:true});};
+ await assert.rejects(modelRequest(agent,new AbortController().signal,{turn:1,epoch:1,lane:'foreground',purpose:'conversation-review',messages:[{role:'user',content:[{type:'text',text:'synthetic draft'}]}],assertMaterialsCurrent}),/LEARNING_PACK_UNAVAILABLE/);
+ assert.equal(streams,0);assert.equal(journal.get(f.id).used,0);assert.equal(journal.value(f.id,'modelFailures',{}).foreground,undefined);
+});
 await test('legacy foreground remains available after an empty response and accepts a terminal-only reply to the next input',async f=>{
  const {agent,journal,id}=f,events=[],queue=[];
  const message=()=>({id:randomUUID(),role:'user',content:[{type:'text',text:'本轮测试输入'}]});

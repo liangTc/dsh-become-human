@@ -29,6 +29,6 @@ export function expressionSkills(){
   ].map(skill=>({...skill,source:'bundled',provider:'become-human-expression',resourceBase:{kind:'directory',path:path.dirname(skill.path)},invocation:{modelInvocable:true,userInvocable:true}}));
 }
 
-export function expressionStatus(registryRegistered=false){
-  return {enabled:true,registryRegistered,upstream:{name:'humanizer',version:provenance.version,commit:provenance.commit,sha256:provenance.files['SKILL.md'].sha256},adapter:{name:'zhiqiu-expression',version:resourceVersion(adapter),sha256:digest(adapter)},activeMode:'compact-chinese-embedded',phases:[...phases],extraModelCalls:0,promptUtf8Bytes:Buffer.byteLength(expressionPrompt('foreground'),'utf8')};
+export function expressionStatus(registryRegistered=false,enabled=true){
+  return {enabled,registryRegistered,upstream:{name:'humanizer',version:provenance.version,commit:provenance.commit,sha256:provenance.files['SKILL.md'].sha256},adapter:{name:'zhiqiu-expression',version:resourceVersion(adapter),sha256:digest(adapter)},activeMode:enabled?'compact-chinese-embedded':'disabled',phases:enabled?[...phases]:[],extraModelCalls:0,promptUtf8Bytes:enabled?Buffer.byteLength(expressionPrompt('foreground'),'utf8'):0};
 }

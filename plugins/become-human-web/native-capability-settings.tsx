@@ -1,10 +1,14 @@
 import React,{useEffect,useState} from 'react';
+import {normalizeSessionGrants} from './runtime/session-grants.mjs';
 import {useDraftGuard,useSectionContext,OptionalSection,pauseForConfiguration} from './native-shell';
 import McpConnections,{draftMcpServers,serializeMcpServers} from './native-mcp-settings';
 import WorkObservation from './native-work-observation';
 
-function settingsOf(value:any){const result=structuredClone(value?.settings??value??{});delete result.revision;if(result.bridge)delete result.bridge.browser;return result;}
-function draftOf(value:any){const settings=settingsOf(value);return {settings,mcpRows:draftMcpServers(settings.mcp?.servers??[]),sessionIds:(settings.bridge?.allowedSessionIds??[]).join('\n')};}
+function settingsOf(value:any){const result=structuredClone(value?.settings??value??{});delete result.revision;result.bridge=normalizeSessionGrants(result.bridge);return result;}
+function draftOf(value:any){
+  const settings=settingsOf(value);
+  return {settings,mcpRows:draftMcpServers(settings.mcp?.servers??[]),readSessionIds:settings.bridge.readSessionIds.join('\n'),writeSessionIds:settings.bridge.writeSessionIds.join('\n')};
+}
 const split=(text:string)=>Array.from(new Set(text.split(/[\r\n,，]+/).map(item=>item.trim()).filter(Boolean)));
 
 function CapabilityForm({api,s,busy,ui,server,onRefresh,readError}:any){
@@ -22,11 +26,11 @@ function CapabilityForm({api,s,busy,ui,server,onRefresh,readError}:any){
     if(dirty||stale||readError)throw new Error('请先保存或放弃草稿，再使用一键授权。');
     if(s.desired!=='paused')await api.control({op:'pause',sessionId:s.sessionId});
     const next=settingsOf(server),current=next.bridge??{};
-    next.bridge=mode==='selected'?{...current,sessionReadScope:'selected',sessionWriteScope:'selected'}:{...current,sessionReadEnabled:true,sessionReadScope:'all',...(mode==='use'?{sessionWriteEnabled:true,sessionWriteScope:'all'}:{})};
+    next.bridge=mode==='selected'?{...current,sessionReadScope:'selected',sessionWriteScope:'selected'}:mode==='read'?{...current,sessionReadEnabled:true,sessionReadScope:'all'}:{...current,sessionWriteEnabled:true,sessionWriteScope:'all'};
     await api.control({op:'capability-configure',sessionId:s.sessionId,expectedRevision:base.revision,settings:next});await acceptFresh();
   },mode==='selected'?'已退回指定会话范围，Human 保持暂停':mode==='read'?'已授权读取全部普通会话，Human 保持暂停':'已授权使用全部普通会话，写操作仍需逐笔批准；Human 保持暂停');
   const save=()=>api.run(async()=>{
-    const next={...draft.settings,mcp:{...mcp,servers:serializeMcpServers(draft.mcpRows)},bridge:{...bridge,allowedSessionIds:split(draft.sessionIds)}};
+    const next={...draft.settings,mcp:{...mcp,servers:serializeMcpServers(draft.mcpRows)},bridge:{...bridge,readSessionIds:split(draft.readSessionIds),writeSessionIds:split(draft.writeSessionIds)}};
     await pauseForConfiguration(api);await api.control({op:'capability-configure',sessionId:s.sessionId,expectedRevision:base.revision,settings:next});
     await acceptFresh();
   },'工具与连接设置已保存，Human 仍保持暂停');
@@ -40,7 +44,8 @@ function CapabilityForm({api,s,busy,ui,server,onRefresh,readError}:any){
       <details className="hn-advanced"><summary>自行配置读取、使用与指定会话</summary><div className="hn-fields">
         <div><Check label="开启会话读取" disabled={busy} value={bridge.sessionReadEnabled} onChange={(enabled:boolean)=>patchBridge('sessionReadEnabled',enabled)}/><Field label="读取范围" hint="允许读取可见聊天文本；不会因读取而启动目标 Agent。"><Select aria-label="DSH 会话读取范围" disabled={busy||!bridge.sessionReadEnabled} value={bridge.sessionReadScope??'selected'} options={[["selected","仅指定会话"],["all","全部可见普通会话，含后续新增"]]} onChange={(scope:string)=>patchBridge('sessionReadScope',scope)}/></Field></div>
         <div><Check label="开启会话使用" disabled={busy} value={bridge.sessionWriteEnabled} onChange={(enabled:boolean)=>patchBridge('sessionWriteEnabled',enabled)}/><Field label="使用范围" hint="允许将其他会话作为任务执行目标；发送和取消均须逐笔批准。"><Select aria-label="DSH 会话使用范围" disabled={busy||!bridge.sessionWriteEnabled} value={bridge.sessionWriteScope??'selected'} options={[["selected","仅指定会话"],["all","全部可见普通会话，含后续新增"]]} onChange={(scope:string)=>patchBridge('sessionWriteScope',scope)}/></Field></div>
-        <Field wide label="指定会话 ID · 每行一个" hint="仅在范围选择“仅指定会话”时使用。留空不授权任何指定会话；不填写 Human 主会话编号。"><Text value={draft.sessionIds} rows={4} disabled={busy} placeholder="粘贴需要访问的 DSH 会话 ID" onChange={(sessionIds:string)=>setDraft(previous=>({...previous,sessionIds}))}/></Field>
+        {bridge.sessionReadScope!=='all'&&<Field wide label="允许读取的会话" hint="每行一个会话 ID，可填写多个项目。留空表示没有指定可读会话。"><Text value={draft.readSessionIds} rows={3} disabled={busy||!bridge.sessionReadEnabled} placeholder="可读取的 DSH 会话 ID" onChange={(readSessionIds:string)=>setDraft(previous=>({...previous,readSessionIds}))}/></Field>}
+        {bridge.sessionWriteScope!=='all'&&<Field wide label="允许派发和取消任务的会话" hint="每行一个会话 ID。只填写你允许 Human 操作的目标，每次操作仍需批准。"><Text value={draft.writeSessionIds} rows={3} disabled={busy||!bridge.sessionWriteEnabled} placeholder="可操作的 DSH 会话 ID" onChange={(writeSessionIds:string)=>setDraft(previous=>({...previous,writeSessionIds}))}/></Field>}
       </div></details>
       <Check label="允许 Human 自主选择读取这些会话" disabled={busy||!bridge.sessionReadEnabled} value={['dsh-session-list','dsh-session-read'].every(id=>settings.autonomy?.toolIds?.includes(id))} onChange={(enabled:boolean)=>setDraft(previous=>({...previous,settings:{...previous.settings,autonomy:{toolIds:[...(previous.settings.autonomy?.toolIds??[]).filter((id:string)=>!['dsh-session-list','dsh-session-read'].includes(id)),...(enabled?['dsh-session-list','dsh-session-read']:[])]}}}))}/><p className="hn-help">与定期观察独立：允许选题器按当前需要读取，仍受上面的会话范围约束；不会自主启动其他会话的模型。</p>
       <OptionalSection title="定期观察工作会话"><WorkObservation api={api} s={s} busy={busy} ui={ui} bridge={settingsOf(server).bridge} connectionDraft={dirty} connectionStale={stale}/></OptionalSection>

@@ -93,11 +93,17 @@ export function resetLearningPlan(kind,checkpoint){
 // Migration adapter for durable pre-pack tasks. New third-party actions still
 // use humanBehaviors. There is deliberately no bundled/default provider.
 export class LearningPack {
-  constructor(){this.provider=null;}
+  constructor(registerCapabilities){this.provider=null;this.registerCapabilities=registerCapabilities;}
   register(descriptor){
     if(this.provider||descriptor?.version!==1||['collect','prepare','execute'].some(k=>typeof descriptor[k]!=='function'))throw Error('INVALID_LEARNING_PACK');
-    const provider=Object.freeze({...descriptor});this.provider=provider;
-    return ()=>{if(this.provider===provider)this.provider=null;};
+    const provider=Object.freeze({...descriptor});
+    const release=this.registerCapabilities?.();
+    this.provider=provider;
+    return ()=>{
+      if(this.provider!==provider)return;
+      this.provider=null;
+      release?.();
+    };
   }
   catalog(){return this.provider?[{id:'deep-learning',version:1,title:'探索与学习',kind:'optional-workflow',taskKinds:[...learningKinds]}]:[];}
   available(settings){return !!this.provider&&settings.learningEnabled===true;}
@@ -111,9 +117,10 @@ export class LearningPack {
     shareOpportunity(agent,snapshot);
   }
   hold(agent,task,settings){
-    if(!isLearningActivity(task.kind))return false;
+    const isReport=task.kind==='write-report';
+    if(!isLearningActivity(task.kind)&&!isReport)return false;
     const version=task.checkpoint.learningPackVersion??1;
-    const reason=!this.provider?'LEARNING_PACK_UNAVAILABLE':!settings.learningEnabled?'LEARNING_DISABLED':version!==this.provider.version?'LEARNING_PACK_CHANGED':null;
+    const reason=!this.provider?'LEARNING_PACK_UNAVAILABLE':!isReport&&!settings.learningEnabled?'LEARNING_DISABLED':version!==this.provider.version?'LEARNING_PACK_CHANGED':null;
     const store=agent.factory.autonomy;
     if(reason){if(task.checkpoint.learningHold!==reason){store.update(task.id,'suspended',{...task.checkpoint,learningHold:reason});agent.factory.journal.audit(agent.id,'learning-task-held',{taskId:task.id,code:reason});}return true;}
     if(task.checkpoint.learningHold){const {learningHold,...checkpoint}=task.checkpoint;store.update(task.id,task.status,checkpoint);}

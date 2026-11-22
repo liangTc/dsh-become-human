@@ -65,7 +65,7 @@ export function reviewMessages(data,reply,{protocolRepair}={}){
   if(protocolRepair)packet.protocolRepair=protocolRepair;
   const speech=row=>({sourceId:row.sourceId,speaker:row.speaker,at:row.at,order:row.order,text:row.text,excerpted:row.excerpted,...(row.adjacentTo?{adjacentTo:row.adjacentTo,relation:row.relation}:{})});
   packet.memoryLookups=(data.capabilityObservations??[]).filter(row=>row.tool==='search-conversation-memory'&&row.status==='completed'&&row.result?.value?.kind==='conversation-memory-search').slice(-2).map(row=>({tool:row.tool,...row.result.value.coverage,queries:row.result.value.queries,matches:(row.result.value.matches??[]).map(speech),context:(row.result.value.context??[]).map(speech),contextMeaning:'Adjacent original user speech; not proven corrections. Interpret its relevance and attribution from the actual words.'}));
-  packet.availableTools=(data.capabilityCatalog??[]).map(row=>({id:row.id,effect:row.effect}));
+  packet.availableTools=[...data.capabilityCatalog??[],...data.capabilityIndex??[]].map(row=>({id:row.id,effect:row.effect}));
   packet.observedTools=packet.observedTools.map((row,index)=>({...row,executed:data.capabilityObservations[index].executed,code:data.capabilityObservations[index].code}));
   packet.observedBoard=(data.boardObservations??[]).map(row=>({op:row.op,status:row.status,executed:row.executed,code:row.code}));
   packet.currentExecution={scope:'this-turn-only',completedTools:packet.observedTools.filter(row=>row.status==='completed'&&row.executed!==false).map(row=>row.tool),completedMemorySearch:packet.memoryLookups.length>0};

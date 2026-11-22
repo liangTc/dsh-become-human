@@ -1,6 +1,6 @@
 import {capabilityName} from './record-presentation.mjs';
 import {RecordContent} from './native-records';
-import React,{useEffect,useRef,useState} from 'react';
+import React,{useRef,useState} from 'react';
 import {useDraftGuard,useDraftNavigation} from './native-shell';
 
 const statusLabels:Record<string,string>={queued:'排队中','awaiting-approval':'等待本次批准',running:'执行中',suspended:'已暂停 · 保留进度',completed:'已完成',failed:'失败 · 不自动重试',cancelled:'已取消',expired:'授权已到期',unknown:'结果待核对 · 不自动重试'};
@@ -117,15 +117,27 @@ export function ToolJobDetail({id,api,busy,ui,nonce,onChanged,onClose}:any){
   return <Detail title="工具任务 · 目标、批准与回执" onClose={onClose}><Button disabled={busy} onClick={onChanged}>刷新当前任务</Button><ReadState result={result}>{(row:any)=><ToolJob key={row.id+':'+row.version+':'+row.digest} row={row} {...{api,busy,ui,onChanged}}/>}</ReadState></Detail>;
 }
 
+function ToolCatalog({api,s,busy,ui,nonce,tool,setTool,refresh}:any){
+  const {Select,Field,Band,Empty,ReadState,useRead}=ui,navigation=useDraftNavigation();
+  const catalog=useRead(api,{kind:'tool-catalog'},nonce);
+  return <ReadState result={catalog}>{(data:any)=>{
+    const items=catalogOf(data);
+    if(!items.length)return <Empty>暂无已注册能力。</Empty>;
+    const selected=tool?items.find((item:any)=>item.id===tool):items.find((item:any)=>item.available!==false)??items[0];
+    const options=items.map((item:any)=>[item.id,capabilityName(item.title??item.description??item.id)+(item.available===false?' · 未启用':'')]);
+    if(!selected)options.unshift(['','原能力已移除，请重新选择']);
+    return <><Field label="选择能力"><Select value={selected?.id??''} options={options} onChange={(next:string)=>{if(next&&next!==selected?.id)navigation?.navigate?navigation.navigate(()=>setTool(next)):setTool(next);}}/></Field>
+      {selected?.available===false?<Band>当前工具未启用，请检查工具授权。</Band>:selected&&<ToolSubmit key={selected.id} descriptor={selected} {...{api,s,busy,ui}} onSubmitted={refresh}/>}</>;
+  }}</ReadState>;
+}
+
 export default function Tools({api,s,busy,ui}:any){
-  const {Button,Select,Field,Band,Empty,ReadState,useRead}=ui,[tool,setTool]=useState(''),[nonce,setNonce]=useState(0),[activeId,setActiveId]=useState(''),[filter,setFilter]=useState(''),navigation=useDraftNavigation(),lastCatalog=useRef<any[]>([]);
-  const revision=Number(s.management?.toolRevision??0),rows=useRead(api,{kind:'tool-jobs',limit:50},nonce+revision),catalog=useRead(api,{kind:'tool-catalog'},nonce);if(catalog.data&&!catalog.error)lastCatalog.current=catalogOf(catalog.data);
-  const items=lastCatalog.current,selected=items.find((item:any)=>item.id===tool);
-  useEffect(()=>{if(!tool&&items.length)setTool((items.find((item:any)=>item.available!==false)??items[0]).id);},[tool,catalog.data]);
+  const {Button,Select,Field,Band,Empty,ReadState,useRead}=ui,[tool,setTool]=useState(''),[nonce,setNonce]=useState(0),[activeId,setActiveId]=useState(''),[filter,setFilter]=useState('');
+  const revision=Number(s.management?.toolRevision??0),rows=useRead(api,{kind:'tool-jobs',limit:50},nonce+revision);
+  const catalogKey=JSON.stringify([s.bootId,s.sessionId,s.management?.capabilityRevision,s.management?.catalogRevision,s.autonomy?.learningPack?.available]);
   const refresh=()=>setNonce(value=>value+1);
   return <><div className="hn-row hn-between"><h3>调用工具</h3><Button disabled={busy} onClick={refresh}>刷新能力与任务</Button></div><Band>所有任务与聊天、学习共用唯一执行通道。只读工具按已配置范围读取；写操作需要逐笔预览批准。工具结果不会自动成为长期记忆。</Band>
-    <ReadState result={catalog}>{()=>items.length?<Field label="选择能力"><Select value={tool} options={items.map((item:any)=>[item.id,capabilityName(item.title??item.description??item.id)+(item.available===false?' · 未启用':'')])} onChange={(next:string)=>{if(next!==tool)navigation?.navigate?navigation.navigate(()=>setTool(next)):setTool(next);}}/></Field>:<Empty>暂无已注册能力。</Empty>}</ReadState>
-    {selected&&<ToolSubmit key={selected.id} descriptor={selected} api={api} s={s} busy={busy||catalog.loading||!!catalog.error} ui={ui} onSubmitted={refresh}/>}
+    <ToolCatalog key={catalogKey} {...{api,s,busy,ui,nonce,tool,setTool,refresh}}/>
     <h3 className="hn-section-title">任务与回执</h3><Field label="筛选任务状态"><Select value={filter} options={[["","全部状态"],...Object.entries(statusLabels)]} onChange={setFilter}/></Field>
     <ReadState result={rows}>{(data:any)=>{const visible=rowsOf(data).filter((row:any)=>!filter||row.status===filter);return visible.length?visible.map((row:any)=><section className="hn-group" key={row.id}><div className="hn-row hn-between"><strong>{capabilityName(row.capabilitySnapshot?.title??row.tool)}</strong><span>{statusLabels[row.status]??row.status}</span></div><p className="hn-note">{time(row.updated)} · 版本 {row.version}</p><p className="hn-note">{row.input?.title??row.input?.url??(row.input?.sessionId?'DSH 会话操作':'参数与结果见详情')}</p>{row.error&&<p className="hn-note">原因：{ui.errorText(typeof row.error==='string'?row.error:row.error.code??row.error.message??print(row.error))}</p>}<Button onClick={()=>setActiveId(row.id)}>{row.status==='awaiting-approval'?'预览目标 / 批准':'查看结果与回执'}</Button></section>):<Empty>暂无符合条件的工具任务。</Empty>;}}</ReadState>
     {activeId&&<ToolJobDetail key={activeId} id={activeId} {...{api,busy,ui}} nonce={nonce+revision} onChanged={refresh} onClose={()=>setActiveId('')}/>}

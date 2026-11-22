@@ -1,7 +1,7 @@
 import fs from 'node:fs';import os from 'node:os';import {spawnSync} from 'node:child_process';import path from 'node:path';import {pathToFileURL} from 'node:url';
 const root=path.resolve(import.meta.dirname,'..');
 const packagedHostSuites=['desktop-manager','desktop-worker','storage-routing'];
-const suites=['behavior-core','memory-continuity','dialogue','attempt-lifecycle','model-policy','controller-admission','runtime-status','quiet-hours','plugin-lifecycle','plugin-events','learning-pack','learning-management','extension-pages','extension-management','extension-registry','worker-request','web-experience','management-order','user-records','conversation-records','weixin-recovery','model-diagnostics','model-error-notifications','budget-notifications','unread-messages','human-update',...packagedHostSuites];
+const suites=['behavior-core','memory-continuity','dialogue','attempt-lifecycle','model-policy','controller-admission','runtime-status','quiet-hours','plugin-lifecycle','plugin-events','learning-pack','learning-management','extension-pages','extension-management','extension-registry','worker-request','web-experience','management-order','work-observation-behavior','four-fixes','user-records','conversation-records','weixin-recovery','model-diagnostics','model-error-notifications','budget-notifications','unread-messages','human-update',...packagedHostSuites];
 // Canonicalize hosted Windows 8.3 TEMP aliases without relaxing root safety checks.
 const tempParent=path.join(root,'.dsh-verify');fs.mkdirSync(tempParent,{recursive:true});
 const testTemp=fs.realpathSync.native(fs.mkdtempSync(path.join(tempParent,'release-tests-')));

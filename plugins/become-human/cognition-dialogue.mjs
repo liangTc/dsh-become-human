@@ -70,6 +70,13 @@ function checkedInput(call){
 
 export function boardOperationKey(call){return hash({op:call.op,input:canonical(call.input)});}
 
+// Older builds counted up to four calls, two schema lookups and two protocol
+// repairs in the request key. Keep their receipts usable across an upgrade.
+export function dialogueMutationRequestId(prefix,identity,lookupLegacy){
+  const legacy=Array.from({length:8},(_,i)=>prefix+':'+hash({...identity,step:i+1}));
+  return lookupLegacy(legacy)?.request_id??prefix+':'+hash(identity);
+}
+
 export function runBoardRequest(agent,call,{admittedIds,step,valid}={}){
   if(!boardDialogueAvailable(agent.factory.cognition))fail('BOARD_UNAVAILABLE');
   if(!Array.isArray(admittedIds)||!admittedIds.length||admittedIds.some(id=>typeof id!=='string')||!Number.isSafeInteger(step)||step<1||step>4||typeof valid!=='function')fail('INVALID_BOARD_REQUEST');
@@ -79,7 +86,9 @@ export function runBoardRequest(agent,call,{admittedIds,step,valid}={}){
     const page=cognition.listMatters(id,{...input,limit:input.limit??5,offset:input.offset??0}),focus=cognition.attentionState(id);
     return {status:'completed',result:boundedResult({items:page.items.map(row=>compactMatter(row)),total:page.total,offset:page.offset,limit:page.limit,hasMore:page.hasMore,nextOffset:page.hasMore?page.offset+page.items.length:null,attention:{version:focus.version,matterId:focus.matterId,taskId:focus.taskId,selectedAt:focus.selectedAt,leaseUntil:focus.leaseUntil,reason:clip(focus.reason,120)},summaryOnly:true,scope:'Bounded current Session board summary; omitted or truncated records may still exist.'})};
   }
-  const requestId='board-dialogue:'+hash({admittedIds,op:call.op,input:canonical(input),step});
+  const table=call.op==='create'?'human_matter':'human_matter_request';
+  const requestId=dialogueMutationRequestId('board-dialogue',{admittedIds,op:call.op,input:canonical(input)},legacy=>
+    cognition.db?.prepare(`SELECT request_id FROM ${table} WHERE agent=? AND request_id IN (SELECT value FROM json_each(?)) ORDER BY rowid LIMIT 1`).get(id,JSON.stringify(legacy)));
   let row;
   if(call.op==='create')row=cognition.createMatter(id,{...input,requestId},{actor:'agent'});
   else{

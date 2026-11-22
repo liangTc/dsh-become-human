@@ -3,11 +3,12 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {DatabaseSync} from 'node:sqlite';
-import {randomUUID} from 'node:crypto';
+import {createHash,randomUUID} from 'node:crypto';
 import {DomainMemory} from '../plugins/become-human/domain.mjs';
 import {ActionStore} from '../plugins/become-human/actions.mjs';
 import {ToolExecutor} from '../plugins/become-human/tool-executor.mjs';
-import {registerReportCapability} from '../plugins/become-human/capability-report.mjs';
+import {CognitionStore} from '../plugins/become-human/cognition.mjs';
+import {registerReportCapability,cancelLearningReportPreview} from '../plugins/become-human/capability-report.mjs';
 import {capabilityDialogue} from '../plugins/become-human/capability-dialogue.mjs';
 import {choiceDialogueRequest} from '../plugins/become-human/choice-dialogue.mjs';
 import {RollingDialogueSummary} from '../plugins/become-human/dialogue-summary.mjs';
@@ -37,7 +38,7 @@ function fixture({ownerText='【开发测试】请根据已有学习笔记生成
  const audits=[],ends=[],journal={db,assertAdmitted(){},value:(a,k,d)=>values.has(a+':'+k)?values.get(a+':'+k):d,put:(a,k,v)=>values.set(a+':'+k,v),audit(a,kind,data){audits.push({agent:a,kind,data});},endAttempt(rid,outcome){ends.push({rid,...outcome});},transaction(fn){const name='s'+depth++;db.exec('SAVEPOINT '+name);try{const r=fn();db.exec('RELEASE '+name);return r;}catch(e){db.exec('ROLLBACK TO '+name);db.exec('RELEASE '+name);throw e;}finally{depth--;}}};
  journal.safety={rows:[],appendSync(id,kind,data){const row={id,kind,data:JSON.stringify(data)};this.rows.push(row);return row;},async prepare(id,kind,data){return this.appendSync(id,kind,data);},async anchor(){}};
  const domain=new DomainMemory(journal),validNote=(a,id)=>{const r=db.prepare("SELECT * FROM learning_note WHERE agent=? AND id=? AND status='active'").get(a,id);return r?{...r,data:JSON.parse(r.data)}:null;};
- const actions=new ActionStore(journal,domain,{root:path.join(base,agentId),validNote}),tools=new ToolExecutor(journal);registerReportCapability(tools,actions,journal);
+ const actions=new ActionStore(journal,domain,{root:path.join(base,agentId),validNote}),tools=new ToolExecutor(journal);const detach=registerReportCapability(tools,actions,journal);
  const add=(title,claim,url)=>{const id=randomUUID(),sourceId=randomUUID();domain.source(agentId,{id:sourceId,kind:'imported',body:JSON.stringify({url,excerpt:claim})});const memoryId=domain.save(agentId,{type:'skill',truth:'inferred',refs:[sourceId],payload:{title,summary:claim}});db.prepare("INSERT INTO learning_note VALUES(?,?,?,?,?,'active',?,NULL)").run(id,agentId,memoryId,sourceId,JSON.stringify({title,summary:claim,claims:[{text:claim,quote:claim,evidenceIds:['E1']}],source:{url,digest:'a'.repeat(64),fetchedAt:Date.now(),partial:true}}),Date.now());return id;};
  const good=add('AbortController definition','AbortController allows aborting Web requests when desired.','https://example.com/AbortController'),bad=add('HTTP 204 definition','HTTP 204 represents a successful response without content.','https://example.com/http/204');
  const ownerId=randomUUID();domain.source(agentId,{id:ownerId,kind:'user',body:ownerText});
@@ -46,9 +47,114 @@ function fixture({ownerText='【开发测试】请根据已有学习笔记生成
  const messages=[{role:'system',content:[{type:'text',text:'Isolated capability contract.'}]},{role:'user',content:[{type:'text',text:JSON.stringify({persona:domain.persona(agentId),input:[{id:ownerId,content:[{type:'text',text:ownerText}]}]})}]}];
  const dialogue=async(sequence)=>{const seen=[];const result=await capabilityDialogue(agent,new AbortController().signal,{turn:1,epoch:1,admittedIds:[ownerId],messages,request:async(a,s,options)=>{const data=JSON.parse(options.messages[1].content[0].text);seen.push(data);const next=sequence.shift(),text=typeof next==='function'?next(data):next;assert.equal(typeof text,'string','unexpected model step');return {rid:randomUUID(),text};}});return {result,seen};};
  const submit=()=>tools.submit(agentId,{tool:'write-learning-report',input:{title:'AbortController definition report',noteIds:[good]},requestId:'test-'+randomUUID()});
- return {db,journal,domain,actions,tools,agent,agentId,ownerId,audits,ends,good,bad,messages,dialogue,submit,close:()=>db.close()};
+ return {db,journal,domain,actions,tools,agent,agentId,ownerId,audits,ends,good,bad,messages,dialogue,submit,detach,close:()=>db.close()};
 }
 const call=(tool,input)=>JSON.stringify({capability:{tool,input}});
+await test('Every note still present in dialogue observations is rechecked after a later read',async()=>{
+ for(const firstTool of ['read-learning-note','list-learning-notes']){
+  const f=fixture();
+  try{
+   const first=firstTool==='read-learning-note'?{noteId:f.good}:{query:'AbortController'};
+   await assert.rejects(f.dialogue([call(firstTool,first),call('read-learning-note',{noteId:f.bad}),data=>{
+    assert.equal(data.capabilityObservations.length,2);
+    const {memory_id}=f.db.prepare('SELECT memory_id FROM learning_note WHERE id=?').get(f.good);
+    f.domain.forgetRecord(f.agentId,memory_id);
+    return '回答引用了第一份笔记。';
+   }]),/STALE_LEARNING_NOTE/);
+   assert(f.ends.some(row=>row.state==='validation-rejected'&&row.error==='STALE_LEARNING_NOTE'));
+  }finally{f.close();}
+ }
+});
+await test('Replaying one owner mutation with a different lookup path reuses its approval, including pre-upgrade approvals',async()=>{
+ for(const fromLegacy of [false,true]){
+  const f=fixture(),tool='fixture-draft',input={title:'合成草稿'},invoke=call(tool,input);
+  try{
+    f.tools.register(tool,{description:'准备合成草稿',effect:'write',inputSchema:{type:'object',properties:{title:{type:'string'}},required:['title'],additionalProperties:false},execute:async()=>assert.fail('approval bypassed')});
+    if(fromLegacy){
+      const oldId='cap-dialogue:'+createHash('sha256').update(JSON.stringify({admittedIds:[f.ownerId],tool,input,step:3})).digest('hex');
+      f.tools.submit(f.agentId,{tool,input,requestId:oldId},{origin:'owner',taskId:'foreground:1'});
+    }
+    await f.dialogue([JSON.stringify({capability:{describe:[tool]}}),invoke]);
+    await f.dialogue([invoke]);
+    const jobs=()=>f.tools.list(f.agentId).items.filter(job=>job.tool===tool);
+    assert.deepEqual(jobs().map(job=>job.status),['awaiting-approval']);
+    const nextOwner=randomUUID();
+    await capabilityDialogue(f.agent,new AbortController().signal,{turn:2,epoch:1,admittedIds:[nextOwner],messages:f.messages,request:async()=>({rid:randomUUID(),text:invoke})});
+    assert.equal(jobs().length,2);
+  }finally{f.close();}
+ }
+});
+await test('Retrying a board mutation through a different discovery path preserves its original receipt and version',async()=>{
+ const f=fixture(),board=(op,input)=>JSON.stringify({board:{op,input}});
+ try{
+   f.journal.get=()=>({desired:'running',epoch:1});
+   const cognition=f.agent.factory.cognition=new CognitionStore(f.journal,f.domain,{factory:f.agent.factory});
+   const describe=JSON.stringify({capability:{describe:['read-public-page']}});
+   const create=board('create',{title:'合成事项'});
+   const done=data=>{assert.equal(data.boardObservations.at(-1).status,'completed');return '已登记。';};
+   await f.dialogue([describe,create,done]);await f.dialogue([create,done]);
+   const rows=f.db.prepare('SELECT id,version FROM human_matter WHERE agent=?').all(f.agentId);
+   assert.equal(rows.length,1);
+   const update=board('update',{matterId:rows[0].id,expectedVersion:1,title:'修订一次'});
+   await f.dialogue([update,done]);await f.dialogue([describe,update,done]);
+   assert.equal(cognition.getMatter(f.agentId,rows[0].id).version,2);
+ }finally{f.close();}
+});
+await test('Unloading the reader during draft or review blocks all later review, protocol repair and style repair requests',async()=>{
+ for(const stage of ['draft','review']){
+   const f=fixture({ownerText:'展开那份笔记。'}),requests=[];
+   try{
+     f.agent.factory.dialogueState={context:()=>null};f.agent.factory.conversationReview=true;
+     const request=choiceDialogueRequest(async(_agent,_signal,options)=>{
+       const data=JSON.parse(options.messages[1].content[0].text),purpose=options.purpose??'draft';
+       requests.push(purpose);
+       if(purpose==='conversation-review'){
+         assert.equal(stage,'review');assert.equal(data.currentNote.id,f.good);
+         f.detach();return {rid:randomUUID(),text:'malformed review'};
+       }
+       if(!data.learningConversation?.note)return {rid:randomUUID(),text:call('read-learning-note',{noteId:f.good})};
+       if(stage==='draft')f.detach();
+       return {rid:randomUUID(),text:'这份合成笔记讨论中止请求。'};
+     });
+     await assert.rejects(capabilityDialogue(f.agent,new AbortController().signal,{turn:1,epoch:1,admittedIds:[f.ownerId],messages:f.messages,request}),/LEARNING_PACK_UNAVAILABLE/);
+     assert.deepEqual(requests,stage==='draft'?['draft','draft']:['draft','draft','conversation-review']);
+     assert(f.ends.some(row=>row.error==='LEARNING_PACK_UNAVAILABLE'));
+     assert(!f.audits.some(row=>row.kind==='conversation-review-unavailable'));
+   }finally{f.close();}
+ }
+});
+await test('Ordinary conversation ships a compact tool index; an on-demand schema read spends no execution step',async()=>{
+ const f=fixture({ownerText:'嗨。'});
+ try{
+   let executions=0;
+   const id='fixture-ledger',arg='statementMonth';
+   f.tools.register(id,{title:'月度对账',description:'按月核对账目',effect:'read',
+     inputSchema:{type:'object',properties:{[arg]:{type:'string'}},required:[arg],additionalProperties:false},
+     execute:async()=>{executions++;return {balanced:true};}});
+   const r=await f.dialogue([
+     data=>{assert.equal(data.capabilityCatalog.length,0);const hint=data.capabilityIndex.find(e=>e.id===id);
+       assert.equal(hint.hint,'月度对账');assert(!JSON.stringify(data).includes(arg));return JSON.stringify({capability:{describe:[id]}});},
+     data=>{assert(data.capabilityCatalog.find(e=>e.id===id).inputSchema.properties[arg]);assert.equal(data.capabilityLimits.used,0);
+       assert.equal(data.capabilityObservations.at(-1).executed,false);return call(id,{[arg]:'2026-10'});},
+     data=>{assert.equal(data.capabilityLimits.used,1);assert.equal(data.capabilityObservations.at(-1).status,'completed');return '已核对。';},
+   ]);
+   assert.equal(r.result.text,'已核对。');assert.equal(executions,1);assert.equal(f.tools.list(f.agentId).items.length,1);
+ }finally{f.close();}
+});
+await test('Directly relevant schema is present up front and a retired tool vanishes from lookup',async()=>{
+ const f=fixture({ownerText:'查一下皮划艇赛程'});
+ try{
+   const id='fixture-paddling';
+   const dispose=f.tools.register(id,{title:'皮划艇赛程',description:'核对比赛时间',effect:'read',
+     inputSchema:{type:'object',properties:{},required:[],additionalProperties:false},execute:async()=>assert.fail('revoked lookup executed')});
+   await f.dialogue([
+     data=>{assert(data.capabilityCatalog.find(e=>e.id===id)?.inputSchema);dispose();return JSON.stringify({capability:{describe:[id]}});},
+     data=>{assert(![...data.capabilityCatalog,...data.capabilityIndex].some(e=>e.id===id));
+       assert.equal(data.capabilityObservations.at(-1).unavailableCount,1);return '暂时没有可用的赛程工具。';},
+   ]);
+   assert.equal(f.tools.list(f.agentId).items.length,0);
+ }finally{f.close();}
+});
 await test('A rejected promise and malformed action recover into one actual lookup through both dialogue layers',async()=>{
  const f=recallFixture();try{
   f.agent.factory.conversationReview=true;f.agent.factory.dialogueState={context:()=>null};let drafts=0,reviews=0;
@@ -68,6 +174,19 @@ const sourceAnswer=data=>{const source=data.foregroundSources.sources[0],unit=so
 await test('A model-selected saved note becomes required current material without another search',async()=>{const f=fixture({ownerText:'展开你刚才提的那份笔记。'});try{const r=await f.dialogue([call('read-learning-note',{noteId:f.good}),data=>{assert.equal(data.learningConversation.note.id,f.good);assert(data.learningConversation.note.claims[0].text.includes('AbortController'));assert.equal(data.learningLookup.resolvedNoteId,f.good);return '这份笔记描述了按需中止请求。';}]);assert.equal(r.result.learningFollowUp.noteId,f.good);assert.equal(r.result.learningFollowUp.ownerSourceId,f.ownerId);assert.equal(f.tools.list(f.agentId).items.length,1);assert(!f.audits.some(a=>a.kind==='learning-follow-up-committed'));}finally{f.close();}});
 await test('A missing saved note is a rejected read and cannot attach another note as its result',async()=>{const f=fixture({ownerText:'展开那份笔记。'});try{const r=await f.dialogue([call('read-learning-note',{noteId:randomUUID()}),'这份笔记暂时无法读取。']);assert.equal(r.result.learningFollowUp,undefined);assert.equal(f.tools.list(f.agentId).items[0].status,'failed');}finally{f.close();}});
 await test('Forgetting selected material before final reply rejects its stale reference',async()=>{const f=fixture({ownerText:'展开那份笔记。'});try{await assert.rejects(f.dialogue([call('read-learning-note',{noteId:f.good}),()=>{const memory=f.db.prepare('SELECT memory_id FROM learning_note WHERE id=?').get(f.good);f.domain.forgetRecord(f.agentId,memory.memory_id);return '这是一份已失效材料的旧回复。';}]),/STALE_LEARNING_NOTE/);}finally{f.close();}});
+await test('A note or list already read cannot support a reply after the reader is unloaded or replaced',async()=>{
+ for(const replace of [false,true])for(const tool of ['read-learning-note','list-learning-notes']){
+   const f=fixture({ownerText:'查一下那份笔记。'});
+   try{
+     await assert.rejects(f.dialogue([call(tool,tool==='read-learning-note'?{noteId:f.good}:{}),()=>{
+       f.detach();if(replace)registerReportCapability(f.tools,f.actions,f.journal);
+       return '这个结果已经过期。';
+     }]),/LEARNING_PACK_UNAVAILABLE/);
+     assert.equal(f.actions.note(f.agentId,f.good).id,f.good);
+     assert(f.ends.some(row=>row.error==='LEARNING_PACK_UNAVAILABLE'));
+   }finally{f.close();}
+ }
+});
 await test('An ungrounded saved-note answer is consumed and corrected before one actual read',async()=>{const f=fixture({ownerText:'回到刚才那个点，展开那份笔记。'});try{const data=JSON.parse(f.messages[1].content[0].text);data.learningLookup={requested:true,currentOffers:[{noteId:f.good}]};f.messages[1].content[0].text=JSON.stringify(data);const r=await f.dialogue(['直接沿用旧助手结论。',call('read-learning-note',{noteId:f.good}),'按当前笔记保留按需条件。']);assert.equal(r.result.learningFollowUp.noteId,f.good);assert.equal(f.tools.list(f.agentId).items.length,1);assert(f.ends.some(a=>a.error==='LEARNING_NOTE_READ_REQUIRED'));}finally{f.close();}});
 await test('Repeated free-form note answers stop without tool dispatch or invented evidence',async()=>{const f=fixture({ownerText:'展开那份笔记。'});try{const data=JSON.parse(f.messages[1].content[0].text);data.learningLookup={requested:true};f.messages[1].content[0].text=JSON.stringify(data);const r=await f.dialogue(['无读取的旧答案。','第二次仍然无读取。','第三次仍然无读取。']);assert.equal(f.tools.list(f.agentId).items.length,0);assert.equal(r.result.learningFollowUp,undefined);assert(r.result.text.includes('哪一份'));assert.equal(f.ends.filter(a=>a.error==='LEARNING_NOTE_READ_REQUIRED').length,3);}finally{f.close();}});
 await test('Consumed tool model output is terminal, distinct from job execution and final reply commit',async()=>{const f=fixture();try{const r=await f.dialogue([call('list-learning-notes',{}),'已核对。']);assert.equal(f.ends.length,1);assert.equal(f.ends[0].state,'completed');assert.notEqual(f.ends[0].rid,r.result.rid);const a=f.audits.find(a=>a.kind==='foreground-model-output-consumed');assert.equal(a.data.channel,'capability');assert.equal(a.data.published,false);assert.equal(f.ends[0].usageConfidence,'unknown');}finally{f.close();}});
@@ -91,6 +210,27 @@ await test('Mismatched material is rejected even after a broad note lookup',asyn
 await test('Direct report without actual current-turn material review is refused',async()=>{const f=fixture();try{const r=await f.dialogue([call('write-learning-report',{title:'AbortController report',noteIds:[f.good]}),'需要先查看笔记。']);assert.equal(r.seen.at(-1).capabilityObservations[0].code,'REPORT_MATERIALS_NOT_REVIEWED');assert.equal(f.actions.list(f.agentId).length,0);}finally{f.close();}});
 await test('Filtered lookup and matching material create one unexecuted approval preview',async()=>{const f=fixture();try{await f.dialogue([call('list-learning-notes',{query:'AbortController'}),call('write-learning-report',{title:'AbortController report',noteIds:[f.good]})]);const jobs=f.tools.list(f.agentId).items,job=jobs.find(j=>j.tool==='write-learning-report');assert.equal(job.status,'awaiting-approval');assert.deepEqual(job.input.noteIds,[f.good]);await assert.rejects(fs.access(job.prepared.path));}finally{f.close();}});
 await test('A successful page read is not treated as saved note review',async()=>{const f=fixture();try{f.tools.register('fixture-read',{description:'read fixture',effect:'read',inputSchema:{type:'object',properties:{},required:[],additionalProperties:false},execute:async()=>({text:'AbortController page'})});const r=await f.dialogue([call('fixture-read',{}),call('write-learning-report',{title:'AbortController report',noteIds:[f.bad]}),'需要先学习。']);assert.equal(r.seen.at(-1).capabilityObservations.at(-1).code,'REPORT_MATERIALS_NOT_REVIEWED');assert.equal(f.actions.list(f.agentId).length,0);}finally{f.close();}});
+await test('A cold runtime without the pack can cancel a legacy report preview and reload the original notes',async()=>{
+  const f=fixture();
+  try{
+    const pending=f.submit();
+    f.detach();
+    const cold=new ToolExecutor(f.journal,{cancelDetachedPreview:(row,context)=>{
+      if(row.tool==='write-learning-report'&&row.capabilitySnapshot?.backend==='managed-report')cancelLearningReportPreview(f.actions,f.journal,context);
+    }});
+    assert(!cold.contextCatalog(f.agentId).some(c=>c.id==='list-learning-notes'));
+    await assert.rejects(()=>cold.approve(f.agentId,pending.id,{expectedVersion:pending.version,digest:pending.digest}),/CAPABILITY_NOT_APPROVABLE/);
+    cold.cancel(f.agentId,pending.id,pending.version);
+    assert.equal(f.actions.get(f.agentId,pending.prepared.actionId).status,'cancelled');
+    const release=registerReportCapability(cold,f.actions,f.journal);
+    try{
+      const lookup=cold.submit(f.agentId,{tool:'read-learning-note',input:{noteId:f.good},requestId:'restored-note'});
+      const result=await cold.execute(f.agentId,lookup.id,{signal:new AbortController().signal,valid(){}});
+      assert.equal(result.status,'completed');assert.equal(result.result.note.id,f.good);
+      assert.equal(cold.get(f.agentId,pending.id).status,'cancelled');
+    }finally{release();}
+  }finally{f.close();}
+});
 await test('Cancelling approval preview also cancels its owned action',async()=>{const f=fixture();try{const j=f.submit(),a=f.actions.get(f.agentId,j.prepared.actionId);assert.equal(a.status,'proposed');const done=f.tools.cancel(f.agentId,j.id,j.version);assert.equal(done.status,'cancelled');assert.equal(f.actions.get(f.agentId,a.id).status,'cancelled');await assert.rejects(fs.access(a.path));}finally{f.close();}});
 await test('Cancelling approved queued report revokes prepared action without file write',async()=>{const f=fixture();try{let j=f.submit();j=await f.tools.approve(f.agentId,j.id,{expectedVersion:j.version,digest:j.digest});assert.equal(j.status,'queued');f.tools.cancel(f.agentId,j.id,j.version);assert.equal(f.actions.get(f.agentId,j.prepared.actionId).status,'cancelled');await assert.rejects(fs.access(j.prepared.path));}finally{f.close();}});
 await test('Stale cancellation cannot cancel action or job',()=>{const f=fixture();try{const j=f.submit();assert.throws(()=>f.tools.cancel(f.agentId,j.id,j.version+1),/STALE_TOOL_JOB/);assert.equal(f.actions.get(f.agentId,j.prepared.actionId).status,'proposed');assert.equal(f.tools.get(f.agentId,j.id).status,'awaiting-approval');}finally{f.close();}});

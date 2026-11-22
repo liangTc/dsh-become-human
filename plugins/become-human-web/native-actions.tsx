@@ -25,7 +25,8 @@ function ArtifactContent({api,id,ui}:any){
 function ActionPreviewContent({api,action,ui,onChanged}:any){
   const {Button,Check,Band}=ui,[reviewedDigest,setReviewedDigest]=useState(''),[showFile,setShowFile]=useState(false),[copied,setCopied]=useState('');
   const busy=!!api.snapshot.busy,content=typeof action.content==='string'?action.content:'',digest=typeof action.digest==='string'?action.digest:'',hasPreview=content.length>0&&/^[a-f0-9]{64}$/i.test(digest)&&Number.isSafeInteger(action.bytes)&&action.bytes>0;
-  const approvalReady=action.status==='proposed'&&action.sourceValid===true&&hasPreview&&reviewedDigest===digest&&(!action.expires||action.expires>Date.now());
+  const reportAvailable=api.snapshot.state?.autonomy?.learningPack?.available===true;
+  const approvalReady=reportAvailable&&action.status==='proposed'&&action.sourceValid===true&&hasPreview&&reviewedDigest===digest&&(!action.expires||action.expires>Date.now());
   const cancelable=['proposed','approved','blocked'].includes(action.status),receipt=action.receipt;
   const run=(op:string,notice:string)=>api.run(async()=>{await api.control({op,actionId:action.id,expectedVersion:action.version,digest});setReviewedDigest('');onChanged();},notice);
   const copy=async(text:string)=>{try{if(!navigator.clipboard)throw new Error('CLIPBOARD_UNAVAILABLE');await navigator.clipboard.writeText(text);setCopied('已复制报告草稿。');}catch{setCopied('复制未完成，可在报告原文中选择并复制。');}};
@@ -40,8 +41,8 @@ function ActionPreviewContent({api,action,ui,onChanged}:any){
     {action.reason&&<Band>等待原因：{ui.errorText(action.reason)}</Band>}
     {action.status==='approved'&&<Band>已批准这份具体内容。{action.approvalExpires?'本次授权有效至 '+time(action.approvalExpires)+'。':''}全局或自主暂停仍保留；恢复运行且轮到本行动后，才由当前唯一执行通道写入。</Band>}
     {hasPreview?<><div className="hn-row hn-between"><h3>完整 Markdown 原文</h3><Button onClick={()=>copy(content)}>复制报告草稿</Button></div>{copied&&<p role="status">{copied}</p>}<pre className="hn-preview" style={textStyle}>{content}</pre></>:<Band>未取得完整报告原文，无法批准。请刷新预览。</Band>}
-    {action.status==='proposed'&&<><Check label="我已核对完整原文、材料编号和写入路径，批准写入这一版本" value={!!digest&&reviewedDigest===digest} disabled={busy||!hasPreview||action.sourceValid!==true} onChange={(checked:boolean)=>setReviewedDigest(checked?digest:'')}/><p className="hn-note">批准绑定当前版本和 SHA-256；内容变化后需要重新预览确认。</p></>}
-    <div className="hn-row">{action.status==='proposed'&&<Button primary disabled={busy||!approvalReady} onClick={()=>run('action-approve','已批准当前报告版本，等待原执行通道处理')}>批准此版本写入</Button>}{cancelable&&<Button danger disabled={busy} onClick={()=>run('action-cancel','行动已取消')}>取消此行动</Button>}</div>
+    {action.status==='proposed'&&reportAvailable&&<><Check label="我已核对完整原文、材料编号和写入路径，批准写入这一版本" value={!!digest&&reviewedDigest===digest} disabled={busy||!hasPreview||action.sourceValid!==true} onChange={(checked:boolean)=>setReviewedDigest(checked?digest:'')}/><p className="hn-note">批准绑定当前版本和 SHA-256；内容变化后需要重新预览确认。</p></>}
+    <div className="hn-row">{action.status==='proposed'&&reportAvailable&&<Button primary disabled={busy||!approvalReady} onClick={()=>run('action-approve','已批准当前报告版本，等待原执行通道处理')}>批准此版本写入</Button>}{cancelable&&<Button danger disabled={busy} onClick={()=>run('action-cancel','行动已取消')}>取消此行动</Button>}</div>
     {receipt&&<section className="hn-group"><h3>实际写入回执</h3><p className="hn-mono" style={textStyle}>{receipt.path}</p><p className="hn-note hn-mono" style={textStyle}>SHA-256 {receipt.digest??receipt.sha256} · {receipt.bytes} 字节</p><p className="hn-note">完成 {time(receipt.completedAt??receipt.created)}。该回执表示受管文件已经写入并核验，不代表现实效果已经验证。</p><Button onClick={()=>setShowFile(v=>!v)}>{showFile?'收起实际文件原文':'查看实际文件原文 / 复制'}</Button>{showFile&&<ArtifactContent api={api} id={action.id} ui={ui}/>}</section>}
   </>;
 }
@@ -59,10 +60,11 @@ function ReportCreate({api,ui,onCreated,onClose}:any){
 
 export default function Actions({api,s,busy,ui}:any){
   const {Button,Select,Band,Empty,ReadState,useRead}=ui,[nonce,setNonce]=useState(0),[status,setStatus]=useState(''),[creating,setCreating]=useState(false),[active,setActive]=useState(''),result=useRead(api,{kind:'actions'},nonce+Number(s.management?.actionRevision??0));
+  const reportAvailable=s.autonomy?.learningPack?.available===true;
   const refresh=()=>setNonce(n=>n+1);
-  return <><div className="hn-row hn-between"><h3>报告行动</h3><div className="hn-row"><Button onClick={refresh}>刷新行动</Button><Button primary disabled={busy} onClick={()=>setCreating(true)}>生成学习报告</Button></div></div>
+  return <><div className="hn-row hn-between"><h3>报告行动</h3><div className="hn-row"><Button onClick={refresh}>刷新行动</Button>{reportAvailable&&<Button primary disabled={busy} onClick={()=>setCreating(true)}>生成学习报告</Button>}</div></div>
     <Band>草稿、批准和实际写入分开记录。已批准的行动与聊天、学习共用唯一执行通道，主人输入优先；暂停状态下不会写入文件。</Band>
     <Select aria-label="筛选行动状态" value={status} options={[["","全部状态"],...Object.entries(labels)]} onChange={setStatus}/>
-    <ReadState result={result}>{(data:any)=>{const rows=rowsOf(data).filter((a:any)=>!status||a.status===status);return !rows.length?<Empty>暂无符合条件的报告行动。可从有效学习笔记生成第一份草稿。</Empty>:rows.map((action:any)=><section className="hn-group" key={action.id}><div className="hn-row hn-between"><strong>{action.title}</strong><span>{labels[action.status]??action.status}</span></div><p className="hn-note">创建 {time(action.created)} · 版本 {action.version} · {(action.noteIds??[]).length} 份材料</p><p className="hn-note hn-mono" style={textStyle}>{action.receipt?.path??action.path}</p>{action.reason&&<p>等待原因：{ui.errorText(action.reason)}</p>}<Button onClick={()=>setActive(action.id)}>{action.status==='proposed'?'完整预览 / 批准':'查看行动 / 文件'}</Button></section>);}}</ReadState>
-    {creating&&<ReportCreate api={api} ui={ui} onClose={()=>setCreating(false)} onCreated={(id:string)=>{setCreating(false);refresh();if(id)setActive(id);}}/>}{active&&<ActionDetail api={api} id={active} ui={ui} onClose={()=>setActive('')} onChanged={refresh}/>}</>;
+    <ReadState result={result}>{(data:any)=>{const rows=rowsOf(data).filter((a:any)=>!status||a.status===status);return !rows.length?<Empty>暂无符合条件的报告行动。{reportAvailable?'可从有效学习笔记生成第一份草稿。':''}</Empty>:rows.map((action:any)=><section className="hn-group" key={action.id}><div className="hn-row hn-between"><strong>{action.title}</strong><span>{labels[action.status]??action.status}</span></div><p className="hn-note">创建 {time(action.created)} · 版本 {action.version} · {(action.noteIds??[]).length} 份材料</p><p className="hn-note hn-mono" style={textStyle}>{action.receipt?.path??action.path}</p>{action.reason&&<p>等待原因：{ui.errorText(action.reason)}</p>}<Button onClick={()=>setActive(action.id)}>{action.status==='proposed'?'完整预览 / 批准':'查看行动 / 文件'}</Button></section>);}}</ReadState>
+    {creating&&reportAvailable&&<ReportCreate api={api} ui={ui} onClose={()=>setCreating(false)} onCreated={(id:string)=>{setCreating(false);refresh();if(id)setActive(id);}}/>}{active&&<ActionDetail api={api} id={active} ui={ui} onClose={()=>setActive('')} onChanged={refresh}/>}</>;
 }

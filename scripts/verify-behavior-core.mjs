@@ -17,6 +17,43 @@ async function test(name,body){let f;try{f=await fixture();await body(f);cases.p
 function taskFor(f,next,plan){const task=f.f.autonomy.task(f.id,next.kind,{...checkpointForOpportunity(next),plan},f.f.domain.persona(f.id).version);return task;}
 const context={signal:new AbortController().signal,valid(){}};
 
+await test('Generic tool opportunities rotate within three slots while a bound task stays eligible',f=>{
+  const tools=Array.from({length:9},(_,n)=>({kind:'behavior',behaviorId:'tool.sample-'+n,question:'有合适机会时使用',
+    behaviorDefinition:{id:'tool.sample-'+n,title:n===8?'观测潮汐':'项目'+n,description:'测试能力',inputSchema:schema}}));
+  const goal={...tools[0],goal:{id:'fixture',stepId:'step'},behaviorInput:{value:'已确认'}};
+  const visible=new Set();
+  for(let i=0;i<8;i++){
+    const {opportunities}=choiceOpportunity([...tools,goal],{journal:f.j,agentId:f.id,toolFocus:'观测潮汐'});
+    const unbound=opportunities.filter(row=>!row.goal);
+    assert(opportunities.some(row=>row.goal?.id==='fixture'));
+    assert.equal(unbound.length,3);
+    assert(unbound.some(row=>row.behaviorId==='tool.sample-8'));
+    for(const row of unbound)visible.add(row.behaviorId);
+  }
+  assert.equal(visible.size,9);
+});
+
+await test('A misplaced descriptive field can be recovered without changing identity, intent or tool input',f=>{
+  const task=taskFor(f,choiceOpportunity([{kind:'chat',question:'选择话题',social:{topics:[{key:'open-thread'}]}}]));
+  const opportunityId=task.checkpoint.opportunities[0].opportunityId;
+  const plan={decision:'execute',value:'继续上次的话题',topicKey:'open-thread'};
+  const question='还有一件想聊的事。';
+  const resolve=value=>resolveBehaviorChoice(f.agent,task,value);
+  const result=resolve({opportunityId,plan,question});
+  assert.deepEqual(result.plan,{...plan,question});
+  assert.equal(result.selected.kind,'chat');
+  assert.deepEqual(result.normalizedFields,['question']);
+  assert(!Object.hasOwn(plan,'question'));
+  assert.deepEqual(resolve({opportunityId,plan:{...plan,question},question}).plan,result.plan);
+  for(const [payload,reason] of [
+    [{opportunityId,plan:{...plan,question:'另一个方向'},question},'conflicting-plan-field'],
+    [{opportunityId,plan,question:{}},'invalid-field-type'],
+    [{opportunityId,plan,question,input:{}},'unexpected-top-level-fields'],
+    [{opportunityId,plan:{question},decision:'execute'},'unexpected-top-level-fields'],
+    [{opportunityId:'absent',plan,question},'unknown-opportunity'],
+  ])assert.throws(()=>resolve(payload),e=>e.validationDiagnostic?.reason===reason);
+});
+
 await test('Learning disabled still offers a registered non-learning behavior',async f=>{f.register();const next=await candidate(f.agent,context.signal,f.f.autonomy.settings(f.id));assert.equal(next.kind,'behavior-choice');assert(next.opportunities.some(x=>x.behaviorId==='make-index'));assert(!next.opportunities.some(x=>['research','learn-ai'].includes(x.kind)));});
 await test('Selection diagnostics distinguish malformed shape and unknown IDs without retaining model content',f=>{f.register();const task=taskFor(f,choiceOpportunity(f.f.behaviors.opportunities(f.agent,{})));for(const [value,reason] of [[null,'object-required'],[{secretField:'private-content'},'unexpected-top-level-fields'],[{opportunityId:'private-content',plan:{}},'execute-plan-required'],[{opportunityId:'private-content',plan:{decision:'execute'}},'unknown-opportunity']])assert.throws(()=>resolveBehaviorChoice(f.agent,task,value),e=>e.message==='INVALID_BEHAVIOR_SELECTION'&&e.validationDiagnostic.reason===reason&&!JSON.stringify(e.validationDiagnostic).includes('private-content'));});
 await test('Candidates do not fetch configured sources before selection',async f=>{learning(f);const settings={...f.f.autonomy.settings(f.id),learningEnabled:true,sources:[{url:'https://127.0.0.1:1/unreachable',title:'Public material',topic:'Read current information'}]};const next=await candidate(f.agent,context.signal,settings);assert(next.opportunities.some(x=>x.kind==='learn-ai'&&x.sourceSpec&&!x.source));});
@@ -27,6 +64,17 @@ await test('Execution evidence and reflection survive restart; withdrawn sources
 await test('Development tasks never become real personality evidence',f=>{const task=taskFor(f,{kind:'chat',question:'【开发测试】这只是合成测试'}, {question:'【开发测试】这只是合成测试',value:'验证'});f.f.autonomy.update(task.id,'completed');const e=f.f.experience.recordTask(f.id,task.id);assert.equal(e.source,null);assert.equal(f.f.experience.recent(f.id).length,0);});
 await test('Events arriving during an action are not acknowledged by its completion',f=>{f.f.autonomy.event(f.id,'before','timer',{});const seen=f.f.autonomy.events(f.id).map(e=>e.id);f.f.autonomy.event(f.id,'during','input',{});f.f.autonomy.completeEvents(f.id,seen);assert.equal(f.f.autonomy.events(f.id).length,1);assert.equal(f.f.autonomy.events(f.id)[0].kind,'input');});
 await test('Unapproved custom tools are absent; explicitly autonomous reads execute once',async f=>{let calls=0;const register=(name,autonomous)=>f.f.tools.register(name,{description:'读取测试索引。'.repeat(200),inputSchema:schema,effect:'read',autonomous,execute:async()=>{calls++;return {entries:2,excerpt:"x".repeat(32000)};}});register('private-read',false);register('approved-read',true);syncCapabilityBehaviors(f.f,f.id);assert.equal(f.f.behaviors.definition(f.agent,'tool.private-read'),null);const definition=f.f.behaviors.definition(f.agent,'tool.approved-read'),task=taskFor(f,{kind:'behavior',behaviorId:definition.id,behaviorFingerprint:definition.fingerprint,question:'读取索引'},{input:{value:'index'}});const first=await f.f.behaviors.execute(f.agent,task,context),second=await f.f.behaviors.execute(f.agent,task,context);assert.equal(first.status,'completed');assert.equal(first.jobId,second.jobId);assert.equal(calls,1);assert.equal(first.preview.text.length,1200);assert.equal(first.preview.truncated,true);assert.equal(first.result,undefined);f.f.autonomy.update(task.id,'completed',{...task.checkpoint,behaviorResult:first});f.f.experience.recordTask(f.id,task.id);assert.equal(f.f.experience.context(f.id).experiences[0].behaviorResult.preview.evidenceStatus,'tool-returned-unverified');});
+await test('Checking one tool contract leaves unrelated adapters untouched',f=>{
+  let unrelatedProbes=0;
+  const tool={description:'读取合成资料',inputSchema:schema,effect:'read',autonomous:true,execute:async()=>({})};
+  const dispose=f.f.tools.register('targeted-read',tool);
+  f.f.tools.register('other-read',{...tool,available(){unrelatedProbes++;return true;}});
+  const check=()=>f.f.tools.catalog(f.id,{origin:'autonomous',toolId:'targeted-read'});
+  assert.deepEqual(check().map(row=>row.id),['targeted-read']);
+  dispose();
+  assert.deepEqual(check(),[]);
+  assert.equal(unrelatedProbes,0);
+});
 await test('Experience reflection behavior registers without a scheduler change',f=>{registerExperienceBehavior(f.f);assert(f.f.behaviors.definition(f.agent,'reflect-experience'));});
 
 await test('Temporary model failures back off without pausing the session or replaying failed work',async f=>{
@@ -114,6 +162,60 @@ await test('Whole autonomous turn selects and executes a non-learning behavior w
     const row=f.j.db.prepare("SELECT * FROM autonomy_task WHERE agent=? AND kind='behavior'").get(f.id);
     const diagnostics=f.j.db.prepare('SELECT kind,data FROM audit WHERE agent=? ORDER BY seq DESC LIMIT 8').all(f.id);
     assert(row,JSON.stringify(diagnostics));assert.equal(row.status,'completed',JSON.stringify(diagnostics));assert.equal(calls,1);assert.equal(f.f.experience.recent(f.id).length,1);assert.equal(f.j.value(f.id,'autonomyPaused',false),false);
+  }finally{f.j.safety.close();}
+});
+
+await test('Rejected proposals cool down only the affected work and a new valid choice executes without restarting',async f=>{
+  const {SafetyLedger}=await import('../plugins/become-human/safety.mjs');
+  const {runAutonomyTurn}=await import('../plugins/become-human/autonomy.mjs');
+  const {ReminderStore}=await import('../plugins/become-human/reminders.mjs');
+  f.j.safety=await SafetyLedger.open(path.join(f.dir,'safety'));
+  try{
+    await f.f.autonomy.configure(f.id,{enabled:true,quotaEnabled:false,learningEnabled:true,
+      searchEnabled:true,socialEnabled:false,proactiveEnabled:false,quietStart:0,quietEnd:0,wakeIntervalMs:600000});
+    f.register();
+    f.f.learningPack={available:()=>true,collect(_agent,{offer}){
+      offer({kind:'research',question:'查阅公开资料'});
+      offer({kind:'share-insight',question:'和主人聊聊上次的笔记',noteId:'fixture-note'});
+    }};
+    f.f.reminders=new ReminderStore(f.j);
+    f.f.config={provider:'fixture',model:'fixture',domainEnabled:true};
+    f.f.tickets=new WeakMap();f.f.allowCall=async()=>{};
+    f.j.set(f.id,'running');f.j.put(f.id,'remaining',null);
+    const events=[];
+    f.agent.session={id:f.id,snapshotEvents:()=>events,append(type,data){events.push({type,data,time:Date.now()});}};
+    f.agent.inbox={nextTurn:[],nextStep:[]};f.agent.flush=async()=>{};f.agent.desired=()=>f.j.get(f.id);
+    const offered=[];
+    const prepareCall=async()=>({config:f.f.config,async *stream(input){
+      const {opportunities}=JSON.parse(input.messages[1].content[0].text);
+      offered.push(opportunities.map(row=>row.kind));
+      const choice=['absent','research','share-insight','behavior'][offered.length-1];
+      const row=opportunities.find(x=>x.kind===choice),plan={decision:'execute',value:'检查此项'};
+      if(choice==='research')plan.searchQuery='password=synthetic';
+      if(choice==='behavior')plan.input={value:'目录'};
+      const question=choice==='share-insight'?'你之前说过这件事':row?.direction??'检查机会';
+      yield {type:'text-delta',text:JSON.stringify({opportunityId:row?.opportunityId??'unknown',plan,question})};
+      yield {type:'usage',usage:{inputTokens:10,outputTokens:5}};
+      yield {type:'finish',reason:{kind:'stop'}};
+    }});
+    f.agent.ctx={sessionProjections:{stateOf:()=>({lastTurn:0})},llm:{prepareCall}};
+    const run=()=>runAutonomyTurn(f.agent,new AbortController().signal);
+    const reason=()=>f.j.value(f.id,'autonomyWait',null);
+    await run();assert.equal(reason(),'INVALID_BEHAVIOR_SELECTION');
+    await run();assert.equal(offered.length,1,'unchanged invalid batch consumes no second model call');
+    f.f.autonomy.event(f.id,'new-event','configuration',{});
+    await run();assert.equal(reason(),'INVALID_PUBLIC_SEARCH_QUERY');
+    await run();assert.equal(reason(),'UNSUPPORTED_OWNER_ATTRIBUTION');
+    assert(!offered[2].includes('research'));
+    await run();assert(!offered[3].includes('share-insight'));assert.equal(offered.length,4);
+    const tasks=f.j.db.prepare('SELECT kind,status FROM autonomy_task ORDER BY rowid').all();
+    assert.deepEqual(tasks.map(row=>row.status),['failed','failed','failed','completed']);
+    assert.equal(tasks.at(-1).kind,'behavior');
+    const audit=f.j.db.prepare("SELECT data FROM audit WHERE agent=? AND kind='direction-selected'").get(f.id);
+    assert.deepEqual(JSON.parse(audit.data).normalizedFields,['question']);
+    assert.equal(f.j.value(f.id,'autonomyPaused',false),false);
+    assert.equal(f.j.get(f.id).desired,'running');
+    assert.equal(f.j.db.prepare('SELECT count(*) n FROM outbox').get().n,0);
   }finally{f.j.safety.close();}
 });
 

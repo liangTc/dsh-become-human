@@ -13,6 +13,8 @@ const {HumanManagement}=await import('../plugins/become-human/management.mjs');
 const {GoalEngine}=await import('../plugins/become-human/goals.mjs');
 hook?.deregister();
 const {ToolExecutor}=await import('../plugins/become-human/tool-executor.mjs');
+const {ReadOnlyMcpProvider}=await import('../plugins/become-human/capability-mcp.mjs');
+const {WorkObservation}=await import('../plugins/become-human/work-observation.mjs');
 const {registerBridgeCapabilities,validateBridgeInput}=await import('../plugins/become-human/capability-bridge.mjs');
 const {capabilityDefaults,validateCapabilitySettings}=await import('../plugins/become-human/capability-policy.mjs');
 const {createHostCapabilities,activeSessionTurn}=await import('../plugins/become-human-web/host-capabilities.mjs');
@@ -67,7 +69,94 @@ await test('Different request keys remain separate explicit owner proposals',()=
 await test('Request keys are scoped per Human and purged with its data',()=>withFixture(async f=>{const r=f.request(),other=randomUUID();f.journal.ensure(other);await f.management.mutate(f.id,r);await f.management.mutate(other,r);assert.equal(f.count('human_goal_request'),2);f.domain.purgeAgent(f.id);assert.equal(f.count('human_goal_request'),1);assert.equal(f.journal.db.prepare('SELECT agent FROM human_goal_request').get().agent,other);}));
 await test('An unchanged frontend retry retains key and absolute expiry',()=>{let keys=0;const draft={description:'Synthetic draft',days:7,milestones:[]},a=prepareGoalSubmission(null,draft,{now:100,newId:()=>String(++keys)}),b=prepareGoalSubmission(a,draft,{now:9000,newId:()=>String(++keys)});assert.equal(a,b);assert.equal(keys,1);assert.equal(b.payload.expires,100+7*86400000);});
 await test('A changed frontend draft receives a new key and expiry',()=>{let keys=0;const a=prepareGoalSubmission(null,{description:'A',days:7},{now:1,newId:()=>String(++keys)}),b=prepareGoalSubmission(a,{description:'B',days:7},{now:2,newId:()=>String(++keys)});assert.notEqual(a.payload.requestId,b.payload.requestId);assert.equal(b.payload.expires-a.payload.expires,1);});
-await test('Legacy browser policy is discarded while existing DSH/MCP authorization remains',()=>{const original=structuredClone(capabilityDefaults);original.bridge.sessionReadEnabled=true;original.bridge.allowedSessionIds=['external-test'];original.bridge.browser={enabled:true,endpoint:'invalid-retired-endpoint',allowedOrigins:['https://example.com']};const next=validateCapabilitySettings(original);assert.equal(next.bridge.browser,undefined);assert.equal(next.bridge.sessionReadEnabled,true);assert.deepEqual(next.bridge.allowedSessionIds,['external-test']);assert.equal(next.mcp.bundledEnabled,true);});
+await test('Legacy signed session grants expand into independent identical lists without rewriting the ledger',()=>withFixture(async f=>{
+  const legacy=structuredClone(capabilityDefaults);
+  legacy.bridge={sessionReadEnabled:true,sessionWriteEnabled:false,allowedSessionIds:['external-test'],browser:{enabled:true}};
+  const signed={kind:'human-capability-policy',data:JSON.stringify({agent:f.id,revision:9,settings:legacy})};
+  f.journal.safety={rows:[signed],assert(){}};
+  const projected=new ToolExecutor(f.journal).configuration(f.id);
+  assert.equal(projected.revision,9);
+  assert.deepEqual(projected.bridge,{sessionReadEnabled:true,sessionReadScope:'selected',sessionWriteEnabled:false,sessionWriteScope:'selected',readSessionIds:['external-test'],writeSessionIds:['external-test']});
+  assert.equal(projected.mcp.bundledEnabled,true);
+  assert.deepEqual(JSON.parse(signed.data).settings,legacy);
+  const partial=validateCapabilitySettings({...legacy,bridge:{...legacy.bridge,readSessionIds:['new-read']}});
+  assert.deepEqual(partial.bridge.writeSessionIds,[],'mixed old and split fields never widen the missing grant');
+}));
+await test('Host list, read, observation, prompt and cancel each check their own session grant',async()=>{
+  let writes=0;
+  const controller={list:async()=>({items:['read-only','both','write-only'].map(sessionId=>({sessionId}))}),
+    inspect:async id=>({meta:{id},events:[]}),page:async()=>({records:[]}),prompt:async()=>{writes++;return {accepted:true}}};
+  const host=createHostCapabilities({sessionController:controller},{getHumanSessionId:()=> 'human-main'});
+  const bridge={sessionReadEnabled:true,readSessionIds:['read-only','both'],sessionWriteEnabled:true,writeSessionIds:['write-only','both']};
+  const call=(operation,input)=>host.handle({operation,input,context:{agent:'human-main',jobId:'test-job'}});
+  try{
+    host.configure(bridge);
+    assert.deepEqual((await call('dsh-session-list',{})).items.map(row=>row.sessionId),['both','read-only']);
+    assert.equal((await call('dsh-session-read',{sessionId:'read-only'})).sessionId,'read-only');
+    await assert.rejects(call('dsh-session-read',{sessionId:'write-only'}),/CAPABILITY_SCOPE_DENIED/);
+    await assert.rejects(call('dsh-session-observe',{sessionId:'write-only',afterSeq:-1}),/CAPABILITY_SCOPE_DENIED/);
+    await assert.rejects(call('dsh-session-prompt',{sessionId:'read-only',text:'test'}),/CAPABILITY_SCOPE_DENIED/);
+    await assert.rejects(call('dsh-session-cancel',{sessionId:'read-only',expectedTurn:1,expectedTurnStartSeq:0}),/CAPABILITY_SCOPE_DENIED/);
+    assert.equal(writes,0);
+    assert.equal((await call('dsh-session-prompt',{sessionId:'write-only',text:'test'})).accepted,true);
+    host.configure({...bridge,sessionReadScope:'all',writeSessionIds:[]});
+    await assert.rejects(call('dsh-session-prompt',{sessionId:'write-only',text:'test'}),/CAPABILITY_SCOPE_DENIED/);
+    assert.equal(writes,1);
+  }finally{await host.close();}
+});
+await test('Observation grant hashes survive legacy migration and ignore write-only changes',()=>withFixture(async f=>{
+  let bridge={sessionReadEnabled:true,sessionReadScope:'selected',sessionWriteEnabled:true,allowedSessionIds:['A']};
+  f.journal.safety={assert(){},rows:[{kind:'human-work-observation-policy',data:JSON.stringify({agent:f.id,revision:1,settings:{enabled:true}})}]};
+  const observer=new WorkObservation(f.journal,{bridgeSettings:()=>bridge});
+  const before=observer.grantHash(f.id);
+  bridge={...bridge,readSessionIds:['A'],writeSessionIds:['B']};
+  assert.equal(observer.grantHash(f.id),before);
+  assert.equal(observer.allowed(f.id,'B'),false);
+  assert.equal(observer.allowed(f.id,'A'),true);
+  bridge={...bridge,readSessionIds:[]};
+  assert.equal(observer.allowed(f.id,'A'),false);
+  assert.notEqual(observer.grantHash(f.id),before);
+}));
+await test('Worker rejects read-only targets before creating a write preview and rechecks revocation before dispatch',()=>withFixture(async f=>{
+  f.journal.safety={rows:[],assert(){},async prepare(id,kind,data){this.rows.push({id,kind,data:JSON.stringify(data)});},async anchor(){}};
+  const tools=new ToolExecutor(f.journal);let calls=0;
+  registerBridgeCapabilities(tools,{request:async()=>{calls++;return {accepted:true};}});
+  const settings=structuredClone(capabilityDefaults);
+  settings.bridge={...settings.bridge,sessionReadEnabled:true,sessionWriteEnabled:true,readSessionIds:['A','B'],writeSessionIds:['A']};
+  await tools.configure(f.id,settings,0);
+  const submit=sessionId=>tools.submit(f.id,{tool:'dsh-session-prompt',input:{sessionId,text:'测试'},requestId:randomUUID()});
+  assert.throws(()=>submit('B'),/CAPABILITY_SCOPE_DENIED/);
+  assert.equal(f.count('human_tool_job'),0);
+  let job=submit('A');
+  job=await tools.approve(f.id,job.id,{expectedVersion:job.version,digest:job.digest});
+  await tools.configure(f.id,{...settings,bridge:{...settings.bridge,writeSessionIds:[]}},1);
+  const done=await tools.execute(f.id,job.id,{signal:new AbortController().signal,valid(){}});
+  assert.equal(done.status,'failed');assert.equal(done.error,'CAPABILITY_APPROVAL_INVALID');assert.equal(calls,0);
+}));
+await test('A selected scope with no other session offers no DSH tool to either caller',()=>withFixture(async f=>{
+  f.journal.safety={rows:[],assert(){},async prepare(id,kind,data){this.rows.push({id,kind,data:JSON.stringify(data)});}};
+  const tools=new ToolExecutor(f.journal);
+  registerBridgeCapabilities(tools,{request:()=>assert.fail('No host request expected')});
+  const settings=structuredClone(capabilityDefaults);
+  settings.bridge={...settings.bridge,sessionReadEnabled:true,sessionWriteEnabled:true,writeSessionIds:[f.id]};
+  settings.autonomy.toolIds=['dsh-session-read','dsh-session-list'];
+  await tools.configure(f.id,settings,0);
+  for(const origin of ['owner','autonomous']){
+    assert.deepEqual(tools.contextCatalog(f.id,origin).filter(row=>row.id.startsWith('dsh-session-')),[]);
+  }
+  await tools.configure(f.id,{...settings,bridge:{...settings.bridge,sessionReadScope:'all'}},1);
+  assert.deepEqual(tools.contextCatalog(f.id,'autonomous').filter(row=>row.id.startsWith('dsh-session-')).map(row=>row.id).sort(),['dsh-session-list','dsh-session-read']);
+}));
+await test('Disabling the bundled MCP waits for its process to exit and supports re-enabling',async()=>{
+  const provider=new ReadOnlyMcpProvider();
+  try{
+    await provider.start();assert.equal(provider.status().connected,true);
+    await provider.setEnabled(false);
+    assert.equal(provider.status().running,false);assert.equal(provider.status().terminating,0);
+    await assert.rejects(provider.start(),/CAPABILITY_DISABLED/);
+    await provider.setEnabled(true);await provider.start();assert.equal(provider.status().connected,true);
+  }finally{await provider.close();}
+});
 await test('Browser operations are absent from registration and input validation',()=>{const registered=[],registry={register:(id,descriptor)=>{registered.push({id,descriptor});return ()=>{};}};registerBridgeCapabilities(registry,{request:async()=>{}});assert.equal(registered.length,4);assert(registered.every(r=>r.id.startsWith('dsh-session-')));assert.equal(registered.find(r=>r.id==='dsh-session-cancel').descriptor.version,2);assert.throws(()=>validateBridgeInput('browser-tab-list',{}),/CAPABILITY_NOT_FOUND/);});
 await test('Host rejects removed browser operation even when legacy setting was enabled',async()=>{const h=hostFixture();try{h.host.configure({browser:{enabled:true}});await assert.rejects(h.host.handle({operation:'browser-tab-list',input:{}}),/CAPABILITY_NOT_FOUND/);assert.equal(h.host.status().browser,undefined);}finally{await h.host.close();}});
 await test('Cancellation requires both the turn and start-sequence identity',()=>{for(const input of [{sessionId:'external-test'},{sessionId:'external-test',expectedTurn:1},{sessionId:'external-test',expectedTurn:1,expectedTurnStartSeq:-1}])assert.throws(()=>validateBridgeInput('dsh-session-cancel',input),/INVALID_CAPABILITY_INPUT/);});

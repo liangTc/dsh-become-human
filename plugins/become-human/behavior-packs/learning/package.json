@@ -1,6 +1,6 @@
 {
   "name": "dsh-human-learning",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "license": "Apache-2.0",
   "description": "可选的探索与学习行为包；停用保留笔记和待续任务（测试版）",

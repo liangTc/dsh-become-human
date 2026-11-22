@@ -11,9 +11,10 @@ import {conversationPolicy,conversationalText,conversationOptions} from './conve
 import {getDshRuntimeVersion} from '@deepseek-ai/dsh-app-boot';
 import {supportedRuntimeVersion} from './dsh-compatibility.mjs';
 import {HumanFactory} from './driver.mjs';
+import {queueWorkObservation,restoreWorkObservation} from './work-observation-runtime.mjs';
 import {DeletionLab} from './deletion.mjs';
 import {SessionRetirement} from './retirement.mjs';
-import {expressionSkills,expressionStatus} from './expression.mjs';
+import {expressionStatus} from './expression.mjs';
 import {supersedeOwnerBatch,conversationSettings} from './owner-turns.mjs';
 import {replyPresentation} from './presentation.mjs';
 import {HumanMedia} from './multimodal.mjs';
@@ -23,12 +24,6 @@ const pluginVersion=JSON.parse(await fs.readFile(findPackageJSON(import.meta.url
 export const inject=['agents','sessions','sessionPersistence','sessionProjections','llm','connection','webServer','workspaceRegistry','attachments'];
 export const Config=z.object({legacyQuietHours:z.object({sessionId:z.string(),offset:z.number(),zone:z.string()}).required(false),intervalMs:z.number().default(15000),tokenBudget:z.number().default(12000),localQuotaEnabled:z.boolean().default(false),maxCycles:z.number().default(3),maxTokens:z.number().required(false),requestTimeoutMs:z.number().required(false),interactiveOnly:z.boolean().default(false),provider:z.string(),model:z.string(),reasoningEffort:z.string(),budgetRound:z.string(),allowedRoutes:z.array(z.object({provider:z.string(),model:z.string()})).default([]),modelCapabilities:z.array(z.object({provider:z.string(),model:z.string(),adapter:z.union(['pi-ai','deepseek-native']),inputModalities:z.array(z.union(['text','image'])).required(false),reasoningEfforts:z.array(z.union(['off','low','medium','high','max']))})).default([]),externalBehaviorIds:z.array(z.union(['reflect-experience'])).default([]),domainEnabled:z.boolean().default(true),sharedBudgetGuard:z.boolean().default(true)});
 export async function apply(ctx,config){
-  let expressionRegistryRegistered=false;
-  ctx.inject(['skills'],scoped=>{
-    for(const skill of expressionSkills())scoped.skills.register(skill);
-    expressionRegistryRegistered=true;
-    scoped.effect(()=>()=>{expressionRegistryRegistered=false;});
-  });
   const runtimeVersion=getDshRuntimeVersion();
   if(!supportedRuntimeVersion(runtimeVersion))throw new Error('UNSUPPORTED_DSH_VERSION');
   const storage=ctx.sessionPersistence;if(typeof storage.guard!=='function')throw new Error('P0_REQUIRES_GUARDED_STORAGE');await storage.ready;
@@ -42,7 +37,7 @@ export async function apply(ctx,config){
   ctx.plugin(HumanFactory,{...config,controllerToken,journal:path.join(root,'control.sqlite')});
   await ctx.inject(['becomeHuman'],async scoped=>{
     const factory=scoped.becomeHuman,journal=factory.journal;
-    scoped.inject(['skills'],s=>{factory.management.skills.registry=s.skills;if(factory.controllerSessionId)factory.management.skills.refreshRegistry(factory.controllerSessionId);});
+    scoped.inject(['skills'],s=>s.effect(()=>factory.management.skills.attachRegistry(s.skills,factory.controllerSessionId)));
     journal.safety=storage.ledger;
     factory.autonomy.legacyQuietHours=config.legacyQuietHours;
     factory.media=new HumanMedia(journal,factory.domain,scoped.attachments);
@@ -50,7 +45,13 @@ export async function apply(ctx,config){
     scoped.effect(()=>()=>deletionLab.close());let deletionPreview=null;
     const idFile=path.join(root,'agent.json');let id;
     try{id=JSON.parse(await fs.readFile(idFile,'utf8')).sessionId;}catch(e){if(e.code!=='ENOENT')throw e;id=crypto.randomUUID();}
-    const retirement=new SessionRetirement(storage,journal,factory.domain,{dataRoot:root,quiesce:async old=>{if(agent?.id===old){agent.cancel({kind:'disposed'},{keepInbox:true});await handle.dispose();}},replace:async(old,next)=>{if(id===old&&agent){id=next;factory.controllerSessionId=id;handle=await scoped.agents.create({sessionId:id,meta:{cwd:process.cwd()},controllerToken});agent=handle.agent;initializeDevelopment(factory,id);await factory.customMcpCapabilities.sync(id);factory.config.intervalMs=factory.autonomy.settings(id).wakeIntervalMs;factory.management.skills.refreshRegistry(id);journal.put(id,'nativeTracingSince',Date.now());await fs.writeFile(idFile,JSON.stringify({sessionId:id}));await workspace.attachSession(id);}}});
+    async function syncMcpPolicy(sessionId){
+      const {mcp}=factory.tools.configuration(sessionId);
+      await factory.mcpCapabilities.setEnabled(mcp.bundledEnabled);
+      await factory.customMcpCapabilities.sync(sessionId);
+      return mcp.bundledEnabled;
+    }
+    const retirement=new SessionRetirement(storage,journal,factory.domain,{dataRoot:root,quiesce:async old=>{if(agent?.id===old){agent.cancel({kind:'disposed'},{keepInbox:true});await handle.dispose();}},replace:async(old,next)=>{if(id===old&&agent){id=next;factory.controllerSessionId=id;handle=await scoped.agents.create({sessionId:id,meta:{cwd:process.cwd()},controllerToken});agent=handle.agent;initializeDevelopment(factory,id);await syncMcpPolicy(id);factory.config.intervalMs=factory.autonomy.settings(id).wakeIntervalMs;factory.management.skills.refreshRegistry(id);journal.put(id,'nativeTracingSince',Date.now());await fs.writeFile(idFile,JSON.stringify({sessionId:id}));await workspace.attachSession(id);}}});
     let handle,agent;
     await storage.ledger.configureBudget(config.budgetRound??'legacy',config.tokenBudget,journal.get(id)?.used??0);
     await storage.ledger.configureLocalQuota(false);
@@ -60,7 +61,7 @@ export async function apply(ctx,config){
     // Persona reconciliation also runs on a new installation, before agent creation.
     journal.ensure(id);
     factory.management.reconcileProfile(id);
-    await factory.customMcpCapabilities.sync(id);
+    const bundledEnabled=await syncMcpPolicy(id);
     const pageRpc=new ExtensionPageRpc(journal,()=>id);scoped.effect(()=>()=>pageRpc.close());
     factory.plugins.pages=pageRpc;scoped.provide('humanPlugins',factory.plugins.service());
     scoped.provide('humanPages',Object.freeze({contractVersion:2,register:(owner,page,handlers)=>pageRpc.register(owner,page,handlers)}));
@@ -70,7 +71,7 @@ export async function apply(ctx,config){
     scoped.provide('humanEvents',Object.freeze({contractVersion:1,register:(name,descriptor)=>factory.pluginEvents.register(name,descriptor),status:()=>factory.pluginEvents.status(id)}));
     scoped.provide('humanSources',Object.freeze({contractVersion:1,register:(name,descriptor)=>factory.publicSources.register(name,descriptor),status:()=>factory.publicSources.status()}));
     scoped.provide('humanCapabilities',Object.freeze({contractVersion:1,register:(name,descriptor)=>factory.tools.register(name,descriptor),catalog:()=>factory.tools.catalog(id)}));
-    if(factory.tools.configuration(id).mcp.bundledEnabled)try{await factory.mcpCapabilities.start(AbortSignal.timeout(5000));}catch(error){journal.audit(id,'capability-provider-unavailable',{provider:'bundled-public-mcp',code:/^[A-Z_]{3,80}$/.test(error.message)?error.message:'MCP_STARTUP_FAILED'});}
+    if(bundledEnabled)try{await factory.mcpCapabilities.start(AbortSignal.timeout(5000));}catch(error){journal.audit(id,'capability-provider-unavailable',{provider:'bundled-public-mcp',code:/^[A-Z_]{3,80}$/.test(error.message)?error.message:'MCP_STARTUP_FAILED'});}
     const stored=await scoped.sessionPersistence.stat(id);
     handle=stored?await scoped.agents.resume({resumeSessionId:id,controllerToken}):await scoped.agents.create({sessionId:id,meta:{cwd:process.cwd()},controllerToken});
     agent=handle.agent;factory.config.intervalMs=factory.autonomy.settings(id).wakeIntervalMs;factory.management.skills.refreshRegistry(id);if(!journal.value(id,'nativeTracingSince',null))journal.put(id,'nativeTracingSince',Date.now());await fs.writeFile(idFile,JSON.stringify({sessionId:id}));
@@ -80,6 +81,7 @@ export async function apply(ctx,config){
     factory.domain.repairWorkLabelMemories(id);
     factory.domain.repairPreferenceSlots(id);
     initializeDevelopment(factory,id);
+    restoreWorkObservation(agent);
     factory.tools.recover(id);
     const bootId=crypto.randomUUID();
     const messageExists=messageId=>agent.session.snapshotEvents().some(e=>e.type==='user/message'&&e.data.id===messageId||e.type==='agent/inbox/spliced'&&e.data.inserted.some(m=>m.id===messageId));
@@ -125,7 +127,9 @@ export async function apply(ctx,config){
       const attempts=journal.db.prepare("SELECT id,turn,state,trigger,config,usage,usage_confidence,error,text_chars,reasoning_chars,failure_facts,started,ended,json_extract(CASE WHEN json_valid(request) THEN request ELSE '{}' END,'$.purpose') AS purpose FROM attempt WHERE agent=? ORDER BY started DESC LIMIT 8").all(id);
       const modelFailures=journal.value(id,'modelFailures',{});
       const autonomy={...factory.autonomy.snapshot(id),modelRetryAt:autonomyBrief.modelRetryAt,learningPack:{available:!!factory.learningPack.provider,active:factory.learningPack.available(factory.autonomy.settings(id))}},autonomyEnabled=autonomy.settings.enabled;
-      return lastSafeState={...brief,publicSources:factory.publicSources.status(),workObservation:factory.workObservation.indicator(id),plugin:'dsh-become-human',run,expression:expressionStatus(expressionRegistryRegistered),management:factory.management.snapshot(id),revision:journal.db.prepare('SELECT total_changes() AS n').get().n+storage.ledger.rows.length,runtime:runtimeVersion,reasoningEffort:config.reasoningEffort??'provider-default',retryableInput:retryIds().length>0,localQuotaEnabled:false,modelLimitPolicy:'host-provider-defaults',used:storage.ledger.used()-storage.ledger.budget.base,cumulativeUsed:storage.ledger.used(),budgetRound:journal.value(id,'budgetRound','legacy'),budget:null,remaining:journal.value(id,'remaining',0),longRun:journal.longRunStats(id),successes:journal.value(id,'successes',0),intervalMs:factory.config.intervalMs,interactiveOnly:autonomyEnabled?false:config.interactiveOnly,lastUsage:journal.value(id,'lastUsage',null),lastUsageConfidence:journal.value(id,'lastUsageConfidence','legacy-unverified'),persona:factory.domain.persona(id).core,memory:journal.value(id,'memory','尚无简记。'),receipt:journal.value(id,'receipt',0),messages:rows,attempts,modelFailures,responseRecovery:{pending:journal.staged(id).length,committed:journal.db.prepare("SELECT count(*) AS n FROM response_stage WHERE agent=? AND state='committed'").get(id).n},deletion:{...deletionLab.status(),preview:deletionPreview?.expires>Date.now()?deletionPreview:null},safety:storage.ledger.status(),retirement:{operations:retirement.status(),preview:retirementPreview?.expires>Date.now()?retirementPreview:null},memories:factory.domain.list(id,{limit:20}),personaState:factory.domain.persona(id),goals:factory.domain.context(id).goals,reminders:factory.reminders.list(id),autonomy,modelGate:{inflight:factory.inflight,unbudgetedCalls:'denied',tools:autonomyEnabled?'public-research-and-exact-approved-report':'disabled',nativeUpload:'disabled',fork:'disabled',embedding:'disabled'},audit:journal.db.prepare('SELECT seq,kind,data FROM audit WHERE agent=? ORDER BY seq DESC LIMIT 12').all(id)};
+      const management=factory.management.snapshot(id);
+      const expressionEnabled=management.skills.some(skill=>skill.builtin&&skill.enabled);
+      return lastSafeState={...brief,publicSources:factory.publicSources.status(),workObservation:factory.workObservation.indicator(id),plugin:'dsh-become-human',run,expression:expressionStatus(expressionEnabled&&!!factory.management.skills.registry,expressionEnabled),management,revision:journal.db.prepare('SELECT total_changes() AS n').get().n+storage.ledger.rows.length,runtime:runtimeVersion,reasoningEffort:config.reasoningEffort??'provider-default',retryableInput:retryIds().length>0,localQuotaEnabled:false,modelLimitPolicy:'host-provider-defaults',used:storage.ledger.used()-storage.ledger.budget.base,cumulativeUsed:storage.ledger.used(),budgetRound:journal.value(id,'budgetRound','legacy'),budget:null,remaining:journal.value(id,'remaining',0),longRun:journal.longRunStats(id),successes:journal.value(id,'successes',0),intervalMs:factory.config.intervalMs,interactiveOnly:autonomyEnabled?false:config.interactiveOnly,lastUsage:journal.value(id,'lastUsage',null),lastUsageConfidence:journal.value(id,'lastUsageConfidence','legacy-unverified'),persona:factory.domain.persona(id).core,memory:journal.value(id,'memory','尚无简记。'),receipt:journal.value(id,'receipt',0),messages:rows,attempts,modelFailures,responseRecovery:{pending:journal.staged(id).length,committed:journal.db.prepare("SELECT count(*) AS n FROM response_stage WHERE agent=? AND state='committed'").get(id).n},deletion:{...deletionLab.status(),preview:deletionPreview?.expires>Date.now()?deletionPreview:null},safety:storage.ledger.status(),retirement:{operations:retirement.status(),preview:retirementPreview?.expires>Date.now()?retirementPreview:null},memories:factory.domain.list(id,{limit:20}),personaState:factory.domain.persona(id),goals:factory.domain.context(id).goals,reminders:factory.reminders.list(id),autonomy,modelGate:{inflight:factory.inflight,unbudgetedCalls:'denied',tools:autonomyEnabled?'public-research-and-exact-approved-report':'disabled',nativeUpload:'disabled',fork:'disabled',embedding:'disabled'},audit:journal.db.prepare('SELECT seq,kind,data FROM audit WHERE agent=? ORDER BY seq DESC LIMIT 12').all(id)};
     }
     let operations=Promise.resolve();
     const mutate=input=>operations=operations.catch(()=>{}).then(async()=>{
@@ -150,15 +154,15 @@ export async function apply(ctx,config){
       }else if(input.op.startsWith('work-observation-')){
         if(input.sessionId!==id)throw new Error('STALE_SESSION');if(agent.active||agent.desired().desired!=='paused')throw new Error('PAUSE_REQUIRED');
         if(input.op==='work-observation-configure')await factory.workObservation.configure(id,input.settings,input.expectedRevision);
-        else if(input.op==='work-observation-check'){if(!factory.workObservation.settings(id).enabled||!factory.tools.configuration(id).bridge.sessionReadEnabled)throw new Error('WORK_OBSERVATION_NOT_AUTHORIZED');if(factory.workObservation.read(id,{limit:1}).status.held)throw new Error('WORK_OBSERVATION_RETRY_REQUIRED');journal.put(id,'workObservationRequested',true);factory.workObservation.noteStatus(id,{phase:'queued',nextCheckAt:Date.now()});}
-        else if(input.op==='work-observation-retry'){factory.workObservation.releaseRetry(id);journal.put(id,'workObservationRequested',true);}
+        else if(input.op==='work-observation-check')queueWorkObservation(agent);
+        else if(input.op==='work-observation-retry')journal.transaction(()=>{factory.workObservation.releaseRetry(id);queueWorkObservation(agent);});
         else if(input.op==='work-observation-forget')factory.workObservation.forget(id,input.id,{expectedVersion:input.expectedVersion});
         else if(input.op==='work-observation-annotate')factory.workObservation.correct(id,input.id,{expectedVersion:input.expectedVersion,annotation:input.annotation});
         else throw new Error('UNKNOWN_OPERATION');
       }else if(input.op==='capability-configure'){
         if(input.sessionId!==id)throw new Error('STALE_SESSION');if(agent.active||agent.desired().desired!=='paused')throw new Error('PAUSE_REQUIRED');
         await factory.tools.configure(id,input.settings,input.expectedRevision);
-        await factory.customMcpCapabilities.sync(id);
+        await syncMcpPolicy(id);
       }else if(['tool-submit','tool-cancel','tool-approve'].includes(input.op)){
         if(input.sessionId!==id)throw new Error('STALE_SESSION');
         if(input.op==='tool-submit')factory.tools.submit(id,input);else if(input.op==='tool-approve')await factory.tools.approve(id,input.jobId,input);else {factory.tools.cancel(id,input.jobId,input.expectedVersion);await journal.safety?.anchor();}

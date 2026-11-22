@@ -35,9 +35,9 @@ export function characterBoard(factory,id,{limit=50}={}){
     attention:{...snapshot.attention,basis:[{text:snapshot.attention.method},{text:'执行门禁：'+(snapshot.attention.gates?.reasons?.join('、')||'当前没有已记录阻塞')}],nextReviewAt:snapshot.attention.candidates?.[0]?.nextEligibleAt??null}};
 }
 
-export function compactCognition(agent,{limit=3,experience}={}){
+export function compactCognition(agent,{limit=3,experience,origin='owner'}={}){
   const store=agent.factory.cognition;if(!store)return null;
-  const self=store.selfModel(agent.id,{experience,runtime:{running:!!agent.active,activeLane:agent.activeLane??null}}),focus=store.attentionState(agent.id);
+  const self=store.selfModel(agent.id,{experience,origin,runtime:{running:!!agent.active,activeLane:agent.activeLane??null}}),focus=store.attentionState(agent.id);
   const items=store.contextMatters(agent.id,{limit});
   const focusValid=!focus.matterId||(()=>{try{return store.getMatter(agent.id,focus.matterId).refs.every(ref=>ref.valid);}catch{return false;}})();
   return {experience:self.experience??null,version:1,revision:store.revision(agent.id),status:{desired:self.status.desired,phase:self.status.phase,autonomyPaused:self.status.paused,activeLane:self.status.activeLane},

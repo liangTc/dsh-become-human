@@ -20,14 +20,23 @@ const inputErrors=new Set(['MODEL_IMAGE_INPUT_UNSUPPORTED','MODEL_IMAGE_CAPABILI
 const localInputFailure=code=>({rid:randomUUID(),localMessageId:randomUUID(),provider:'local-image-input',model:'command',reasoningChars:0,inputFailure:true,text:['MODEL_IMAGE_INPUT_UNSUPPORTED','MODEL_IMAGE_CAPABILITY_UNKNOWN','IMAGE_INPUT_UNSUPPORTED'].includes(code)?'当前对话模型还未确认支持看图片。请在模型设置里选择支持图片的模型，再发给我。':'这张图片暂时无法读取，请重新添加后再发送。'});
 
 // Output format only. Interpretation and expression live in configurable Skills.
-export const choiceDialoguePolicy='\n最终回复可用JSON对象：reply为实际自然回复；dialogue和choice均可省略或为null，不为填写字段制造互动或分数。dialogue可含focus(最多240字符)、intent(最多80字符)、sourceIds(1至16个本轮可见来源)、address:{value(最多40字符),sourceIds(仅用户来源)}或null、attributions:[{messageId,speaker:user或assistant,span(回复内最多240字符)}](最多8项)、corrections:[{messageId(助手来源),sourceIds(用户来源),summary(最多240字符)}](最多4项)。choice仅确有选择或关系影响时填写，沿用stance/requestKey/reasonSummary/delta/evidenceSourceIds合同，重新考虑时引用真实assistantMessageId。learningLookup.requested为true而尚无当前笔记时，应先实际读取；确实需要澄清而不能选择材料时，可给 learningLookupDecision:"clarify"，reply只提出简短澄清，不声称已有笔记结论。内部字段不展示给用户。需要工具或看板时仍返回原capability/board协议；已有foregroundSources时只用资料片段协议。';
+export const choiceDialoguePolicy='\n最终回复可用JSON对象：reply为实际自然回复；dialogue和choice均可省略或为null，不为填写字段制造互动或分数。dialogue可含focus(最多240字符)、intent(最多80字符)、sourceIds(1至16个本轮可见来源)、address:{value(最多40字符),sourceIds(仅用户来源)}或null、attributions:[{messageId,speaker:user或assistant,span(回复内最多240字符)}](最多8项)、corrections:[{messageId(助手来源),sourceIds(用户来源),summary(最多240字符)}](最多4项)。choice仅确有选择或关系影响时填写，沿用stance/requestKey/reasonSummary/delta/evidenceSourceIds合同，重新考虑时引用真实assistantMessageId。内部字段不展示给用户。需要工具或看板时仍返回原capability/board协议；已有foregroundSources时只用资料片段协议。';
 
 /** Meaning stays in the model. One protocol repair and one conversation repair
  * are independent; an earlier formatting repair must not consume the only
  * opportunity to fix a later semantic rejection. All requests remain serial. */
-export function choiceDialogueRequest(request){
+export function choiceDialogueRequest(send){
   return async function choiceRequest(agent,signal,options){
     const f=agent.factory,j=f.journal,id=agent.id;
+    const request=async(agent,signal,next)=>{
+      next.assertMaterialsCurrent?.();
+      const response=await send(agent,signal,next);
+      try{next.assertMaterialsCurrent?.();}catch(error){
+        j.endAttempt(response.rid,{state:'validation-rejected',usage:response.usage,usageConfidence:response.usage?'reported':'unknown',error:error.code??error.message,textChars:response.text.length,reasoningChars:response.reasoningChars});
+        throw error;
+      }
+      return response;
+    };
     try{
       let data;try{data=JSON.parse(textOf(options.messages?.[1]));}catch{}
       if(!plain(data)||data.foregroundSources||options.messages?.length!==2)return await request(agent,signal,options);
@@ -36,7 +45,8 @@ export function choiceDialogueRequest(request){
       const relationship=enabled?f.relationship.context(id,{ownerSourceIds}):null;
       const contract={reply:'自然回复',dialogue:'可选，按本轮真实含义更新',choice:null};
       let system=textOf(options.messages[0]);const suffix=personaPolicy+contextPolicy;if(system.endsWith(suffix))system=system.slice(0,-suffix.length);
-      let messages=contextMessages(agent,'foreground',system+choiceDialoguePolicy,{...data,...(relationship?{relationship}:{}),choiceOutputContract:contract});
+      const replyPolicy=choiceDialoguePolicy+(data.learningLookup?.requested?'learningLookup.requested为true而尚无当前笔记时，应先实际读取；确实需要澄清而不能选择材料时，可给 learningLookupDecision:"clarify"，reply只提出简短澄清，不声称已有笔记结论。':'');
+      let messages=contextMessages(agent,'foreground',system+replyPolicy,{...data,...(relationship?{relationship}:{}),choiceOutputContract:contract});
       let reviewData=JSON.parse(textOf(messages[1])),styleRepair=false;
       const repaired={protocol:false,conversation:false};let blockingReviewRejected=false;
       for(let pass=0;pass<3;pass++){
@@ -65,6 +75,10 @@ export function choiceDialogueRequest(request){
             }else{conversationIssues=review.issues;contractError=Object.assign(new Error('CONVERSATION_REVIEW_REJECTED'),{validationDiagnostic:{field:'reply',reason:'conversation-behavior',issueKinds:review.issues.map(issue=>issue.kind)}});}
           }}
           catch(error){
+            if(error.foregroundMaterialsChanged){
+              j.endAttempt(response.rid,{state:'validation-rejected',usage:response.usage,usageConfidence:response.usage?'reported':'unknown',error:error.code??error.message,textChars:response.text.length,reasoningChars:response.reasoningChars});
+              throw error;
+            }
             const degraded=canDegradeReview(agent,signal,error,{epoch:options.epoch,blockingReviewRejected});
             if(degraded)dialogueQuality=recordReviewUnavailable(agent,error,{response,options,degraded:true});
             else{
@@ -90,7 +104,7 @@ export function choiceDialogueRequest(request){
           repaired[repairKind]=true;
           j.audit(id,'dialogue-contract-repair',{attemptId:response.rid,validationDiagnostic:contractError.validationDiagnostic,maximumAdditionalCalls:1});
           if(conversationIssues?.every(issue=>stylisticIssues.has(issue.kind))){messages=styleRepairMessages(reviewData,reply,conversationIssues);styleRepair=true;}
-          else{messages=contextMessages(agent,'foreground',system+choiceDialoguePolicy,{...data,...(relationship?{relationship}:{}),choiceOutputContract:contract,dialogueRepair:{validationDiagnostic:contractError.validationDiagnostic,...(conversationIssues?{conversationIssues}:{}),previousReply:response.text.slice(0,6000),unpublishedDraft:true}});reviewData=JSON.parse(textOf(messages[1]));styleRepair=false;}
+          else{messages=contextMessages(agent,'foreground',system+replyPolicy,{...data,...(relationship?{relationship}:{}),choiceOutputContract:contract,dialogueRepair:{validationDiagnostic:contractError.validationDiagnostic,...(conversationIssues?{conversationIssues}:{}),previousReply:response.text.slice(0,6000),unpublishedDraft:true}});reviewData=JSON.parse(textOf(messages[1]));styleRepair=false;}
           continue;
         }
         let relationshipDecision;

@@ -39,7 +39,7 @@ export function readiness(factory,id){
     {id:'model',label:'模型路线',status:routed.provider&&routed.model?'done':'todo',section:'model',detail:'检查已配置路线；未额外调用模型验证凭据。'},
     {id:'persona',label:'人格、职责和兴趣',status:profile.role&&profile.interests&&profile.corePrompt?.length>=20?'done':'todo',section:'persona',detail:'补充你希望她关心什么、如何交流和哪些行为需要先询问。'},
     {id:'autonomy',label:'自主事件循环',status:settings.enabled?'done':'optional',section:'autonomy',detail:settings.enabled?'按配置检查时机和任务。':'当前可仅聊天；启用后才自主推进。'},
-    {id:'research',label:'外部学习',status:settings.learningEnabled&&(settings.searchEnabled||settings.sources?.length)?'done':'optional',section:'autonomy',detail:'公开搜索或指定来源至少启用一种；关闭不会影响普通聊天。'},
+    {id:'research',label:'外部学习',status:factory.learningPack?.available(settings)&&(settings.searchEnabled||settings.sources?.length)?'done':'optional',section:'autonomy',detail:factory.learningPack?.provider?'公开搜索或指定来源至少启用一种。':'可在插件管理中启用学习行为包。'},
     {id:'quiet',label:'时区和免打扰',status:'review',section:'autonomy',detail:`UTC偏移 ${settings.timeZoneOffsetMinutes} 分钟；免打扰 ${settings.quietStart}:00–${settings.quietEnd}:00，请核对使用地区。`},
     {id:'quota',label:'自主开销限制',status:settings.quotaEnabled?'done':'review',section:'autonomy',detail:settings.quotaEnabled?'主人聊天与自主额度分别记账。':'当前自主不限额，适合开发短测；正式使用可设置预算。'}
   ],tools:factory.tools?.catalog(id)??[],singleSession:true};

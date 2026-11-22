@@ -1,4 +1,5 @@
 import {createHash} from 'node:crypto';
+import {normalizeSessionGrants,sessionTargetInScope} from './runtime/session-grants.mjs';
 
 const error=code=>Object.assign(new Error(code),{code});
 const fail=code=>{throw error(code);};
@@ -8,7 +9,6 @@ const only=(input,keys)=>{if(!plain(input)||Object.keys(input).some(k=>!keys.inc
 const number=(value,min,max)=>{if(!Number.isSafeInteger(value)||value<min||value>max)fail('INVALID_CAPABILITY_INPUT');return value;};
 const boundedText=(value,max)=>typeof value==='string'?value.slice(0,max):'';
 const unknown=(cause,receipt)=>Object.assign(error('CAPABILITY_OUTCOME_UNKNOWN'),{cause,...(receipt?{receipt}: {})});
-const sessionScope=value=>{if(value!==undefined&&!['selected','all'].includes(value))fail('INVALID_CAPABILITY_SETTINGS');return value??'selected';};
 const ordinarySession=value=>plain(value)&&value.origin===undefined&&!(Number(value.delegationDepth)>0);
 const visibleChatEvent=event=>{
   if(event?.surfaceOp!=='append'||!['user/message','assistant/message'].includes(event?.type))return false;
@@ -59,12 +59,7 @@ export function activeSessionTurn(events){
   return {turn:start.data.turn,turnStartSeq:start.seq};
 }
 
-export function normalizeHostCapabilitySettings(input={}){
-  only(input,['sessionReadEnabled','sessionReadScope','sessionWriteEnabled','sessionWriteScope','allowedSessionIds','browser']);
-  for(const key of ['sessionReadEnabled','sessionWriteEnabled'])if(input[key]!==undefined&&typeof input[key]!=='boolean')fail('INVALID_CAPABILITY_SETTINGS');
-  const ids=input.allowedSessionIds??[];if(!Array.isArray(ids)||ids.length>64)fail('INVALID_CAPABILITY_SETTINGS');
-  return {sessionReadEnabled:input.sessionReadEnabled===true,sessionReadScope:sessionScope(input.sessionReadScope),sessionWriteEnabled:input.sessionWriteEnabled===true,sessionWriteScope:sessionScope(input.sessionWriteScope),allowedSessionIds:[...new Set(ids.map(identifier))].sort()};
-}
+export const normalizeHostCapabilitySettings=normalizeSessionGrants;
 
 // Direct Host APIs only. Reads do not resolve/create an Agent, and no operation
 // addresses the Human's own durable Session. External sessions remain external.
@@ -81,11 +76,10 @@ export function createHostCapabilities(ctx,{getHumanSessionId,home}={}){
     return !(child&&parent&&typeof agents.isOwnedBy==='function'&&agents.isOwnedBy(child.id,parent));
   };
   const humanSession=async()=>{const id=await getHumanSessionId();if(typeof id!=='string'||!id)fail('HUMAN_SESSION_UNAVAILABLE');return id;};
-  const scopeFor=write=>write?settings.sessionWriteScope:settings.sessionReadScope;
   const assertAllowed=async(sessionId,write)=>{
     const human=await humanSession();if(sessionId===human)fail('HUMAN_SESSION_TARGET_FORBIDDEN');
     if(!(write?settings.sessionWriteEnabled:settings.sessionReadEnabled))fail('CAPABILITY_DISABLED');
-    if(scopeFor(write)!=='all'&&!settings.allowedSessionIds.includes(sessionId))fail('CAPABILITY_SCOPE_DENIED');
+    if(!sessionTargetInScope(settings,sessionId,write))fail('CAPABILITY_SCOPE_DENIED');
   };
   const scopeSignal=signal=>{const aborter=new AbortController(),abort=()=>aborter.abort(signal.reason);if(signal?.aborted)abort();else signal?.addEventListener('abort',abort,{once:true});active.add(aborter);return {signal:aborter.signal,release:()=>{active.delete(aborter);signal?.removeEventListener('abort',abort);}};};
   const assertCurrent=(signal,expected)=>{signal.throwIfAborted();if(closed)fail('CAPABILITY_BRIDGE_CLOSED');if(expected!==fingerprint)fail('CAPABILITY_POLICY_CHANGED');};
@@ -125,7 +119,7 @@ export function createHostCapabilities(ctx,{getHumanSessionId,home}={}){
     if(input.verifySessionIds!==undefined&&(!Array.isArray(input.verifySessionIds)||input.verifySessionIds.length>64))fail('INVALID_CAPABILITY_INPUT');
     const verifyIds=[...new Set((input.verifySessionIds??[]).map(identifier))].sort();
     if(!settings.sessionReadEnabled)fail('CAPABILITY_DISABLED');
-    const rows=[...new Map((await visibleSessions(signal,expected)).filter(row=>scopeFor(false)==='all'||settings.allowedSessionIds.includes(row.sessionId)).map(row=>[row.sessionId,row])).values()].sort((a,b)=>a.sessionId<b.sessionId?-1:a.sessionId>b.sessionId?1:0);
+    const rows=[...new Map((await visibleSessions(signal,expected)).filter(row=>sessionTargetInScope(settings,row.sessionId)).map(row=>[row.sessionId,row])).values()].sort((a,b)=>a.sessionId<b.sessionId?-1:a.sessionId>b.sessionId?1:0);
     const items=[];let used=0;for(const row of rows.slice(offset,offset+limit)){const item={sessionId:row.sessionId,updatedAt:row.updatedAt,running:row.running===true,agentAvailable:row.agentAvailable===true,blank:row.blank===true,...(row.cwd?{cwd:boundedText(row.cwd,256)}:{})};used+=JSON.stringify(item).length;if(used>12000)break;items.push(item);}
     const hasMore=offset+items.length<rows.length;
     const visibleIds=new Set(rows.map(row=>row.sessionId));
@@ -225,7 +219,7 @@ export function createHostCapabilities(ctx,{getHumanSessionId,home}={}){
       if(nextFingerprint!==fingerprint||(nextRevision!==undefined&&nextRevision!==revision)){for(const aborter of active)aborter.abort(error('CAPABILITY_POLICY_CHANGED'));settings=next;fingerprint=nextFingerprint;revision=nextRevision??revision;}
       return this.status();
     },
-    status(){let available=false;try{available=!!controller();}catch{}return {backend:'host-bridge',closed,session:{available,readEnabled:settings.sessionReadEnabled,readScope:settings.sessionReadScope,writeEnabled:settings.sessionWriteEnabled,writeScope:settings.sessionWriteScope,allowedSessionIds:[...settings.allowedSessionIds],coldReads:true,externalModelOnPrompt:true,dynamicHostVisibility:true,excludesHumanSession:true,excludesSubagents:true,cancelIdentity:'turn-and-start-seq'}};},
+    status(){let available=false;try{available=!!controller();}catch{}return {backend:'host-bridge',closed,session:{available,readEnabled:settings.sessionReadEnabled,readScope:settings.sessionReadScope,writeEnabled:settings.sessionWriteEnabled,writeScope:settings.sessionWriteScope,readSessionIds:[...settings.readSessionIds],writeSessionIds:[...settings.writeSessionIds],coldReads:true,externalModelOnPrompt:true,dynamicHostVisibility:true,excludesHumanSession:true,excludesSubagents:true,cancelIdentity:'turn-and-start-seq'}};},
     async handle({operation,input,context}={},signal=new AbortController().signal){
       if(closed)fail('CAPABILITY_BRIDGE_CLOSED');const scoped=scopeSignal(signal),expected=fingerprint;
       try{assertCurrent(scoped.signal,expected);

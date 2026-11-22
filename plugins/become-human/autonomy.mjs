@@ -35,6 +35,14 @@ const key=value=>createHash('sha256').update(value).digest('hex');
 
 const failure=(code)=>Object.assign(new Error(code),{code});
 const contractFailure=(field,reason,extra={})=>Object.assign(failure('INVALID_TASK_OUTPUT'),{validationDiagnostic:{field,reason,...extra}});
+// These veto a proposal before any action has been admitted. Storage, model
+// configuration and execution failures must retain their own recovery paths.
+const selectionRejections=new Set([
+  'INVALID_BEHAVIOR_SELECTION','INVALID_TOOL_INPUT','INVALID_CAPABILITY_INPUT','BEHAVIOR_INPUT_CHANGED',
+  'BEHAVIOR_UNAVAILABLE','BEHAVIOR_DEFINITION_CHANGED','INVALID_TASK_OUTPUT','GOAL_DIRECTION_CHANGED',
+  'MATTER_DIRECTION_CHANGED','REPEATED_SOCIAL_TOPIC','SOCIAL_REPLY_PRESSURE','SOCIAL_TASK_ROLE_MISMATCH',
+  'INVALID_PUBLIC_SEARCH_QUERY','UNSUPPORTED_OWNER_ATTRIBUTION',
+]);
 
 function deferAutonomousModel(journal,id,modelFailure,wakeIntervalMs){
   const previous=journal.value(id,'autonomyModelBackoff',null);
@@ -86,18 +94,29 @@ export async function runAutonomyTurn(agent,signal){
       for(const m of admitted){if(!agent.session.snapshotEvents().some(e=>e.type==='user/message'&&e.data.id===m.id))agent.session.append('user/message',m,{surfaceOp:'append'});agent.events.emit('agent/inbox/claimed',{message:m,turn});f.domain.observe(id,m);}
       await agent.flush();valid(agent,signal,epoch);
       const persona=store.persona(id,'dialogue');
-      const engagement=learningEngagementSnapshot(j,f.domain,id),followUp=engagement.offers.findLast(offer=>admitted.some(m=>m.id===offer.interestedSourceId));
-      const noteProbe=explicitLearningNoteRequest(admitted,[]),requestedNote=noteProbe.requested?explicitLearningNoteRequest(admitted,(f.actions?.eligibleNotes(id,{limit:100})?.items??[]).filter(n=>n.eligible===true).map(n=>store.note(id,n.id)).filter(Boolean)):noteProbe;
-      const followUpNote=['explicit-url-needs-current-read','owner-changed-topic','owner-stopped-note-request'].includes(requestedNote.reason)?null:requestedNote.requested?(requestedNote.noteId?store.note(id,requestedNote.noteId):null):followUp?store.note(id,followUp.noteId):null,noteOwnerSourceId=requestedNote.requested?requestedNote.ownerSourceId:followUp?.interestedSourceId;
-      const clarifyNote=requestedNote.requested&&!followUpNote&&!delegateLearningLookup(requestedNote,admitted),followUpEvidence=followUpNote?f.actions.note(id,followUpNote.id):null;
-      const learningReference=followUpEvidence?{noteId:followUpEvidence.id,sourceId:followUpEvidence.sourceId,sourceHash:followUpEvidence.sourceHash,memoryVersion:followUpEvidence.memoryVersion,ownerSourceId:noteOwnerSourceId}:null;
-      const learningLookup={requested:requestedNote.requested,reason:requestedNote.reason,ownerSourceId:admitted.at(-1).id,currentOffers:engagement.offers.slice(-3).map(offer=>({messageId:offer.messageId,noteId:offer.noteId,title:offer.title,question:offer.question,text:offer.text})),scope:'Already shared topics only; interpret the current owner input before reading. Not permission to share on a casual turn.'};
-      if(requestedNote.requested)j.audit(id,'learning-note-requested',{turn,noteId:followUpNote?.id??null,ownerMessageIds:admitted.map(m=>m.id),reason:requestedNote.reason,matched:!!followUpNote,lane:'foreground'});
-      const foregroundNotes=[...new Map([...(followUpNote?[followUpNote]:[]),...store.notes(id)].map(note=>[note.id,note])).values()].slice(0,f.management?.execution(id).context.learningLimit??3);
+      const learningProvider=f.learningPack?.provider;
+      let learningContext={},learningReference=null,clarifyText=null;
+      if(learningProvider){
+        const engagement=learningEngagementSnapshot(j,f.domain,id),followUp=engagement.offers.findLast(offer=>admitted.some(m=>m.id===offer.interestedSourceId));
+        const noteProbe=explicitLearningNoteRequest(admitted,[]),requestedNote=noteProbe.requested?explicitLearningNoteRequest(admitted,(f.actions?.eligibleNotes(id,{limit:100})?.items??[]).filter(n=>n.eligible===true).map(n=>store.note(id,n.id)).filter(Boolean)):noteProbe;
+        const followUpNote=['explicit-url-needs-current-read','owner-changed-topic','owner-stopped-note-request'].includes(requestedNote.reason)?null:requestedNote.requested?(requestedNote.noteId?store.note(id,requestedNote.noteId):null):followUp?store.note(id,followUp.noteId):null,noteOwnerSourceId=requestedNote.requested?requestedNote.ownerSourceId:followUp?.interestedSourceId;
+        const clarifyNote=requestedNote.requested&&!followUpNote&&!delegateLearningLookup(requestedNote,admitted),followUpEvidence=followUpNote?f.actions.note(id,followUpNote.id):null;
+        learningReference=followUpEvidence?{noteId:followUpEvidence.id,sourceId:followUpEvidence.sourceId,sourceHash:followUpEvidence.sourceHash,memoryVersion:followUpEvidence.memoryVersion,ownerSourceId:noteOwnerSourceId}:null;
+        const learningLookup={requested:requestedNote.requested,reason:requestedNote.reason,ownerSourceId:admitted.at(-1).id,currentOffers:engagement.offers.slice(-3).map(offer=>({messageId:offer.messageId,noteId:offer.noteId,title:offer.title,question:offer.question,text:offer.text})),scope:'Already shared topics only; interpret the current owner input before reading. Not permission to share on a casual turn.'};
+        if(requestedNote.requested)j.audit(id,'learning-note-requested',{turn,noteId:followUpNote?.id??null,ownerMessageIds:admitted.map(m=>m.id),reason:requestedNote.reason,matched:!!followUpNote,lane:'foreground'});
+        if(clarifyNote)clarifyText=requestedNote.ambiguous?'有几份同名或相近的学习笔记。你想核对哪一份？可以再给一个主题或更完整的标题。':'这次没有唯一定位到那份有效学习笔记。告诉我具体标题或主题，我再核对，不沿用旧网页当作这份笔记。';
+        learningContext={learningLookup};
+        if(followUpNote){
+          const note={id:followUpNote.id,title:followUpNote.data.title,summary:claimTextProjection(followUpNote.data.claims,{maxChars:800}).text,claims:followUpNote.data.claims.map(c=>({text:c.text,scope:c.scope??null})),coverage:followUpNote.data.coverage??null,source:followUpNote.data.source,ownerAnnotation:followUpNote.data.ownerRevision??null};
+          learningContext.learningConversation={noteId:followUpNote.id,ownerSourceId:noteOwnerSourceId,kind:'explicit-current-topic-follow-up',reference:learningReference,scope:'本轮主人明确追问的学习笔记',note};
+        }
+      }
       const command=recoveredCommand?.receipt??ownerCommand(agent,admitted[0],settings.timeZoneOffsetMinutes);
       if(command&&agent.session.snapshotEvents().some(e=>e.type==='assistant/message'&&e.data.message.id===command.messageId)){phase('idle');return;}
-      if(!command&&!clarifyNote){await compactConversation(agent,signal,{turn,epoch,admittedIds:admitted.map(m=>m.id)},modelRequest);valid(agent,signal,epoch);}
-      response=command?{rid:crypto.randomUUID(),text:command.text,provider:command.provider,model:'command',localMessageId:command.messageId,reasoningChars:0}:clarifyNote?{rid:crypto.randomUUID(),text:requestedNote.ambiguous?'有几份同名或相近的学习笔记。你想核对哪一份？可以再给一个主题或更完整的标题。':'这次没有唯一定位到那份有效学习笔记。告诉我具体标题或主题，我再核对，不沿用旧网页当作这份笔记。',provider:'local-learning-recall',model:'command',localMessageId:crypto.randomUUID(),reasoningChars:0}:await capabilityDialogue(agent,signal,{request:choiceDialogueRequest(modelRequest),turn,epoch,lane,admittedIds:admitted.map(m=>m.id),messages:contextMessages(agent,'foreground',foregroundSystem(agent,admitted),{persona,input:admitted,history:recentMessages(agent,{lane:'foreground',admittedIds:admitted.map(m=>m.id)}),domain:{},learningLookup,learningConversation:followUpNote?{noteId:followUpNote.id,ownerSourceId:noteOwnerSourceId,kind:'explicit-current-topic-follow-up',reference:learningReference,scope:'只允许就本轮追问展开，不是新的工具或数据授权'}:null,learningNotes:foregroundNotes.map(n=>({id:n.id,title:n.data.title,summary:claimTextProjection(n.data.claims,{maxChars:800}).text,claims:n.data.claims.map(c=>({text:c.text,scope:c.scope??null})),coverage:n.data.coverage??null,source:n.data.source,ownerAnnotation:n.data.ownerRevision??null,feedback:n.feedback}))})});
+      if(!command&&!clarifyText){await compactConversation(agent,signal,{turn,epoch,admittedIds:admitted.map(m=>m.id)},modelRequest);valid(agent,signal,epoch);}
+      if(learningReference&&learningProvider!==f.learningPack?.provider)throw failure('LEARNING_PACK_UNAVAILABLE');
+      response=command?{rid:crypto.randomUUID(),text:command.text,provider:command.provider,model:'command',localMessageId:command.messageId,reasoningChars:0}:clarifyText?{rid:crypto.randomUUID(),text:clarifyText,provider:'local-learning-recall',model:'command',localMessageId:crypto.randomUUID(),reasoningChars:0}:await capabilityDialogue(agent,signal,{request:choiceDialogueRequest(modelRequest),turn,epoch,lane,admittedIds:admitted.map(m=>m.id),messages:contextMessages(agent,'foreground',foregroundSystem(agent,admitted),{persona,input:admitted,history:recentMessages(agent,{lane:'foreground',admittedIds:admitted.map(m=>m.id)}),domain:{},...learningContext})});
+      if((learningReference||response.learningFollowUp)&&learningProvider!==f.learningPack?.provider)throw failure('LEARNING_PACK_UNAVAILABLE');
       valid(agent,signal,epoch,persona.version);
     }else{
       if(!settings.enabled){phase('idle');return;}
@@ -114,7 +133,13 @@ export async function runAutonomyTurn(agent,signal){
         return;
       }
       const persona=store.persona(id,'selection');
-      task=next.task??store.task(id,next.kind,{...checkpointForOpportunity(next),eventIds:[...store.events(id).filter(event=>event.kind!=='plugin').map(event=>event.id),...next.eventIds??[]],memoryKey:selectionMemoryKey(agent,next.kind)},persona.version);
+      task=next.task;
+      if(!task){
+        const checkpoint={...checkpointForOpportunity(next),eventIds:[...store.events(id).filter(event=>event.kind!=='plugin').map(event=>event.id),...next.eventIds??[]]};
+        const cooldown=next.kind==='behavior-choice'&&store.deferred(id,checkpoint);
+        if(cooldown&&selectionRejections.has(cooldown.reason)){j.put(id,'autonomyWait',cooldown.reason);phase('waiting');return;}
+        task=store.task(id,next.kind,{...checkpoint,memoryKey:selectionMemoryKey(agent,next.kind)},persona.version);
+      }
       if(next.goal&&!next.task)f.goals.attachTask(id,next.goal,task.id);
       if(task.checkpoint.matterId){task=linkMatterTask(agent,task);store.update(task.id,task.status,{...task.checkpoint,memoryKey:selectionMemoryKey(agent,task.kind)});task=store.getTask(task.id);}
       if(task.checkpoint.goal)agent.activeGoalTask=task;agent.activeCognitionTask=task;
@@ -134,11 +159,11 @@ export async function runAutonomyTurn(agent,signal){
         const selectionInput=selectionMessages(agent,task,persona);
         store.update(task.id,task.status,{...task.checkpoint,strategyCandidates:selectionInput.strategyCandidates??[]});task=store.getTask(task.id);
         const selection=await modelRequest(agent,signal,{turn,epoch,lane:'selection',taskId:task.id,messages:selectionInput});
-        valid(agent,signal,epoch,persona.version);let plan,selectedOpportunity;const selectionTask=task;
+        valid(agent,signal,epoch,persona.version);let plan,selectedOpportunity,normalizedFields;const selectionTask=task;
         try{
           plan=structured(selection.text);
           if(task.kind==='behavior-choice'){
-            const choice=resolveBehaviorChoice(agent,task,plan);plan=choice.plan;
+            const choice=resolveBehaviorChoice(agent,task,plan);plan=choice.plan;normalizedFields=choice.normalizedFields;
             if(choice.selected){selectedOpportunity=choice.selected;task={...task,kind:choice.selected.kind,checkpoint:{...checkpointForOpportunity(choice.selected),eventIds:[...new Set([...(task.checkpoint.eventIds??[]),...(choice.selected.eventIds??[])])],roundId:agent.activeRoundId,strategyCandidates:selectionTask.checkpoint.strategyCandidates??[],strategyUses:choice.strategyUses??[],memoryKey:selectionMemoryKey(agent,choice.selected.kind)}};}
           }
           // WAIT is a decision to do no work; it needs no invented question or
@@ -156,15 +181,24 @@ export async function runAutonomyTurn(agent,signal){
         }catch(error){
           // An invalid proposal never becomes an executable task or an orphan
           // goal attempt. Commit the chosen kind only after full validation.
-          if(selectedOpportunity)task=selectionTask;
+          // The resolver may reject a tool input before returning its choice.
+          // Use the offered ID only to scope the cooldown, never to admit it.
+          const offered=task.kind==='behavior-choice'&&task.checkpoint.opportunities?.find(row=>row.opportunityId===plan?.opportunityId);
+          const rejectedTask=offered?{id:task.id,kind:offered.kind,checkpoint:checkpointForOpportunity(offered)}:task;
+          task=selectionTask;
           const diagnostic=outputDiagnostic(error,{phase:'selection',text:selection.text});
           j.audit(id,'autonomy-output-rejected',{taskId:task.id,attemptId:selection.rid,phase:'selection',code:error.message,responseHash:key(selection.text),textChars:selection.text.length,validationDiagnostic:diagnostic});
           j.endAttempt(selection.rid,{state:'validation-rejected',usage:selection.usage,usageConfidence:selection.usage?'reported':'unknown',error:error.message,textChars:selection.text.length,reasoningChars:selection.reasoningChars});
-          if(['INVALID_BEHAVIOR_SELECTION','INVALID_TOOL_INPUT','INVALID_CAPABILITY_INPUT','BEHAVIOR_INPUT_CHANGED','BEHAVIOR_UNAVAILABLE','BEHAVIOR_DEFINITION_CHANGED','INVALID_TASK_OUTPUT','GOAL_DIRECTION_CHANGED','MATTER_DIRECTION_CHANGED','REPEATED_SOCIAL_TOPIC','SOCIAL_REPLY_PRESSURE','SOCIAL_TASK_ROLE_MISMATCH'].includes(error.message)){store.defer(id,task,error.message,socialDelay(settings,task));store.update(task.id,'failed',{...task.checkpoint,reason:error.message,failureDiagnostic:diagnostic});if(task.kind==='research')j.put(id,'lastResearchAt',Date.now());j.put(id,'autonomyWait',error.message);phase('waiting');return;}throw error;
+          if(!selectionRejections.has(error.message))throw error;
+          const contactVeto=['REPEATED_SOCIAL_TOPIC','SOCIAL_REPLY_PRESSURE','SOCIAL_TASK_ROLE_MISMATCH'].includes(error.message);
+          store.defer(id,rejectedTask,error.message,contactVeto?socialDelay(settings,rejectedTask):settings.wakeIntervalMs);
+          store.update(task.id,'failed',{...task.checkpoint,reason:error.message,failureDiagnostic:diagnostic});
+          if(task.kind==='research')j.put(id,'lastResearchAt',Date.now());
+          j.put(id,'autonomyWait',error.message);phase('waiting');return;
         }
         if(selectedOpportunity)j.transaction(()=>{f.pluginEvents?.claim(id,task.checkpoint.pluginEventIds??[]);task=store.selectOpportunity(task.id,selectedOpportunity,task.checkpoint);});
-        j.audit(id,'direction-selected',{taskId:task.id,roundId:agent.activeRoundId,decision:plan.decision,question:plan.question,value:plan.value,...(plan.topicKey?{topicKey:plan.topicKey}:{}),...(plan.learningIntent?{learningIntent:plan.learningIntent}:{})});
-        if(plan.decision==='wait'){if(task.kind==='research')j.put(id,'lastResearchAt',Date.now());store.defer(id,task,'selection-wait',socialDelay(settings,task));store.update(task.id,task.checkpoint.goal?'suspended':'cancelled',{...task.checkpoint,reason:'selection-wait',selectionReason:plan.value});phase('waiting');return;}
+        j.audit(id,'direction-selected',{taskId:task.id,roundId:agent.activeRoundId,decision:plan.decision,question:plan.question,value:plan.value,...(normalizedFields?.length?{normalizedFields}:{}),...(plan.topicKey?{topicKey:plan.topicKey}:{}),...(plan.learningIntent?{learningIntent:plan.learningIntent}:{})});
+        if(plan.decision==='wait'){if(task.kind==='research')j.put(id,'lastResearchAt',Date.now());store.defer(id,task,'selection-wait',task.kind==='behavior-choice'?settings.wakeIntervalMs:socialDelay(settings,task));store.update(task.id,task.checkpoint.goal?'suspended':'cancelled',{...task.checkpoint,reason:'selection-wait',selectionReason:plan.value});phase('waiting');return;}
         if(!admitLearningRoute(agent,task,plan,settings)){phase('waiting');return;}
         j.transaction(()=>{store.update(task.id,'ready',{...task.checkpoint,plan});task=store.getTask(task.id);f.experience?.strategies.bind(id,task,task.checkpoint.strategyUses??[]);});
         if(task.checkpoint.goal&&!f.goals.linked(id,task.id)&&task.kind!=='write-report')f.goals.attachTask(id,task.checkpoint.goal,task.id);
@@ -224,7 +258,7 @@ export async function runAutonomyTurn(agent,signal){
     });
     if(code==='GOAL_NO_LONGER_ACTIVE'||code==='MATTER_NO_LONGER_ACTIVE'){j.put(id,'autonomyWait',code);phase('waiting');}
     else if(backoff){reason={kind:'error',error:{code:'HUMAN_AUTONOMY_ERROR',message:code}};phase('waiting');}
-    else if(task?.kind==='behavior'||['INVALID_BEHAVIOR_SELECTION','BEHAVIOR_UNAVAILABLE','BEHAVIOR_DEFINITION_CHANGED','BEHAVIOR_INPUT_CHANGED'].includes(code)){if(task)store.defer(id,task,code,settings.sourceIntervalMs);j.put(id,'autonomyWait',code);phase('waiting');}
+    else if(!parentSignal.aborted&&!roundTimeout&&code!=='AUTONOMOUS_BUDGET_EXHAUSTED'&&(task?.kind==='behavior'||['INVALID_BEHAVIOR_SELECTION','BEHAVIOR_UNAVAILABLE','BEHAVIOR_DEFINITION_CHANGED','BEHAVIOR_INPUT_CHANGED'].includes(code))){if(task)store.defer(id,task,code,settings.sourceIntervalMs);j.put(id,'autonomyWait',code);phase('waiting');}
     else if(roundTimeout){store.defer(id,task,'AUTONOMOUS_ROUND_TIMEOUT',settings.sourceIntervalMs);j.put(id,'autonomyWait','AUTONOMOUS_ROUND_TIMEOUT');phase('waiting');}
     else if(parentSignal.aborted){reason=agent.cause?.kind==='owner-supplement'?{kind:'completed'}:{kind:'aborted',reason:agent.cause??{kind:'user'}};phase('preempted');}
     else if(code==='AUTONOMOUS_BUDGET_EXHAUSTED'){const estimate=task?estimateTaskBudget(agent,store.getTask(task.id)):{tokens:0,requests:1};store.requestBudget(id,task?.id??'new-task',autonomousBudgetEstimate(estimate,error.neededTokens));j.put(id,'autonomyWait','autonomous-budget');phase('waiting-budget');}

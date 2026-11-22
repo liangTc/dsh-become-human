@@ -9,11 +9,73 @@ const anchor=process.env.BH_TEST_DEPENDENCY_ANCHOR??path.resolve('plugins/become
 registerHooks({resolve(name,context,next){try{return next(name,context);}catch(e){if(e.code!=='ERR_MODULE_NOT_FOUND'||name.startsWith('.')||name.includes(':'))throw e;return next(name,{...context,parentURL:pathToFileURL(anchor).href});}}});
 const {ControlJournal}=await import('../plugins/become-human/driver.mjs'),{DomainMemory}=await import('../plugins/become-human/domain.mjs'),{AutonomyStore}=await import('../plugins/become-human/autonomy-store.mjs'),{BehaviorRegistry}=await import('../plugins/become-human/behaviors.mjs'),{LearningPack}=await import('../plugins/become-human/learning-pack.mjs'),{apply}=await import('../plugins/become-human/behavior-packs/learning/index.mjs'),{candidate,selectionMemoryKey}=await import('../plugins/become-human/autonomy-opportunities.mjs'),{selectedTaskWorkflow}=await import('../plugins/become-human/autonomy-workflows.mjs'),{checkpointForOpportunity}=await import('../plugins/become-human/behavior-selection.mjs'),{prepareRuntimeProfile,workflowIds}=await import('../plugins/become-human-web/runtime-profile.mjs');
 const root=await fs.mkdtemp(path.join(os.tmpdir(),'human-learning-pack-')),cases=[],signal=new AbortController().signal;
-async function test(name,fn){const id=randomUUID(),dir=path.join(root,id);await fs.mkdir(dir);const j=new ControlJournal(path.join(dir,'test.sqlite'));j.ensure(id);const domain=new DomainMemory(j),autonomy=new AutonomyStore(j,domain),learningPack=new LearningPack(),f={journal:j,domain,autonomy,learningPack,behaviors:new BehaviorRegistry(),tools:{catalog:()=>[]}},agent={id,factory:f,session:{snapshotEvents:()=>[]}};j.put(id,'autonomySettings',{enabled:true,learningEnabled:true,searchEnabled:true,proactiveEnabled:false,socialEnabled:false});const x={id,dir,j,f,agent};try{await fn(x);cases.push({name,passed:true});}catch(e){cases.push({name,passed:false,error:e.stack});}finally{j.close();}console.log(JSON.stringify(cases.at(-1)));}
+async function test(name,fn){const id=randomUUID(),dir=path.join(root,id);await fs.mkdir(dir);const j=new ControlJournal(path.join(dir,'test.sqlite'));j.ensure(id);const learningPack=new LearningPack(),domain=new DomainMemory(j,{learningPack}),autonomy=new AutonomyStore(j,domain),f={journal:j,domain,autonomy,learningPack,behaviors:new BehaviorRegistry(),tools:{catalog:()=>[]}},agent={id,factory:f,session:{snapshotEvents:()=>[]}};j.put(id,'autonomySettings',{enabled:true,learningEnabled:true,searchEnabled:true,proactiveEnabled:false,socialEnabled:false});const x={id,dir,j,f,agent};try{await fn(x);cases.push({name,passed:true});}catch(e){cases.push({name,passed:false,error:e.stack});}finally{j.close();}console.log(JSON.stringify(cases.at(-1)));}
 function install(x){let dispose;apply({humanLearning:{contractVersion:1},humanPlugins:{contractVersion:1,register:(_owner,d)=>({dispose:x.f.learningPack.register(d.learning)})},effect:fn=>{dispose=fn();}});return dispose;}
 const settings=x=>x.f.autonomy.settings(x.id),next=x=>candidate(x.agent,signal,settings(x));
 function task(x,kind='research',checkpoint={}){return x.f.autonomy.task(x.id,kind,{candidate:{kind,question:'核对材料'},memoryKey:selectionMemoryKey(x.agent,kind),plan:{decision:'execute',question:'核对材料',value:'核对范围',searchQuery:'scope'},...checkpoint},x.f.autonomy.persona(x.id,'selection').version);}
 function context(x,t,extra={}){return {agent:x.agent,task:t,response:null,signal,epoch:1,turn:1,valid(){},phase(){},...extra};}
+function storeNote(x,index){
+  const excerpt='An observation about process '+index;
+  return x.f.autonomy.commitNote(x.id,task(x,'learn-ai'),{url:'https://example.org/process/'+index,digest:'a'.repeat(64),excerpt,partial:true},{
+    title:'Process '+index,summary:excerpt,claims:[{text:excerpt,quote:excerpt}],relevance:excerpt,question:'What remains uncertain?',share:excerpt,
+  });
+}
+await test('Removing the pack excludes linked memories before ranking and from ordinary management reads',async x=>{
+  const dispose=install(x),{domain,autonomy}=x.f,{id,j}=x;
+  const {HumanManagement}=await import('../plugins/become-human/management.mjs');
+  const management=new HumanManagement(x.f),source=randomUUID();
+  domain.source(id,{id:source,kind:'user',body:'周末准备去散步。'});
+  const episode=domain.save(id,{type:'episode',truth:'factual',refs:[source],payload:{userSaid:'周末准备去散步。'}});
+  const customSkill=domain.save(id,{type:'skill',truth:'inferred',refs:[source],payload:{summary:'一个独立的技能记录'}});
+  const noteIds=Array.from({length:10},(_,i)=>storeNote(x,i)),sample=autonomy.note(id,noteIds[0]);
+  assert.equal(management.read(id,{kind:'notes',limit:2}).items.length,2);
+  assert.equal(autonomy.snapshot(id).notes.length,10);
+  dispose();
+  assert.deepEqual(autonomy.snapshot(id).notes,[]);
+  assert.deepEqual(new Set(domain.context(id).memories.map(m=>m.id)),new Set([episode,customSkill]));
+  assert.deepEqual(new Set(domain.list(id).map(m=>m.id)),new Set([episode,customSkill]));
+  assert.equal(management.read(id,{kind:'memories'}).total,2);
+  assert.throws(()=>management.read(id,{kind:'memory-history',memoryId:sample.memory_id}),/MEMORY_NOT_FOUND/);
+  for(const kind of ['notes','note-history','action-notes'])assert.throws(()=>management.read(id,{kind,noteId:sample.id}),/LEARNING_PACK_UNAVAILABLE/);
+  await assert.rejects(()=>management.mutate(id,{op:'note-revise',noteId:sample.id,summary:'new',expectedVersion:0}),/LEARNING_PACK_UNAVAILABLE/);
+  assert.throws(()=>autonomy.feedback(id,sample.id,'not-now'),/LEARNING_PACK_UNAVAILABLE/);
+  assert.equal(management.allPages(id,'notes').length,10);
+  assert.equal(management.allPages(id,'memoryList').length,12);
+  assert.equal(j.db.prepare('SELECT count(*) AS n FROM learning_note WHERE agent=?').get(id).n,10);
+  install(x);
+  assert.equal(management.read(id,{kind:'notes'}).total,10);
+});
+await test('Detaching the pack stops new report proposals, pending goals and pending writes while keeping completed files readable',async x=>{
+  const dispose=install(x),{id,j}=x,{domain,autonomy}=x.f,noteId=storeNote(x,1);
+  const {GoalEngine}=await import('../plugins/become-human/goals.mjs'),{ActionStore}=await import('../plugins/become-human/actions.mjs');
+  const goals=new GoalEngine(j,domain,autonomy),actions=new ActionStore(j,domain,{root:path.join(x.dir,'artifacts'),validNote:(agent,id)=>goals.validNote(agent,id),requireSignedApproval:false});
+  goals.setActions(actions);
+  const propose=()=>actions.proposeReport(id,{requestId:randomUUID(),title:'整理已存材料',noteIds:[noteId]});
+  const approve=a=>actions.approve(id,a.id,{expectedVersion:a.version,digest:a.digest});
+  const complete=approve(propose());await actions.execute(id,complete.id,{valid:()=>true});
+  const approved=approve(propose()),draft=propose(),ownerSource=randomUUID();domain.source(id,{id:ownerSource,kind:'user',body:'请整理这个报告。'});
+  const goal=goals.propose(id,{description:'整理可用材料',refs:[ownerSource],expires:Date.now()+86400000,milestones:[{kind:'write-report',question:'整理现有材料',noteIds:[noteId]}]});
+  goals.transition(id,goal.id,'activate',{expectedVersion:goal.version});
+  assert.equal(goals.candidate(id)?.kind,'write-report');
+  dispose();
+  assert.equal(goals.candidate(id),null);
+  assert.equal(actions.next(id),null);
+  assert.throws(propose,/LEARNING_PACK_UNAVAILABLE/);
+  assert.throws(()=>approve(draft),/LEARNING_PACK_UNAVAILABLE/);
+  assert.equal(actions.get(id,approved.id).status,'approved');
+  assert.equal((await actions.readContent(id,complete.id)).digest,complete.digest);
+  assert.equal(actions.list(id).length,3);
+  install(x);
+  assert.equal(actions.next(id)?.id,approved.id);
+  assert.equal(goals.candidate(id)?.goal.id,goal.id);
+});
+await test('A persisted report task holds on removal and can run with the package installed and autonomous study disabled',async x=>{
+  const dispose=install(x),t=task(x,'write-report');dispose();
+  assert.equal(await next(x),null);
+  assert.equal(x.f.autonomy.getTask(t.id).checkpoint.learningHold,'LEARNING_PACK_UNAVAILABLE');
+  install(x);x.j.put(x.id,'autonomySettings',{...settings(x),learningEnabled:false});
+  assert.equal((await next(x)).task.id,t.id);
+});
 await test('Missing pack ignores previously enabled learning preferences',async x=>{assert.equal(await next(x),null);assert.deepEqual(x.f.learningPack.catalog(),[]);assert.throws(()=>selectedTaskWorkflow('research',x.agent),/LEARNING_PACK_UNAVAILABLE/);});
 await test('Explicit install offers learning without any source or model I/O',async x=>{install(x);assert((await next(x)).opportunities.some(r=>r.kind==='research'));assert.equal(x.f.learningPack.catalog().length,1);});
 await test('Learning switch off suppresses even an installed pack',async x=>{install(x);x.j.put(x.id,'autonomySettings',{...settings(x),learningEnabled:false});assert.equal(await next(x),null);});
@@ -52,6 +114,7 @@ await test('Evidence rejection retains the next source and records exhausted att
  assert.equal(x.j.db.prepare('SELECT count(*) n FROM outbox WHERE agent=?').get(x.id).n,0);
 });
 await test('An older cooling checkpoint cannot hide a ready report, including behind a full page',async x=>{
+ install(x);x.j.put(x.id,'autonomySettings',{...settings(x),learningEnabled:false});
  const store=x.f.autonomy,now=Date.now();
  const reports=Array.from({length:34},(_,i)=>{
    const t=task(x,'write-report',{candidate:{kind:'write-report',question:'报告 '+i}});
@@ -64,6 +127,7 @@ await test('An older cooling checkpoint cannot hide a ready report, including be
  assert.equal((await candidate(x.agent,signal,settings(x),now+60001)).task.id,reports[0].id);
 });
 await test('Custom behavior can wait for its own condition without blocking a later checkpoint',async x=>{
+ install(x);x.j.put(x.id,'autonomySettings',{...settings(x),learningEnabled:false});
  let ready=false,checked=0;
  x.f.behaviors.register('local-wait',{version:1,title:'测试',description:'等待条件',inputSchema:{type:'object',properties:{},additionalProperties:false},
    readyToResume(agent,ctx){assert.equal(agent.id,x.id);assert.deepEqual(ctx.input,{});assert.equal(ctx.result.summary,'等待');checked++;return ready;},

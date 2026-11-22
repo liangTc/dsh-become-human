@@ -120,7 +120,8 @@ export class GoalEngine {
     });return this.get(agent,id);
   }
   eligible(agent,step,settings){
-    if(!settings.enabled)return false;if(step.kind==='behavior'){const definition=this.behaviors?.definition(this.behaviorContext(agent),step.behaviorId);return !!definition&&definition.fingerprint===step.behaviorFingerprint;}if(step.kind==='write-report')return !!this.actions;
+    if(!settings.enabled)return false;if(step.kind==='behavior'){const definition=this.behaviors?.definition(this.behaviorContext(agent),step.behaviorId);return !!definition&&definition.fingerprint===step.behaviorFingerprint;}if(this.domain.learningNotesAvailable===false)return false;
+    if(step.kind==='write-report')return !!this.actions;
     if(!settings.learningEnabled)return false;
     if(step.kind==='research')return settings.searchEnabled===true;
     return settings.sources?.some(s=>s.url===step.sourceUrl)===true;

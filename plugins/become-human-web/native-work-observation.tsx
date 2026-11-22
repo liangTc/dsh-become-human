@@ -1,4 +1,5 @@
 import React,{useEffect,useRef,useState} from 'react';
+import {sessionGrantIds} from './runtime/session-grants.mjs';
 import {useDraftGuard} from './native-shell';
 
 const defaults={enabled:false,intervalMs:600000,retentionDays:14,maxSessionsPerCheck:3,maxMessagesPerSession:20};
@@ -11,7 +12,7 @@ const settingsOf=(data:any)=>({...defaults,...(data?.settings??{})});
 const draftOf=(settings:any)=>({enabled:settings.enabled===true,intervalMinutes:String(settings.intervalMs/60000),retentionDays:String(settings.retentionDays),maxSessionsPerCheck:String(settings.maxSessionsPerCheck),maxMessagesPerSession:String(settings.maxMessagesPerSession)});
 function numeric(value:string,min:number,max:number,label:string){const n=Number(value);if(!value.trim()||!Number.isSafeInteger(n)||n<min||n>max)throw new Error(label+'需填写 '+min+'–'+max+' 之间的整数。');return n;}
 function payloadOf(draft:any){return {enabled:draft.enabled,intervalMs:numeric(draft.intervalMinutes,5,1440,'检查间隔')*60000,retentionDays:numeric(draft.retentionDays,1,90,'保留天数'),maxSessionsPerCheck:numeric(draft.maxSessionsPerCheck,1,5,'每次最多会话数'),maxMessagesPerSession:numeric(draft.maxMessagesPerSession,5,30,'每个会话消息数')};}
-const inScope=(bridge:any,row:any)=>bridge?.sessionReadEnabled===true&&(bridge.sessionReadScope==='all'||(bridge.allowedSessionIds??[]).includes(row.sessionId));
+const inScope=(bridge:any,row:any)=>bridge?.sessionReadEnabled===true&&(bridge.sessionReadScope==='all'||sessionGrantIds(bridge).includes(row.sessionId));
 
 function WorkMemory({api,s,busy,ui,row,visible,authorized,onChanged}:any){
   const {Button,Text,Detail,Field}=ui;
@@ -49,37 +50,38 @@ function ObservationForm({api,s,busy,ui,data,bridge,connectionDraft,connectionSt
   useDraftGuard(dirty);
   useEffect(()=>{if(!dirty){const fresh=settingsOf(data);setBase({revision:fresh.revision??0,draft:draftOf(fresh)});setDraft(draftOf(fresh));}},[data.settings]);
   const patch=(key:string,value:any)=>setDraft(previous=>({...previous,[key]:value}));
-  const canRead=bridge?.sessionReadEnabled===true&&(bridge.sessionReadScope==='all'||(bridge.allowedSessionIds??[]).length>0),locked=busy||s.agentBusy||s.desired!=='paused',blocked=locked||!!readError||connectionDraft||connectionStale||stale;
+  const canRead=bridge?.sessionReadEnabled===true&&(bridge.sessionReadScope==='all'||sessionGrantIds(bridge).length>0),locked=busy||s.agentBusy||s.desired!=='paused',blocked=locked||!!readError||connectionDraft||connectionStale||stale;
   const save=()=>api.run(async()=>{
     if(busy||readError||connectionDraft||connectionStale||stale)throw new Error('请处理未保存的工具授权并核对最新设置。');
     await api.control({op:'work-observation-configure',sessionId:s.sessionId,expectedRevision:base.revision,settings:payloadOf(draft)});
     const fresh=settingsOf(await onChanged());setBase({revision:fresh.revision??0,draft:draftOf(fresh)});setDraft(draftOf(fresh));
   },'工作观察设置已保存，原运行状态已保留');
-  const queued=status.requested===true||status.checkRequested===true||status.manualRequested===true,held=status.held===true;
-  const stateLabel=!settings.enabled?'未开启工作观察':!canRead?'等待读取授权':held?'等待处理上次检查':status.running||['running','reading','extracting'].includes(status.phase)?'正在检查':queued?'已安排，恢复运行后检查':s.desired!=='running'||s.autonomy?.paused?'随 Human 暂停':'按周期检查';
+  const queued=status.phase==='queued'||status.requested===true||status.checkRequested===true||status.manualRequested===true,held=status.held===true;
+  const missingCapacity=status.phase==='failed'&&status.lastError==='MODEL_BUDGET_ESTIMATE_UNAVAILABLE';
+  const stateLabel=!settings.enabled?'未开启工作观察':!canRead?'等待读取授权':held?'等待处理上次检查':missingCapacity?'检查失败，需核对模型配置':status.phase==='waiting-budget'?'等待自主额度':status.running||['running','reading','extracting'].includes(status.phase)?'正在检查':queued?'已安排，恢复运行后检查':s.desired!=='running'||s.autonomy?.paused?'随 Human 暂停':'到期后由 Human 选择是否查看';
   const records=rowsOf(data),total=data.memories?.total??records.length;
   return <>
     <h4 className="hn-section-title">定期观察工作会话</h4>
-    {mode==='diagnostics'&&<div className="hn-setting-summary"><span>{stateLabel}</span><span>已保存的读取范围：{!bridge?.sessionReadEnabled?'未授权':bridge.sessionReadScope==='all'?'全部可见普通会话':'指定 '+(bridge.allowedSessionIds??[]).length+' 个会话'}</span></div>}
-    <p className="hn-help">在读取授权内，定期从其他 DSH 会话提炼进展、决策、阻塞和待办，帮助当前 Human 了解工作上下文。它只读文本，不启动目标 Agent，不发送任务，也不会自动把工作报告推送到聊天。</p>
+    {mode==='diagnostics'&&<div className="hn-setting-summary"><span>{stateLabel}</span><span>已保存的读取范围：{!bridge?.sessionReadEnabled?'未授权':bridge.sessionReadScope==='all'?'全部可见普通会话':'指定 '+sessionGrantIds(bridge).length+' 个会话'}</span></div>}
+    <p className="hn-help">在读取授权内，让 Human 自主选择何时查看其他 DSH 会话并提炼进展、决策、阻塞和待办，帮助当前 Human 了解工作上下文。它只读文本，不启动目标 Agent，不发送任务，也不会自动把工作报告推送到聊天。</p>
     {mode==='settings'&&<>{!canRead?<Band>当前没有可读取的会话范围。你可以先保存工作观察偏好，再在上方授权读取；开启观察不会自动扩大读取权限。</Band>:null}
     <Check label="开启工作观察并沉淀为工作记忆" disabled={busy||!!readError} value={draft.enabled} onChange={(value:boolean)=>patch('enabled',value)}/>
     <div className="hn-fields">
-      <Field label="检查间隔 · 分钟" hint="5–1,440 分钟。到期后随自主唤醒安排，实际不会快于自主检查频率，也不抢占主人聊天。"><input className="hn-input" type="number" aria-label="工作观察检查间隔 · 分钟" min={5} max={1440} step={1} disabled={busy||!draft.enabled} value={draft.intervalMinutes} onChange={event=>patch('intervalMinutes',event.target.value)}/></Field>
+      <Field label="检查间隔 · 分钟" hint="5–1,440 分钟。到期后成为可选行为。需要在下次运行时检查，可使用“安排一次工作检查”。"><input className="hn-input" type="number" aria-label="工作观察检查间隔 · 分钟" min={5} max={1440} step={1} disabled={busy||!draft.enabled} value={draft.intervalMinutes} onChange={event=>patch('intervalMinutes',event.target.value)}/></Field>
       <Field label="工作记忆保留 · 天" hint="1–90 天，表示召回有效期。到期后不再参与召回，不代表清理历史审计或离线备份。"><input className="hn-input" type="number" aria-label="工作记忆保留天数" min={1} max={90} step={1} disabled={busy||!draft.enabled} value={draft.retentionDays} onChange={event=>patch('retentionDays',event.target.value)}/></Field>
       <Field label="每次最多检查会话数" hint="1–5 个。会话较多时轮流检查，不在一轮读取全部历史。"><input className="hn-input" type="number" aria-label="工作观察每次最多会话数" min={1} max={5} step={1} disabled={busy||!draft.enabled} value={draft.maxSessionsPerCheck} onChange={event=>patch('maxSessionsPerCheck',event.target.value)}/></Field>
       <Field label="每个会话最多读取消息数" hint="5–30 条。首次只取最近有限消息，后续增量读取新内容。"><input className="hn-input" type="number" aria-label="工作观察每会话消息数" min={5} max={30} step={1} disabled={busy||!draft.enabled} value={draft.maxMessagesPerSession} onChange={event=>patch('maxMessagesPerSession',event.target.value)}/></Field>
     </div>
-    <p className="hn-help">无新增内容时不调用提炼模型；有变化时使用自主额度。用户原话和其他 Agent 的建议分开保存，分类是模型推断，不等于主人确认或实际完成；工作记忆不混入主人个人事实或人格证据。关闭观察或撤回读取授权后，不再向模型召回这些内容。</p>
+    <p className="hn-help">周期选题和提炼使用自主额度。手动安排跳过选题，没有新增材料时不调用提炼模型。用户原话和其他 Agent 的建议分开保存，分类是模型推断，不等于主人确认或实际完成；工作记忆不混入主人个人事实或人格证据。关闭观察或撤回读取授权后，不再向模型召回这些内容。</p>
     {connectionDraft||connectionStale?<Band>上方工具与连接存在未保存或过期的授权草稿。这里展示的是已保存范围；请先处理该草稿，再保存观察设置或安排检查。</Band>:null}
     {stale?<Band>工作观察设置已在其他页面更新。当前草稿已保留，请放弃修改并基于最新设置编辑。</Band>:null}
     <div className="hn-row"><Button primary disabled={busy||readError||connectionDraft||connectionStale||stale||!dirty} onClick={save}>保存工作观察</Button>{dirty?<Button disabled={busy} onClick={()=>{setBase({revision:settings.revision??0,draft:draftOf(settings)});setDraft(draftOf(settings));}}>放弃修改</Button>:null}</div>
     <p className="hn-help">保存成功后保持原运行状态。提炼结果在资料的工作记忆中查看，检查进度在日志中查看。</p></>}
     {mode==='diagnostics'&&    <details className="hn-advanced"><summary>检查状态与手动安排</summary>
       <div className="hn-setting-summary"><span>上次检查：{clock(status.lastCheckedAt)}</span><span>下次可检查：{clock(status.nextCheckAt??status.nextEligibleAt)}</span></div>
-      {status.lastError?<Band>上次检查未完成，记录已保留。处理原因后，可在暂停时明确允许重新检查。</Band>:null}
-      <p className="hn-help">手动安排只排队一次检查，恢复 Human 后才执行，仍受读取授权、自主额度和单一执行线约束。失败批次不会自动反复重试。</p>
-      <div className="hn-row"><Button disabled={blocked||dirty||!settings.enabled||!canRead||queued||held} onClick={()=>api.run(async()=>{await api.control({op:'work-observation-check',sessionId:s.sessionId});await onChanged();},'已安排一次工作检查，恢复 Human 后执行')}>安排一次工作检查</Button>{held?<Button disabled={blocked||dirty||!settings.enabled||!canRead} onClick={()=>api.run(async()=>{await api.control({op:'work-observation-retry',sessionId:s.sessionId});await onChanged();},'已允许重新检查失败批次，仍保持暂停')}>允许重新检查失败批次</Button>:null}<Button disabled={busy} onClick={()=>api.run(onChanged,'工作观察状态已刷新')}>刷新工作观察状态</Button></div>
+      {status.lastError?<Band>{missingCapacity?'请检查 DSH 模型的最大输出或上下文容量。配置完成后可安排一次新检查。':status.phase==='waiting-budget'?'这次检查已保留，额度恢复后可继续。':held?'上次检查需要明确重试。':'上次未完成检查，将在后续可用时重新考虑。'}</Band>:null}{status.heldSessions>0&&<Band>{status.heldSessions} 个会话需要明确重试，其他授权会话继续可用。</Band>}{status.deferredSessions>0&&<Band>{status.deferredSessions} 个会话等待读取恢复，稍后再检查。</Band>}
+      <p className="hn-help">手动安排只排队一次检查，恢复 Human 后才执行，仍受读取授权、自主额度和单一执行线约束。单个会话暂时不可读时会稍后再查；提炼内容校验失败则需明确重试。</p>
+      <div className="hn-row"><Button disabled={blocked||dirty||!settings.enabled||!canRead||queued||held} onClick={()=>api.run(async()=>{await api.control({op:'work-observation-check',sessionId:s.sessionId});await onChanged();},'已安排一次工作检查，恢复 Human 后执行')}>安排一次工作检查</Button>{held||status.heldSessions>0?<Button disabled={blocked||dirty||!settings.enabled||!canRead} onClick={()=>api.run(async()=>{await api.control({op:'work-observation-retry',sessionId:s.sessionId});await onChanged();},'已允许重新检查失败批次，仍保持暂停')}>允许重新检查失败批次</Button>:null}<Button disabled={busy} onClick={()=>api.run(onChanged,'工作观察状态已刷新')}>刷新工作观察状态</Button></div>
       <JsonDetails label="查看检查诊断" value={{lastError:status.lastError??null,held,phase:status.phase??null,lastCheckedAt:status.lastCheckedAt??null,nextCheckAt:status.nextCheckAt??status.nextEligibleAt??null}}/>
     </details>}
     {mode==='records'&&<details className="hn-advanced" open><summary>工作记忆 · {total} 条</summary>
@@ -92,7 +94,7 @@ function ObservationForm({api,s,busy,ui,data,bridge,connectionDraft,connectionSt
 
 export default function WorkObservation({api,s,busy,ui,bridge,connectionDraft=false,connectionStale=false,mode='settings'}:any){
   const {Button,Band}=ui,[offset,setOffset]=useState(0),[nonce,setNonce]=useState(0),[loaded,setLoaded]=useState<any>(null),[loading,setLoading]=useState(true),[error,setError]=useState('');
-  const authority=JSON.stringify([s.sessionId,bridge?.sessionReadEnabled,bridge?.sessionReadScope,bridge?.allowedSessionIds??[],s.management?.capabilityRevision,s.workObservation?.revision,s.workObservation?.settingsRevision]);
+  const authority=JSON.stringify([s.sessionId,bridge?.sessionReadEnabled,bridge?.sessionReadScope,sessionGrantIds(bridge),s.management?.capabilityRevision,s.workObservation?.revision,s.workObservation?.settingsRevision]);
   const requestKey=JSON.stringify([authority,offset,nonce]),latest=useRef(requestKey);latest.current=requestKey;
   useEffect(()=>{let live=true;setLoading(true);setError('');api.read({kind:'work-observation',limit:20,offset}).then((data:any)=>{if(live&&latest.current===requestKey){setLoaded({data,authority});setLoading(false);}},(cause:any)=>{if(live&&latest.current===requestKey){setError(String(cause?.message??cause));setLoading(false);}});return ()=>{live=false;};},[requestKey]);
   const refresh=async()=>{const key=latest.current,[currentAuthority,currentOffset]=JSON.parse(key),data=await api.read({kind:'work-observation',limit:20,offset:currentOffset});if(latest.current===key){setLoaded({data,authority:currentAuthority});setError('');setLoading(false);}return data;};

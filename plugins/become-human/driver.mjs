@@ -19,7 +19,7 @@ import {PersonaDevelopment} from './persona-development.mjs';
 import {MemoryLifecycle} from './memory-lifecycle.mjs';
 import {runDevelopmentReview} from './development-runtime.mjs';
 import {WorkObservation} from './work-observation.mjs';
-import {runWorkObservation} from './work-observation-runtime.mjs';
+import {registerWorkObservationBehaviors} from './work-observation-runtime.mjs';
 import {quietUntil} from './quiet-hours.mjs';
 import {runAutonomyTurn} from './autonomy.mjs';
 import {drainActivityFeedback} from './activity-feedback.mjs';
@@ -38,7 +38,7 @@ import {CognitionStore} from './cognition.mjs';
 import {registerMcpCapabilities} from './capability-mcp.mjs';
 import {CustomMcpCapabilities} from './capability-custom-mcp.mjs';
 import {registerBridgeCapabilities} from './capability-bridge.mjs';
-import {registerReportCapability} from './capability-report.mjs';
+import {registerReportCapability,cancelLearningReportPreview} from './capability-report.mjs';
 import {registerCalculationCapability} from './capability-calculation.mjs';
 import {registerConversationRecall} from './conversation-recall.mjs';
 import {parentCapabilityRequest} from './capability-parent.mjs';
@@ -471,7 +471,6 @@ export class HumanAgent {
       const retry=this.factory.journal.value(this.id,'autonomyModelBackoff',null);
       if(retry?.until>Date.now())return;
     }
-    if(!ownerPending&&this.factory.journal.value(this.id,'remaining',0)===null&&await runWorkObservation(this,signal))return;
     if(!ownerPending&&this.factory.journal.value(this.id,'remaining',0)===null&&await runDevelopmentReview(this,signal))return;
     if(this.factory.autonomy.settings(this.id).enabled||this.factory.config.interactiveOnly&&ownerPending)return runAutonomyTurn(this,signal);
     // Chat-only mode stays online for owner input without an idle model turn.
@@ -615,8 +614,10 @@ export class HumanAgent {
 export class HumanFactory extends Service {
   static inject=['agents','sessions','sessionPersistence','sessionProjections','llm'];
   constructor(ctx,config){
-    super(ctx,'becomeHuman');this.runtime={ctx};this.config=config;this.journal=new ControlJournal(config.journal);this.handles=new Set();this.closing=false;this.domain=new DomainMemory(this.journal);this.personaDevelopment=new PersonaDevelopment(this.journal,this.domain);this.memoryLifecycle=new MemoryLifecycle(this.journal,this.domain);this.domain.development=this.personaDevelopment;this.domain.lifecycle=this.memoryLifecycle;this.autonomy=new AutonomyStore(this.journal,this.domain);this.goals=new GoalEngine(this.journal,this.domain,this.autonomy);this.actions=new ActionStore(this.journal,this.domain,{root:path.resolve(path.dirname(config.journal),'artifacts'),validNote:(agent,note)=>this.goals.validNote(agent,note),validGoal:(agent,ref,action)=>this.goals.actionAllowed(agent,action)});this.goals.setActions(this.actions);this.tools=new ToolExecutor(this.journal);this.workObservation=new WorkObservation(this.journal,{bridgeSettings:id=>this.tools.configuration(id).bridge});this.domain.workObservation=this.workObservation;this.reminders=new ReminderStore(this.journal);this.management=new HumanManagement(this);this.cognition=new CognitionStore(this.journal,this.domain,{factory:this});this.tickets=new WeakMap();this.inflight=0;
-    this.learningPack=new LearningPack();this.behaviors=new BehaviorRegistry();this.pluginEvents=new PluginEvents(this.journal,{agentId:()=>this.controllerSessionId,wake:id=>wakeForPluginEvent(this,id)});this.autonomy.pluginEvents=this.pluginEvents;this.publicSources=new PublicSources(this.journal,this.pluginEvents,{agentId:()=>this.controllerSessionId});this.publicSources.start();this.plugins=new HumanPlugins(this);this.plugins.start();this.experience=new ExperienceStore(this.journal,this.domain,{tools:this.tools});this.domain.experience=this.experience;registerExperienceBehavior(this);this.goals.setBehaviors(this.behaviors,id=>{syncCapabilityBehaviors(this,id);return {id,factory:this};});
+    super(ctx,'becomeHuman');this.runtime={ctx};this.config=config;this.journal=new ControlJournal(config.journal);this.handles=new Set();this.closing=false;
+    this.learningPack=new LearningPack(()=>registerReportCapability(this.tools,this.actions,this.journal));
+    this.domain=new DomainMemory(this.journal,{learningPack:this.learningPack});this.personaDevelopment=new PersonaDevelopment(this.journal,this.domain);this.memoryLifecycle=new MemoryLifecycle(this.journal,this.domain);this.domain.development=this.personaDevelopment;this.domain.lifecycle=this.memoryLifecycle;this.autonomy=new AutonomyStore(this.journal,this.domain);this.goals=new GoalEngine(this.journal,this.domain,this.autonomy);this.actions=new ActionStore(this.journal,this.domain,{root:path.resolve(path.dirname(config.journal),'artifacts'),validNote:(agent,note)=>this.goals.validNote(agent,note),validGoal:(agent,ref,action)=>this.goals.actionAllowed(agent,action)});this.goals.setActions(this.actions);this.tools=new ToolExecutor(this.journal,{onPolicyChanged:id=>this.workObservation.reconcilePolicy(id),cancelDetachedPreview:(row,context)=>{if(row.tool==='write-learning-report'&&row.capabilitySnapshot?.backend==='managed-report')cancelLearningReportPreview(this.actions,this.journal,context);}});this.workObservation=new WorkObservation(this.journal,{bridgeSettings:id=>this.tools.configuration(id).bridge});this.domain.workObservation=this.workObservation;this.reminders=new ReminderStore(this.journal);this.management=new HumanManagement(this);this.cognition=new CognitionStore(this.journal,this.domain,{factory:this});this.tickets=new WeakMap();this.inflight=0;
+    this.behaviors=new BehaviorRegistry();this.pluginEvents=new PluginEvents(this.journal,{agentId:()=>this.controllerSessionId,wake:id=>wakeForPluginEvent(this,id)});this.autonomy.pluginEvents=this.pluginEvents;this.publicSources=new PublicSources(this.journal,this.pluginEvents,{agentId:()=>this.controllerSessionId});this.publicSources.start();this.plugins=new HumanPlugins(this);this.plugins.start();this.experience=new ExperienceStore(this.journal,this.domain,{tools:this.tools});this.domain.experience=this.experience;registerExperienceBehavior(this);this.goals.setBehaviors(this.behaviors,id=>{syncCapabilityBehaviors(this,id);return {id,factory:this};});
     this.relationship=new RelationshipChoice(this.journal,this.domain);this.journal.relationship=this.relationship;
     this.conversationSummary=new RollingDialogueSummary(this.journal,this.domain);
     this.dialogueState=new DialogueState(this.journal,this.domain);this.journal.dialogueState=this.dialogueState;
@@ -624,7 +625,7 @@ export class HumanFactory extends Service {
     this.mcpCapabilities=registerMcpCapabilities(this.tools);
     this.customMcpCapabilities=new CustomMcpCapabilities(this.tools,{configuration:agent=>this.tools.configuration(agent),journal:this.journal});
     this.bridgeCapabilities=registerBridgeCapabilities(this.tools,{request:(operation,input,options)=>parentCapabilityRequest(operation,input,{...options,context:{...options.context,policy:this.tools.configuration(options.context.agent).bridge,policyRevision:this.tools.configuration(options.context.agent).revision}})});
-    registerReportCapability(this.tools,this.actions,this.journal);
+    registerWorkObservationBehaviors(this);
     registerCalculationCapability(this.tools);
     registerConversationRecall(this.tools,id=>[...this.handles].map(handle=>handle.agent).find(agent=>agent?.id===id));
     this.capabilities=Object.freeze({contractVersion:1,register:(name,descriptor)=>this.tools.register(name,descriptor),catalog:()=>this.controllerSessionId?this.tools.catalog(this.controllerSessionId):[]});

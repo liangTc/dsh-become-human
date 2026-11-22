@@ -20,18 +20,18 @@ function childEnvironment(){
 export class ReadOnlyMcpProvider {
   constructor({timeoutMs=25000}={}){
     if(!Number.isSafeInteger(timeoutMs)||timeoutMs<1000||timeoutMs>60000)fail('INVALID_MCP_TIMEOUT');
-    this.timeoutMs=timeoutMs;this.child=null;this.ready=false;this.closed=false;this.pending=new Map();this.terminating=new Map();this.counter=0;this.buffer=Buffer.alloc(0);this.busy=false;this.lastError=null;this.startedAt=null;this.connecting=null;
+    this.timeoutMs=timeoutMs;this.child=null;this.ready=false;this.closed=false;this.enabled=true;this.pending=new Map();this.terminating=new Map();this.counter=0;this.buffer=Buffer.alloc(0);this.busy=false;this.lastError=null;this.startedAt=null;this.connecting=null;
   }
   status(){return {backend:'mcp-stdio',server:'bundled-public',protocolVersion:PUBLIC_MCP_PROTOCOL,tool:PUBLIC_MCP_TOOL,readOnly:true,connected:this.ready&&!!this.child,running:!!this.child,terminating:this.terminating.size,pending:this.pending.size,closed:this.closed,lastError:this.lastError,startedAt:this.startedAt};}
   async start(signal){
-    signal?.throwIfAborted();if(this.closed)fail('MCP_PROVIDER_CLOSED');if(this.ready&&this.child)return;if(this.connecting)return this.connecting;
+    signal?.throwIfAborted();if(this.closed)fail('MCP_PROVIDER_CLOSED');if(!this.enabled)fail('CAPABILITY_DISABLED');if(this.ready&&this.child)return;if(this.connecting)return this.connecting;
     const promise=this.connect(signal);this.connecting=promise;
     try{await promise;}finally{if(this.connecting===promise)this.connecting=null;}
   }
   async connect(signal){
     // A cancellation is not acknowledged merely because kill() returned. A new
     // process cannot start while the old process might still be fetching.
-    await this.waitForExit(signal);signal?.throwIfAborted();if(this.closed)fail('MCP_PROVIDER_CLOSED');
+    await this.waitForExit(signal);signal?.throwIfAborted();if(this.closed)fail('MCP_PROVIDER_CLOSED');if(!this.enabled)fail('CAPABILITY_DISABLED');
     const child=spawn(process.execPath,[serverPath],{cwd:dirname(serverPath),env:childEnvironment(),stdio:['pipe','pipe','pipe'],windowsHide:true,shell:false});
     this.child=child;this.ready=false;this.buffer=Buffer.alloc(0);this.startedAt=Date.now();
     child.stdout.on('data',chunk=>this.consume(child,chunk));
@@ -144,6 +144,13 @@ export class ReadOnlyMcpProvider {
       return {...page,backend:'mcp-stdio',server:'bundled-public',tool:PUBLIC_MCP_TOOL};
     }catch(error){if(deadline.aborted&&!signal?.aborted)fail('MCP_REQUEST_TIMEOUT');throw error;}
     finally{this.busy=false;}
+  }
+  async setEnabled(enabled){
+    this.enabled=enabled;
+    if(enabled)return;
+    this.disconnect(this.child,'CAPABILITY_DISABLED');
+    await this.connecting?.catch(()=>{});
+    await this.waitForExit();
   }
   async close(){this.closed=true;this.disconnect(this.child,'MCP_PROVIDER_CLOSED');await this.waitForExit();}
 }

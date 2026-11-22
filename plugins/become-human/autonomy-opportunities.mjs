@@ -69,7 +69,7 @@ export async function candidate(agent,signal,settings,now=Date.now()){
   if(rows.length===32)j.put(id,'pendingTaskCursor',rows.at(-1));
   agent.factory.plugins?.selection({id:'selection:'+now,phase:'selection',now});
   const opportunities=[];
-  const offer=next=>{if(next&&(!isLearningActivity(next.kind)||pack.available(settings))&&!store.deferred(id,checkpointForOpportunity(next),now))opportunities.push(next);};
+  const offer=next=>{if(next&&(next.kind!=='write-report'||pack.provider)&&(!isLearningActivity(next.kind)||pack.available(settings))&&!store.deferred(id,checkpointForOpportunity(next),now))opportunities.push(next);};
   offer(chat);offer(agent.factory.goals?.candidate(id,settings,now));offer(boardCandidate(agent,settings,{chat,now}));
   // Build opportunities without network access. Only the chosen source is
   // fetched, after a model decision and current budget/permission checks.
@@ -78,5 +78,6 @@ export async function candidate(agent,signal,settings,now=Date.now()){
   // One scheduler scan advances event visibility, even when a provider has no
   // useful action. Read-only status queries never change this cursor.
   for(const next of agent.factory.behaviors?.opportunities(agent,{now,settings,events:store.events(id,{advance:true})})??[])offer(next);
-  return choiceOpportunity(opportunities,{journal:j,agentId:id});
+  const profile=store.persona(id,'selection').profile;
+  return choiceOpportunity(opportunities,{journal:j,agentId:id,toolFocus:[profile?.goals,profile?.interests].flat().filter(Boolean).join('\n')});
 }

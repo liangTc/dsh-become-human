@@ -8,7 +8,7 @@
 
 让数字人生活在 DSH 中：记住共同经历，形成自己的倾向，在事件循环中选择做什么，再通过插件获得新的能力。
 
-> **测试版 `0.7.0-beta.43` · 持续开发中。** [GitHub Release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.43) · [npm 安装包](https://www.npmjs.com/package/dsh-become-human-web/v/0.7.0-beta.43) · [本版验证范围](docs/RELEASE_BETA43.md)
+> **测试版 `0.7.0-beta.44` · 持续开发中。** [GitHub Release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.44) · [npm 安装包](https://www.npmjs.com/package/dsh-become-human-web/v/0.7.0-beta.44) · [本版验证范围](docs/RELEASE_BETA44.md)
 
 [English](README.en.md) · [安装指南](docs/INSTALLATION.md) · [使用指南](docs/USAGE.md) · [插件开发手册](https://liangtc.github.io/dsh-become-human/) · [配置说明](docs/CONFIGURATION.md) · [测试状态](docs/TESTING_STATUS.md)
 
@@ -83,20 +83,20 @@ Become Human 是面向 DSH 的数字人插件，包含 Web 管理界面和独立
 
 | 来源 | 当前状态 |
 | --- | --- |
-| `0.7.0-beta.43` | Web 和 Desktop 共用安装包，包含自主选题短暂失败后的自动退避与恢复 |
+| `0.7.0-beta.44` | 学习包停用后撤回工具和资料，写操作重试复用原审批，DSH 会话重新授权后重新核验来源 |
 | [历史测试发行 `0.7.0-beta.5`](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.5) | 提供 `.tgz` 与 SHA-256，但存在首次创建 Human 可能失败的已知初始化问题；修复已进入后续源码 |
-| [npm](https://www.npmjs.com/package/dsh-become-human-web/v/0.7.0-beta.43) | 固定版本安装 `0.7.0-beta.43` 测试版 |
+| [npm](https://www.npmjs.com/package/dsh-become-human-web/v/0.7.0-beta.44) | 固定版本安装 `0.7.0-beta.44` 测试版 |
 
 GitHub Release 提供可直接安装的 `.tgz` 和配套 SHA-256。需要从源码构建时，请选择同名版本标签。
 
 ### 2. 安装插件
 
-**Desktop**：下载组合包，在左侧「插件 → 添加插件」中填入文件的绝对路径，安装并启用。按提示重启后从侧栏打开 Human。[下载 beta.43 组合包](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.43/dsh-become-human-web-0.7.0-beta.43.tgz)
+**Desktop**：下载组合包，在左侧「插件 → 添加插件」中填入文件的绝对路径，安装并启用。按提示重启后从侧栏打开 Human。[下载 beta.44 组合包](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.44/dsh-become-human-web-0.7.0-beta.44.tgz)
 
 **Web**：先在宿主中配置模型。升级前备份并停止对应服务，然后执行以下命令。
 
 ```powershell
-npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add dsh-become-human-web@0.7.0-beta.43 --registry=https://registry.npmjs.org/
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add dsh-become-human-web@0.7.0-beta.44 --registry=https://registry.npmjs.org/
 npx @deepseek-ai/dsh@0.2.0-rc.2 web --no-open
 ```
 

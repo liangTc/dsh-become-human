@@ -1,7 +1,7 @@
 // Fair visibility, not a rule deciding which action the model must execute.
 // Readers preview the same window; only a new scheduler scan advances it.
 export function attentionWindow(journal,agent,scope,entries,{limit=16,advance=false,perGroupLimit=limit}={}){
-  if(!['plugin-events','behavior-opportunities'].includes(scope)||!Number.isInteger(limit)||limit<1||limit>32||entries.length>4096)throw Error('INVALID_ATTENTION_WINDOW');
+  if(!['plugin-events','behavior-opportunities','unbound-tools'].includes(scope)||!Number.isInteger(limit)||limit<1||limit>32||entries.length>4096)throw Error('INVALID_ATTENTION_WINDOW');
   const unique=new Map();
   for(const entry of entries){
     if(typeof entry.key!=='string'||!entry.key||typeof entry.group!=='string'||!entry.group)throw Error('INVALID_ATTENTION_ENTRY');

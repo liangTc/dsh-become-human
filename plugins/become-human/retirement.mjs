@@ -63,7 +63,7 @@ export class SessionRetirement {
     // await, so fence again before registering any late artifact.
     this.storage.guard(id);
     const personaDevelopment=this.domain.development?.export(id)??null;
-    const body=JSON.stringify({multimodal:this.journal.media?.export(id)??null,header:handle.header,events:read.events,memories:this.domain.list(id,{limit:100}),relationship:this.journal.relationship?.snapshot(id)??null,memoryLifecycle:this.domain.lifecycle?.export(id)??null,workObservation:this.domain.workObservation?.export(id)??null,personaDevelopment,developmentRestoreSemantics:'Read-only history; evidence status and versions are retained. This export does not apply or reactivate memories, summaries, relationship changes or persona changes.'});
+    const body=JSON.stringify({multimodal:this.journal.media?.export(id)??null,header:handle.header,events:read.events,memories:this.domain.list(id,{limit:100,includeArchivedNotes:true}),relationship:this.journal.relationship?.snapshot(id)??null,memoryLifecycle:this.domain.lifecycle?.export(id)??null,workObservation:this.domain.workObservation?.export(id)??null,personaDevelopment,developmentRestoreSemantics:'Read-only history; evidence status and versions are retained. This export does not apply or reactivate memories, summaries, relationship changes or persona changes.'});
     if(Buffer.byteLength(body)>2*1024*1024)throw new Error('EXPORT_TOO_LARGE');
     this.journal.db.prepare('INSERT INTO owned_artifact VALUES(?,?,?)').run(id,file,'export');
     let fh,created=false;

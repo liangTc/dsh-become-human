@@ -1,6 +1,6 @@
 {
   "name": "dsh-become-human",
-  "version": "0.7.0-beta.43",
+  "version": "0.7.0-beta.44",
   "type": "module",
   "description": "Bounded autonomous Agent Web integration for DSH 0.2.0-rc.2",
   "main": "index.mjs",
@@ -14,6 +14,7 @@
   "files": [
     "index.mjs",
     "dsh-compatibility.mjs",
+    "session-grants.mjs",
     "driver.mjs",
     "run-status.mjs",
     "quiet-hours.mjs",
@@ -88,6 +89,7 @@
     "capability-calculation.mjs",
     "report-materials.mjs",
     "capability-dialogue.mjs",
+    "capability-discovery.mjs",
     "README.md",
     "LICENSE",
     "NOTICE",

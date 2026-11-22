@@ -1,3 +1,4 @@
+import {sessionScopeAvailable,sessionTargetInScope} from './session-grants.mjs';
 // Worker descriptors only. The manager owns the Host session services.
 // All write jobs must pass the shared executor's exact-input approval first.
 const fail=code=>{const error=new Error(code);error.code=code;throw error;};
@@ -34,7 +35,13 @@ export function registerBridgeCapabilities(registry,{request,status}={}){
   const disposers=[];
   for(const [id,description,inputSchema,effect,backend,scope,timeoutMs,maxResultBytes,retrySafe] of entries){
     const dispose=registry.register(id,{version:id==='dsh-session-cancel'?2:1,externalModel:id==='dsh-session-prompt',description,inputSchema,effect,backend,scope,scopeDescription:'分别按读取/使用授权范围校验 Host 当前可见的普通会话；排除 Human 主会话及子 Agent，写操作仍逐笔审批',timeoutMs,maxResultBytes,retrySafe,autonomous:false,enabledWhen:[effect==='write'?'bridge.sessionWriteEnabled':'bridge.sessionReadEnabled'],
+      available:(agent,settings)=>sessionScopeAvailable(settings.bridge,effect==='write',agent),
       validate:input=>validateBridgeInput(id,input),
+      assertTarget:(agent,input)=>{
+        if(id==='dsh-session-list')return;
+        if(input.sessionId===agent)fail('HUMAN_SESSION_TARGET_FORBIDDEN');
+        if(!sessionTargetInScope(registry.configuration(agent).bridge,input.sessionId,effect==='write'))fail('CAPABILITY_SCOPE_DENIED');
+      },
       execute:(input,signal,context)=>request(id,validateBridgeInput(id,input),{signal,context}),
       ...(typeof status==='function'?{status:()=>status(backend)}:{}),
     });if(typeof dispose==='function')disposers.push(dispose);

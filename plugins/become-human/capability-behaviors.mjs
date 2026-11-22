@@ -15,7 +15,7 @@ export function syncCapabilityBehaviors(factory,id){
     if(registered.get(behaviorId)?.fingerprint===fingerprint)continue;
     registered.get(behaviorId)?.dispose();
     const dispose=factory.behaviors.register(behaviorId,{version:cap.version,title:cap.title.slice(0,120),description:(cap.description||cap.title).slice(0,1000),inputSchema:cap.inputSchema,
-      available:agent=>factory.tools.catalog(agent.id,{origin:'autonomous'}).some(c=>c.id===cap.id&&c.available&&!c.externalModel),
+      available:agent=>factory.tools.catalog(agent.id,{origin:'autonomous',toolId:cap.id}).some(c=>c.id===cap.id&&c.available&&!c.externalModel),
       opportunities:()=>[{question:`按当前兴趣、关注或目标决定是否使用能力：${cap.title}`.slice(0,240)}],
       execute:async(agent,input,context)=>{
         const tools=factory.tools,journal=factory.journal,task=context.task,roundId=task.checkpoint.roundId??task.id,requestId='behavior:'+task.id+':'+roundId;

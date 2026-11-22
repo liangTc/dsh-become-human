@@ -8,8 +8,8 @@ const coreDefault=DEFAULT_PERSONA_CORE;
 
 const secret=text=>/(?:sk-[a-z0-9]{16,}|(?:api.?key|password|密码|令牌|token)\s*[:=]\s*\S{8,})/i.test(text);
 export class DomainMemory {
-  constructor(journal,{clock=()=>Date.now()}={}){
-    this.journal=journal;this.db=journal.db;this.clock=clock;
+  constructor(journal,{clock=()=>Date.now(),learningPack}={}){
+    this.journal=journal;this.db=journal.db;this.clock=clock;this.learningPack=learningPack;
     this.db.exec(`CREATE TABLE IF NOT EXISTS source_record(id TEXT PRIMARY KEY,agent TEXT,kind TEXT,namespace TEXT,root TEXT,occurred INTEGER,body TEXT,hash TEXT,status TEXT);
       CREATE TABLE IF NOT EXISTS memory_record(id TEXT PRIMARY KEY,agent TEXT,type TEXT,payload TEXT,truth TEXT,confidence REAL,refs TEXT,roots TEXT,valid_from INTEGER,valid_to INTEGER,status TEXT,version INTEGER,namespace TEXT);
       CREATE TABLE IF NOT EXISTS dependency(source TEXT,dependent TEXT,kind TEXT,PRIMARY KEY(source,dependent));
@@ -134,9 +134,14 @@ export class DomainMemory {
       this.journal.audit(agent,'preference-slots-migrated',{version:2,restored:restored.length,memoryIds:restored});
     });return {restored:restored.length};
   }
-  list(agent,{type,namespace='real',historical=false,query='',limit=20}={}){
+  get learningNotesAvailable(){return this.learningPack?.provider!==null;}
+  visibleMemoryFilter(){
+    if(this.learningNotesAvailable)return '';
+    return ' AND NOT EXISTS (SELECT 1 FROM learning_note n WHERE n.agent=memory_record.agent AND n.memory_id=memory_record.id)';
+  }
+  list(agent,{type,namespace='real',historical=false,query='',limit=20,includeArchivedNotes=false}={}){
     this.journal.assertAdmitted(agent);if(!Number.isInteger(limit)||limit<1||limit>100||query.length>128)throw new Error('INVALID_QUERY');const now=this.now(agent);
-    const rows=this.db.prepare('SELECT * FROM memory_record WHERE agent=? AND namespace=? ORDER BY valid_from DESC').all(agent,namespace).filter(r=>(!type||r.type===type)&&(historical?r.status!=='deleted':r.status==='active'&&(r.valid_to===null||r.valid_to>now))&&JSON.parse(r.refs).every(id=>this.db.prepare("SELECT 1 FROM source_record WHERE id=? AND status='active'").get(id)));
+    const rows=this.db.prepare('SELECT * FROM memory_record WHERE agent=? AND namespace=?'+(includeArchivedNotes?'':this.visibleMemoryFilter())+' ORDER BY valid_from DESC').all(agent,namespace).filter(r=>(!type||r.type===type)&&(historical?r.status!=='deleted':r.status==='active'&&(r.valid_to===null||r.valid_to>now))&&JSON.parse(r.refs).every(id=>this.db.prepare("SELECT 1 FROM source_record WHERE id=? AND status='active'").get(id)));
     const scored=rows.map(r=>{const text=r.payload.toLowerCase(),terms=[...new Set(query.toLowerCase().match(/[a-z0-9]+|[\u4e00-\u9fff]{1,2}/g)??[])];return {r,score:query?terms.filter(term=>text.includes(term)).length:1};}).filter(x=>x.score>0).sort((a,b)=>b.score-a.score||b.r.valid_from-a.r.valid_from);
     return scored.slice(0,limit).map(({r})=>({...r,payload:JSON.parse(r.payload),refs:JSON.parse(r.refs),roots:JSON.parse(r.roots),evidence:JSON.parse(r.refs).map(id=>{const s=this.db.prepare('SELECT body,hash,occurred FROM source_record WHERE id=?').get(id);return {id,text:s.body,hash:s.hash,occurred:s.occurred};})}));
   }
@@ -248,7 +253,7 @@ export class DomainMemory {
     // not an embedding model or a claim of semantic completeness.
     for(const type of TYPES){if(excludeTypes.includes(type))continue;
       const relevance=terms.length?'('+terms.map(()=>'(instr(lower(payload),?)>0)').join('+')+') DESC,':'';
-      for(const r of this.db.prepare("SELECT id,type,payload,truth,confidence,refs,version,valid_from,valid_to FROM memory_record WHERE agent=? AND namespace='real' AND type=? AND status='active' AND (valid_to IS NULL OR valid_to>?) ORDER BY "+relevance+"valid_from DESC,id DESC LIMIT 512").all(agent,type,now,...terms)){
+      for(const r of this.db.prepare("SELECT id,type,payload,truth,confidence,refs,version,valid_from,valid_to FROM memory_record WHERE agent=? AND namespace='real' AND type=? AND status='active' AND (valid_to IS NULL OR valid_to>?)" + (type==='skill'?this.visibleMemoryFilter():'') + " ORDER BY "+relevance+"valid_from DESC,id DESC LIMIT 512").all(agent,type,now,...terms)){
         const refs=JSON.parse(r.refs);if(!this.contextEvidenceUsable(agent,r))continue;
         if(type==='episode'&&refs.some(ref=>excluded.has(ref)))continue;
         const payload=JSON.parse(r.payload),text=r.payload.toLowerCase(),matched=terms.reduce((n,term)=>n+(text.includes(term)?1:0),0);
@@ -272,7 +277,7 @@ export class DomainMemory {
     // filtered legacy test summaries must not starve valid older summaries.
     const summaries=(this.lifecycle?.summaries(agent,recall.query??'',12)??[]).filter(summary=>{
       if(!Array.isArray(summary.refs)||summary.refs.some(ref=>this.sourceIsDevelopmentTest(agent,ref)||!this.sourceUsable(agent,ref)))return false;
-      if(!Array.isArray(summary.memoryIds)||!summary.memoryIds.every(id=>{const memory=this.db.prepare('SELECT id,type,payload,truth,refs FROM memory_record WHERE agent=? AND id=?').get(agent,id);return memory&&this.contextEvidenceUsable(agent,memory);}))return false;
+      if(!Array.isArray(summary.memoryIds)||!summary.memoryIds.every(id=>{const memory=this.db.prepare('SELECT id,type,payload,truth,refs FROM memory_record WHERE agent=? AND id=?'+this.visibleMemoryFilter()).get(agent,id);return memory&&this.contextEvidenceUsable(agent,memory);}))return false;
       if(recall.query)return true;
       return summary.memoryIds.every(id=>{const memory=this.db.prepare('SELECT id,type,payload,valid_from FROM memory_record WHERE agent=? AND id=?').get(agent,id);return memory&&this.lifecycle.overlay(agent,memory).tier!=='cold';});
     }).slice(0,2).map(summary=>({id:summary.id,batchId:summary.batchId,title:summary.title,text:summary.text,kind:'derived-model-summary',truth:'inferred',semanticValidation:'unverified-model-inference',temporalValidity:summary.temporalValidity,created:summary.created,memoryIds:summary.memoryIds,refs:summary.refs,quotes:summary.quotes.slice(0,4).map(quote=>({sourceId:quote.sourceId,text:quote.text.slice(0,160)})),originalsRetained:true,ownerFact:false}));

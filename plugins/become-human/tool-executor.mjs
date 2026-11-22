@@ -16,7 +16,11 @@ function boundedReadResult(result,limit){
 
 // Registered adapters share the durable queue and the parent's serial interval.
 export class ToolExecutor {
-  constructor(journal){
+  constructor(journal,{cancelDetachedPreview,onPolicyChanged}={}){
+    this.cancelDetachedPreview=cancelDetachedPreview;
+    this.onPolicyChanged=onPolicyChanged;
+    this.configurationQueues=new Map();
+    this.catalogRevision=0;
     this.journal=journal;this.db=journal.db;this.registry=new Map();this.inflight=new Set();this.executions=new Map();
     this.db.exec(`CREATE TABLE IF NOT EXISTS human_tool_job(id TEXT PRIMARY KEY,agent TEXT NOT NULL,request_id TEXT NOT NULL,request_hash TEXT NOT NULL,tool TEXT NOT NULL,input TEXT NOT NULL,status TEXT NOT NULL,version INTEGER NOT NULL,created INTEGER NOT NULL,updated INTEGER NOT NULL,expires INTEGER NOT NULL,result TEXT,error TEXT,UNIQUE(agent,request_id));
       CREATE INDEX IF NOT EXISTS human_tool_pending ON human_tool_job(agent,status,created);
@@ -32,7 +36,8 @@ export class ToolExecutor {
     if(!Number.isSafeInteger(definition.timeoutMs)||definition.timeoutMs<1000||definition.timeoutMs>120000||!Number.isSafeInteger(definition.maxResultBytes)||definition.maxResultBytes<1024||definition.maxResultBytes>131072||!Array.isArray(definition.enabledWhen)||definition.enabledWhen.some(path=>typeof path!=='string'||path.length>100))fail('INVALID_TOOL_ADAPTER');
     definition.outputSchema=adapter.outputSchema?structuredClone(adapter.outputSchema):null;
     const registered=Object.freeze({...adapter,definition,definitionHash:hash(definition)});this.registry.set(name,registered);
-    return ()=>{if(this.registry.get(name)!==registered)return;this.registry.delete(name);for(const execution of this.executions.values())if(execution.adapter===registered)execution.controller.abort(new Error('CAPABILITY_DEFINITION_CHANGED'));};
+    this.catalogRevision++;
+    return ()=>{if(this.registry.get(name)!==registered)return;this.registry.delete(name);this.catalogRevision++;for(const execution of this.executions.values())if(execution.adapter===registered)execution.controller.abort(new Error('CAPABILITY_DEFINITION_CHANGED'));};
   }
   configuration(agent){
     this.journal.assertAdmitted(agent);
@@ -40,15 +45,33 @@ export class ToolExecutor {
     if(!row)return {revision:0,...structuredClone(capabilityDefaults)};
     const data=parse(row.data);return {revision:data.revision,...validateCapabilitySettings(data.settings)};
   }
-  async configure(agent,settings,expectedRevision){
+  configure(agent,settings,expectedRevision){
+    const pending=this.configurationQueues.get(agent)??Promise.resolve();
+    const save=pending.catch(()=>{}).then(()=>this.saveConfiguration(agent,settings,expectedRevision));
+    this.configurationQueues.set(agent,save);
+    return save.finally(()=>{if(this.configurationQueues.get(agent)===save)this.configurationQueues.delete(agent);});
+  }
+  async saveConfiguration(agent,settings,expectedRevision){
     const current=this.configuration(agent);if(expectedRevision!==current.revision)fail('STALE_CAPABILITY_SETTINGS');
     const next=validateCapabilitySettings(settings);if(!this.journal.safety)fail('SIGNED_CONTROL_REQUIRED');
     await this.journal.safety.prepare('capability-policy:'+randomUUID(),'human-capability-policy',{agent,revision:current.revision+1,settings:next});
+    this.onPolicyChanged?.(agent);
     for(const execution of this.executions.values())if(execution.agent===agent&&execution.policyRevision!==current.revision+1)execution.controller.abort(new Error('CAPABILITY_POLICY_CHANGED'));
     this.journal.put(agent,'humanCapabilitySettings',next);this.journal.audit(agent,'capability-configured',{revision:current.revision+1});return this.configuration(agent);
   }
-  enabled(adapter,agent){const settings=this.configuration(agent);return adapter.definition.enabledWhen.every(path=>at(settings,path)===true)&&adapter.available?.()!==false;}
-  catalog(agent,{origin='owner'}={}){const grants=agent?this.configuration(agent).autonomy?.toolIds??[]:[];return [...this.registry.values()].filter(a=>origin!=='autonomous'||a.definition.autonomous||grants.includes(a.definition.id)).map(a=>{const available=agent?this.enabled(a,agent):true;return {...a.definition,autonomous:a.definition.autonomous||grants.includes(a.definition.id),available,unavailableReason:available?null:'CAPABILITY_DISABLED'};});}
+  enabled(adapter,agent,settings=this.configuration(agent)){return adapter.definition.enabledWhen.every(path=>at(settings,path)===true)&&adapter.available?.(agent,settings)!==false;}
+  catalog(agent,{origin='owner',toolId}={}){
+    const candidates=toolId===undefined?[...this.registry.values()]:[this.registry.get(toolId)].filter(Boolean);
+    const policy=agent?this.configuration(agent):null,grants=policy?.autonomy?.toolIds??[];
+    const rows=[];
+    for(const adapter of candidates){
+      const autonomous=adapter.definition.autonomous||grants.includes(adapter.definition.id);
+      if(origin==='autonomous'&&!autonomous)continue;
+      const available=!agent||this.enabled(adapter,agent,policy);
+      rows.push({...adapter.definition,autonomous,available,unavailableReason:available?null:'CAPABILITY_DISABLED'});
+    }
+    return rows;
+  }
   contextCatalog(agent,origin='owner'){return this.catalog(agent,{origin}).filter(a=>a.available).map(({id,title,description,inputSchema,effect,backend,scope,externalModel})=>({id,title,description,inputSchema,effect,backend,scope,externalModel}));}
   metadata(id){return this.db.prepare('SELECT * FROM human_capability_job WHERE id=?').get(id);}
   checkPreview(row){const meta=this.metadata(row.id);if(meta&&meta.digest!==hash({tool:row.tool,input:row.input,snapshot:row.capabilitySnapshot,prepared:row.prepared,policyRevision:meta.policy_revision}))fail('CAPABILITY_PREVIEW_MISMATCH');}
@@ -60,13 +83,15 @@ export class ToolExecutor {
   submit(agent,{tool,input,requestId},{origin='owner',taskId=null}={}){
     this.journal.assertAdmitted(agent);const adapter=this.registry.get(tool);
     if(!adapter||typeof requestId!=='string'||!/^[a-zA-Z0-9._:-]{8,128}$/.test(requestId)||!['owner','autonomous'].includes(origin))fail('INVALID_TOOL_REQUEST');
-    if(!this.enabled(adapter,agent)||origin==='autonomous'&&!adapter.definition.autonomous&&!this.configuration(agent).autonomy?.toolIds?.includes(tool))fail('CAPABILITY_DISABLED');
+    const policy=this.configuration(agent);
+    if(!this.enabled(adapter,agent,policy)||origin==='autonomous'&&!adapter.definition.autonomous&&!policy.autonomy?.toolIds?.includes(tool))fail('CAPABILITY_DISABLED');
     const checked=validateCapabilityInput(adapter.definition.inputSchema,input),data=adapter.validate?adapter.validate(checked):checked;
     validateCapabilityInput(adapter.definition.inputSchema,data);if(Buffer.byteLength(JSON.stringify(data))>16384)fail('CAPABILITY_INPUT_TOO_LARGE');
     const requestHash=hash({tool,input:data}),old=this.db.prepare('SELECT id,request_hash FROM human_tool_job WHERE agent=? AND request_id=?').get(agent,requestId);
     if(old){if(old.request_hash!==requestHash)fail('REQUEST_ID_CONFLICT');return this.get(agent,old.id);}
+    adapter.assertTarget?.(agent,data);
     if(this.db.prepare("SELECT count(*) n FROM human_tool_job WHERE agent=? AND status IN ('queued','awaiting-approval','running','suspended')").get(agent).n>=16)fail('TOOL_QUEUE_FULL');
-    const id=randomUUID(),now=Date.now(),policy=this.configuration(agent),context={agent,jobId:id,requestId,origin,taskId};
+    const id=randomUUID(),now=Date.now(),context={agent,jobId:id,requestId,origin,taskId};
     return this.journal.transaction(()=>{const prepared=adapter.prepare?.(data,context)??null;if(prepared?.then||prepared!==null&&(!plain(prepared)||Buffer.byteLength(JSON.stringify(prepared))>131072))fail('INVALID_CAPABILITY_PREVIEW');
     const scope=typeof adapter.scope==='function'?adapter.scope(data):adapter.definition.scope,snapshot={...adapter.definition,definitionHash:adapter.definitionHash,scope},digest=hash({tool,input:data,snapshot,prepared,policyRevision:policy.revision});
     this.db.prepare('INSERT INTO human_tool_job VALUES(?,?,?,?,?,?,?,?,?,?,?,NULL,NULL)').run(id,agent,requestId,requestHash,tool,JSON.stringify(data),adapter.effect==='write'?'awaiting-approval':'queued',1,now,now,now+86400000);this.db.prepare('INSERT INTO human_capability_job VALUES(?,?,?,?,?,?,?,?,NULL,NULL)').run(agent,id,JSON.stringify(snapshot),origin,taskId,policy.revision,prepared?JSON.stringify(prepared):null,digest);this.journal.audit(agent,'tool-job-created',{jobId:id,tool,effect:adapter.effect,scope,digest,origin,taskId,lane:'action'});return this.get(agent,id);});
@@ -74,7 +99,8 @@ export class ToolExecutor {
   async approve(agent,id,{expectedVersion,digest}){
     const row=this.get(agent,id),meta=this.metadata(id),adapter=this.registry.get(row.tool),policy=this.configuration(agent);
     if(row.version!==expectedVersion)fail('STALE_TOOL_JOB');if(row.status!=='awaiting-approval'||!meta||!adapter||adapter.effect!=='write')fail('CAPABILITY_NOT_APPROVABLE');this.checkPreview(row);
-    if(digest!==meta.digest)fail('CAPABILITY_PREVIEW_MISMATCH');if(meta.policy_revision!==policy.revision||!this.enabled(adapter,agent)||row.capabilitySnapshot.definitionHash!==adapter.definitionHash)fail('CAPABILITY_POLICY_CHANGED');
+    if(digest!==meta.digest)fail('CAPABILITY_PREVIEW_MISMATCH');if(meta.policy_revision!==policy.revision||!this.enabled(adapter,agent,policy)||row.capabilitySnapshot.definitionHash!==adapter.definitionHash)fail('CAPABILITY_POLICY_CHANGED');
+    adapter.assertTarget?.(agent,row.input);
     if(row.expires<=Date.now())fail('CAPABILITY_APPROVAL_EXPIRED');if(!this.journal.safety)fail('SIGNED_CONTROL_REQUIRED');
     const key='capability-approve:'+randomUUID(),expires=Date.now()+300000;
     await this.journal.safety.prepare(key,'human-capability-approved',{agent,jobId:id,digest,definitionHash:adapter.definitionHash,policyRevision:policy.revision,expires});
@@ -83,7 +109,8 @@ export class ToolExecutor {
   cancel(agent,id,version){
     const row=this.get(agent,id);if(row.version!==version)fail('STALE_TOOL_JOB');if(!['queued','awaiting-approval','suspended','failed'].includes(row.status))fail('TOOL_JOB_NOT_CANCELLABLE');this.checkPreview(row);
     return this.journal.transaction(()=>{
-      const adapter=this.registry.get(row.tool),result=adapter?.cancelPrepared?.(row.input,{agent,jobId:id,prepared:row.prepared});
+      const adapter=this.registry.get(row.tool),context={agent,jobId:id,prepared:row.prepared};
+      const result=adapter?adapter.cancelPrepared?.(row.input,context):this.cancelDetachedPreview?.(row,context);
       if(result?.then)fail('INVALID_CAPABILITY_CANCELLATION');
       this.update(row,'cancelled');return this.get(agent,id);
     });
@@ -109,12 +136,15 @@ export class ToolExecutor {
     let row=this.get(agent,id);if(row.origin==='autonomous'&&row.taskId&&row.taskId!==taskId)fail('CAPABILITY_TASK_CONTEXT_REQUIRED');if(!['queued','suspended'].includes(row.status))fail('TOOL_JOB_NOT_EXECUTABLE');valid();if(this.inflight.size)fail('CAPABILITY_BUSY');let adapter,dispatched=false;
     try{
       if(row.expires<=Date.now()){this.update(row,'expired');return this.get(agent,id);}
-      adapter=this.registry.get(row.tool);if(!adapter)fail('TOOL_ADAPTER_UNAVAILABLE');if(!this.enabled(adapter,agent))fail('CAPABILITY_DISABLED');
+      const policy=this.configuration(agent);
+      adapter=this.registry.get(row.tool);if(!adapter)fail('TOOL_ADAPTER_UNAVAILABLE');
       this.checkPreview(row);validateCapabilityInput(adapter.definition.inputSchema,row.input);
       if(row.capabilitySnapshot?.definitionHash&&row.capabilitySnapshot.definitionHash!==adapter.definitionHash)fail('CAPABILITY_DEFINITION_CHANGED');
-      this.checkReadPolicy(row,adapter);
       if(adapter.effect==='write')this.checkApproval(row,adapter);
-      const policy=this.configuration(agent),controller=new AbortController(),requestSignal=AbortSignal.any([signal,controller.signal,AbortSignal.timeout(Math.min(adapter.definition.timeoutMs,policy.limits.timeoutMs))]);
+      if(!this.enabled(adapter,agent,policy))fail('CAPABILITY_DISABLED');
+      this.checkReadPolicy(row,adapter);
+      adapter.assertTarget?.(agent,row.input);
+      const controller=new AbortController(),requestSignal=AbortSignal.any([signal,controller.signal,AbortSignal.timeout(Math.min(adapter.definition.timeoutMs,policy.limits.timeoutMs))]);
       this.executions.set(id,{tool:row.tool,adapter,agent,policyRevision:policy.revision,controller});
       this.update(row,'running');row=this.get(agent,id);this.inflight.add(id);
       const guarded=()=>{valid();requestSignal.throwIfAborted();this.checkReadPolicy(row,adapter);if(adapter.effect==='write'){this.checkPreview(row);this.checkApproval(row,adapter);}};

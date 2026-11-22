@@ -39,6 +39,7 @@ export class AutonomyStore {
       CREATE TABLE IF NOT EXISTS autonomy_event(id TEXT PRIMARY KEY,agent TEXT,key TEXT,kind TEXT,data TEXT,status TEXT,created INTEGER,UNIQUE(agent,key));
       CREATE TABLE IF NOT EXISTS autonomy_task(id TEXT PRIMARY KEY,agent TEXT,kind TEXT,status TEXT,checkpoint TEXT,persona_version INTEGER,created INTEGER,updated INTEGER);
       CREATE TABLE IF NOT EXISTS learning_note(id TEXT PRIMARY KEY,agent TEXT,memory_id TEXT,source_id TEXT,data TEXT,status TEXT,created INTEGER,feedback TEXT);
+      CREATE INDEX IF NOT EXISTS learning_note_memory ON learning_note(agent,memory_id);
       CREATE TABLE IF NOT EXISTS human_activity_feedback(task TEXT PRIMARY KEY,agent TEXT NOT NULL,created INTEGER NOT NULL,attempts INTEGER NOT NULL DEFAULT 0,code TEXT,next_at INTEGER NOT NULL DEFAULT 0);
       CREATE INDEX IF NOT EXISTS autonomy_task_agent ON autonomy_task(agent,status);
       CREATE INDEX IF NOT EXISTS autonomy_task_pending_order ON autonomy_task(agent,created,id) WHERE status IN ('ready','suspended','waiting-budget');`);
@@ -130,7 +131,12 @@ export class AutonomyStore {
   update(tid,status,checkpoint){return this.journal.transaction(()=>{const task=this.getTask(tid);if(!task)return;this.db.prepare('UPDATE autonomy_task SET status=?,checkpoint=?,updated=? WHERE id=?').run(status,JSON.stringify(checkpoint??task.checkpoint),Date.now(),tid);this.journal.audit(task.agent,'task-'+status,{taskId:tid,roundId:checkpoint?.roundId??task.checkpoint.roundId??tid,kind:task.kind,priorStatus:task.status,noteId:checkpoint?.noteId??task.checkpoint.noteId,reason:checkpoint?.reason,checkpoint:checkpoint?{plan:checkpoint.plan??null,source:checkpoint.source?{url:checkpoint.source.url,digest:checkpoint.source.digest}:null,noteId:checkpoint.noteId??null,researchReads:checkpoint.researchReads??null}:null});if(['completed','cancelled','failed'].includes(status)&&this.journal.value(task.agent,'autonomyBudgetRequest',null)?.taskId===tid)this.journal.put(task.agent,'autonomyBudgetRequest',null);if(['completed','cancelled','failed'].includes(status)&&task.kind!=='behavior-choice')this.db.prepare('INSERT INTO human_activity_feedback(task,agent,created) VALUES(?,?,?) ON CONFLICT(task) DO NOTHING').run(tid,task.agent,Date.now());});}
   correction(id,url){return this.journal.value(id,'learning-correction:'+hash(url),null);}
   correctionSources(id){return this.db.prepare("SELECT data FROM learning_note WHERE agent=? AND status='corrected' ORDER BY created DESC LIMIT 20").all(id).map(r=>JSON.parse(r.data)).filter(n=>n&&this.correction(id,n.source.requestedUrl??n.source.url)).map(n=>({url:n.source.requestedUrl??n.source.url,title:n.title,topic:('根据纠正反馈重新核对原学习问题：'+(n.researchQuestion||n.title)).slice(0,240),discovery:n.source.discovery??null}));}
-  candidateKey(checkpoint){return hash({kind:checkpoint.candidate?.kind,question:checkpoint.candidate?.question,source:checkpoint.source?{url:checkpoint.source.requestedUrl??checkpoint.source.url,digest:checkpoint.source.digest}:checkpoint.sourceSpec?{url:checkpoint.sourceSpec.url}:null,noteId:checkpoint.noteId??null,anchor:checkpoint.anchor??null,correction:checkpoint.correction?.revision??null,...(checkpoint.behaviorId?{behaviorId:checkpoint.behaviorId,behaviorFingerprint:checkpoint.behaviorFingerprint,behaviorInput:checkpoint.behaviorInput??null}: {})});}
+  candidateKey(checkpoint){
+    if(checkpoint.candidate?.kind==='behavior-choice'&&Array.isArray(checkpoint.opportunities)){
+      return hash({choice:checkpoint.opportunities.map(row=>row.opportunityId).sort(),events:[...(checkpoint.eventIds??[])].sort()});
+    }
+    return hash({kind:checkpoint.candidate?.kind,question:checkpoint.candidate?.question,source:checkpoint.source?{url:checkpoint.source.requestedUrl??checkpoint.source.url,digest:checkpoint.source.digest}:checkpoint.sourceSpec?{url:checkpoint.sourceSpec.url}:null,noteId:checkpoint.noteId??null,anchor:checkpoint.anchor??null,correction:checkpoint.correction?.revision??null,...(checkpoint.behaviorId?{behaviorId:checkpoint.behaviorId,behaviorFingerprint:checkpoint.behaviorFingerprint,behaviorInput:checkpoint.behaviorInput??null}: {})});
+  }
   deferred(id,checkpoint,now=Date.now()){return this.journal.value(id,'autonomyDeferrals',[]).find(d=>d.key===this.candidateKey(checkpoint)&&d.until>now)??null;}
   clearDeferral(id,checkpoint){const key=this.candidateKey(checkpoint);this.journal.put(id,'autonomyDeferrals',this.journal.value(id,'autonomyDeferrals',[]).filter(d=>d.key!==key));}
   defer(id,task,reason,delayMs,now=Date.now()){
@@ -190,6 +196,7 @@ export class AutonomyStore {
     });
   }
   feedback(id,noteId,value,comment=''){
+    if(this.domain.learningNotesAvailable===false)throw new Error('LEARNING_PACK_UNAVAILABLE');
     if(!['useful','correction','not-now'].includes(value)||typeof comment!=='string'||comment.length>500||value==='correction'&&!comment.trim())throw new Error('INVALID_LEARNING_FEEDBACK');
     const row=this.db.prepare("SELECT * FROM learning_note WHERE agent=? AND id=? AND status='active'").get(id,noteId);const note=row?{...row,data:JSON.parse(row.data)}:null;if(!note)throw new Error('LEARNING_NOTE_NOT_FOUND');
     const feedback={value,comment:comment.trim(),time:Date.now()};return this.journal.transaction(()=>{this.db.prepare('UPDATE learning_note SET feedback=? WHERE id=? AND agent=?').run(JSON.stringify(feedback),noteId,id);
@@ -275,6 +282,6 @@ export class AutonomyStore {
   }
   snapshot(id){
     const budget=this.budget(id),pending=this.pendingBudgetRequest(id,budget.now,budget);
-    return {settings:this.settings(id),social:socialStatus(this.journal,this.domain,id,this.settings(id)),paused:this.journal.value(id,'autonomyPaused',false),phase:this.journal.value(id,'autonomyPhase','idle'),error:this.journal.value(id,'autonomyError',null),lastWait:this.journal.value(id,'autonomyWait',null),budget,pendingBudgetRequest:pending,notes:this.notes(id),tasks:this.db.prepare('SELECT id,kind,status,created,updated FROM autonomy_task WHERE agent=? ORDER BY created DESC LIMIT 12').all(id),events:this.events(id),executor:{backend:'dsh-llm-task',temporaryContext:true,independentSession:false,nestedAgents:false}};}
+    return {settings:this.settings(id),social:socialStatus(this.journal,this.domain,id,this.settings(id)),paused:this.journal.value(id,'autonomyPaused',false),phase:this.journal.value(id,'autonomyPhase','idle'),error:this.journal.value(id,'autonomyError',null),lastWait:this.journal.value(id,'autonomyWait',null),budget,pendingBudgetRequest:pending,notes:this.domain.learningNotesAvailable===false?[]:this.notes(id),tasks:this.db.prepare('SELECT id,kind,status,created,updated FROM autonomy_task WHERE agent=? ORDER BY created DESC LIMIT 12').all(id),events:this.events(id),executor:{backend:'dsh-llm-task',temporaryContext:true,independentSession:false,nestedAgents:false}};}
   purge(id){for(const table of ['autonomy_event','autonomy_task','learning_note'])this.db.prepare('DELETE FROM '+table+' WHERE agent=?').run(id);}
 }
