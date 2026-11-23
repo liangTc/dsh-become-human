@@ -26,7 +26,11 @@ export function transientModelFailure(entry){
   return ['EMPTY_MODEL_OUTPUT','REQUEST_TIMEOUT','NETWORK_ERROR'].includes(entry.code);
 }
 export function modelFailureDiagnostic(failure,localCode='MODEL_EXECUTION_FAILED',streamFacts={}){
-  const raw=plain(failure?.message),code=cleanCode(failure?.code),status=Number.isInteger(failure?.status)&&failure.status>=400&&failure.status<=599?failure.status:undefined;
+  const raw=plain(failure?.message),code=cleanCode(failure?.code);
+  // Some adapters drop the status field when the upstream response has no body.
+  const emptyBodyStatus=/^([45]\d{2}) status code \(no body\)$/iu.exec(raw.trim());
+  const reportedStatus=failure?.status??(emptyBodyStatus?Number(emptyBodyStatus[1]):undefined);
+  const status=Number.isInteger(reportedStatus)&&reportedStatus>=400&&reportedStatus<=599?reportedStatus:undefined;
   const text=(raw+' '+(code??'')).toLowerCase();let category='unknown',summary='模型调用未完成，现有证据不足以确认原因。',suggestion='先核对模型配置和服务商状态；需要时明确进行一次连接测试。';
   if(localCode==='EMPTY_MODEL_OUTPUT'||code==='EMPTY_RESPONSE'){
     category='empty';

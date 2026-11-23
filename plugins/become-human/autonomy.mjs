@@ -1,4 +1,5 @@
 import {modelRequest,requestCost} from './model-gateway.mjs';
+import {assertCurrentWorkMemories} from './work-observation.mjs';
 import {selectionMessages,learningSemanticPolicy} from './task-prompts.mjs';
 import {DshTaskExecutor} from './task-executor.mjs';
 import {discoverPublicSource} from './research-discovery.mjs';
@@ -156,7 +157,9 @@ export async function runAutonomyTurn(agent,signal){
       j.put(id,'autonomyWait',null);
       if(!task.checkpoint.plan){
         phase('selecting');agent.activeLane='selection';
-        const selectionInput=selectionMessages(agent,task,persona);
+        const hint=task.kind==='behavior-choice'?await f.workObservation?.selectionHint?.(agent,task,signal):null;
+        valid(agent,signal,epoch,persona.version);
+        const selectionInput=selectionMessages(agent,task,persona,hint);
         store.update(task.id,task.status,{...task.checkpoint,strategyCandidates:selectionInput.strategyCandidates??[]});task=store.getTask(task.id);
         const selection=await modelRequest(agent,signal,{turn,epoch,lane:'selection',taskId:task.id,messages:selectionInput});
         valid(agent,signal,epoch,persona.version);let plan,selectedOpportunity,normalizedFields;const selectionTask=task;
@@ -232,6 +235,7 @@ export async function runAutonomyTurn(agent,signal){
         response={rid:crypto.randomUUID(),text:'刚才那种说法不准确，我没有实际做过这件事，不能当作亲身经历。',provider:'local-grounding',model:'command',localMessageId:crypto.randomUUID(),reasoningChars:0};
       }
     }
+    if(lane==='foreground'&&response.workMemoryRefs?.length)assertCurrentWorkMemories(agent,response.workMemoryRefs);
     const ownerText=lane==='foreground'?admitted.map(m=>m.content.filter(c=>c.type==='text').map(c=>c.text).join('')).join(' '):'';response.text=conversationalText(response.text,conversationOptions(ownerText));if(!response.text)throw failure('EMPTY_MODEL_OUTPUT');
     const message={...createAssistantMessage({content:[{type:'text',text:response.text}],source:{provider:response.provider,model:response.model}}),...(response.localMessageId?{id:response.localMessageId}:{})};
     const data={turn,step:1,message,stream:[],...(response.usage?{usage:response.usage}:{})};
@@ -258,11 +262,15 @@ export async function runAutonomyTurn(agent,signal){
     });
     if(code==='GOAL_NO_LONGER_ACTIVE'||code==='MATTER_NO_LONGER_ACTIVE'){j.put(id,'autonomyWait',code);phase('waiting');}
     else if(backoff){reason={kind:'error',error:{code:'HUMAN_AUTONOMY_ERROR',message:code}};phase('waiting');}
-    else if(!parentSignal.aborted&&!roundTimeout&&code!=='AUTONOMOUS_BUDGET_EXHAUSTED'&&(task?.kind==='behavior'||['INVALID_BEHAVIOR_SELECTION','BEHAVIOR_UNAVAILABLE','BEHAVIOR_DEFINITION_CHANGED','BEHAVIOR_INPUT_CHANGED'].includes(code))){if(task)store.defer(id,task,code,settings.sourceIntervalMs);j.put(id,'autonomyWait',code);phase('waiting');}
+    else if(!parentSignal.aborted&&!roundTimeout&&code!=='AUTONOMOUS_BUDGET_EXHAUSTED'&&(task?.kind==='behavior'||['INVALID_BEHAVIOR_SELECTION','BEHAVIOR_UNAVAILABLE','BEHAVIOR_DEFINITION_CHANGED','BEHAVIOR_INPUT_CHANGED'].includes(code))){
+      const delay=transient&&Number.isSafeInteger(error.behaviorRetryAfterMs)&&error.behaviorRetryAfterMs>0?Math.min(settings.sourceIntervalMs,error.behaviorRetryAfterMs):settings.sourceIntervalMs;
+      if(task)store.defer(id,task,code,delay);
+      j.put(id,'autonomyWait',code);phase('waiting');
+    }
     else if(roundTimeout){store.defer(id,task,'AUTONOMOUS_ROUND_TIMEOUT',settings.sourceIntervalMs);j.put(id,'autonomyWait','AUTONOMOUS_ROUND_TIMEOUT');phase('waiting');}
     else if(parentSignal.aborted){reason=agent.cause?.kind==='owner-supplement'?{kind:'completed'}:{kind:'aborted',reason:agent.cause??{kind:'user'}};phase('preempted');}
     else if(code==='AUTONOMOUS_BUDGET_EXHAUSTED'){const estimate=task?estimateTaskBudget(agent,store.getTask(task.id)):{tokens:0,requests:1};store.requestBudget(id,task?.id??'new-task',autonomousBudgetEstimate(estimate,error.neededTokens));j.put(id,'autonomyWait','autonomous-budget');phase('waiting-budget');}
-    else if(transient&&lane==='foreground'&&ownerBatch){
+    else if((transient||code==='STALE_WORK_MEMORY')&&lane==='foreground'&&ownerBatch){
       // Consumed owner input stays available for an explicit retry.
       reason={kind:'error',error:{code:'HUMAN_AUTONOMY_ERROR',message:code}};
       j.put(id,'lastError',code);phase('idle');

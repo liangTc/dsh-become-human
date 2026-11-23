@@ -1,6 +1,6 @@
 # 安装与升级
 
-> **测试版 0.7.0-beta.44。** [GitHub Release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.44) · [npm 安装包](https://www.npmjs.com/package/dsh-become-human-web/v/0.7.0-beta.44) · [本版发行说明](https://github.com/liangTc/dsh-become-human/blob/v0.7.0-beta.44/docs/RELEASE_BETA44.md)
+> **测试版 0.7.0-beta.45。** [GitHub Release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.45) · [npm 安装包](https://www.npmjs.com/package/dsh-become-human-web/v/0.7.0-beta.45) · [本版发行说明](https://github.com/liangTc/dsh-become-human/blob/v0.7.0-beta.45/docs/RELEASE_BETA45.md)
 
 [返回首页](../README.md) · [配置说明](CONFIGURATION.md) · [使用指南](USAGE.md) · [测试状态](TESTING_STATUS.md)
 
@@ -23,14 +23,14 @@ Desktop 首次设置可选择宿主模型，退出并重新启动后回到原会
 
 安装流程是：**安装一个组合包 → 打开 Human 完成首次设置 → 创建并启动**。组合包已经包含后台代码；插件自动准备专用运行目录和内部 profile，复用宿主的 Node 与 DSH 启动后台，无需另装第二套 Human 程序。
 
-下载并保留与版本对应的 `.tgz` 与 SHA-256 文件。[beta.44 Release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.44)
+下载并保留与版本对应的 `.tgz` 与 SHA-256 文件。[beta.45 Release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.45)
 
 <a id="desktop-windows"></a>
 
 ## 在 Windows Desktop 安装
 
 1. 在官方 DSH Desktop 的「关于」确认版本为 `0.2.2-rc.3` 或 `0.2.2-rc.5`，在宿主的模型设置中配置要使用的模型。
-2. 下载 `dsh-become-human-web-0.7.0-beta.44.tgz`，并用同版 `.sha256` 核对文件。[安装包](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.44/dsh-become-human-web-0.7.0-beta.44.tgz) · [SHA-256](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.44/dsh-become-human-web-0.7.0-beta.44.tgz.sha256)
+2. 下载 `dsh-become-human-web-0.7.0-beta.45.tgz`，并用同版 `.sha256` 核对文件。[安装包](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.45/dsh-become-human-web-0.7.0-beta.45.tgz) · [SHA-256](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.45/dsh-become-human-web-0.7.0-beta.45.tgz.sha256)
 3. 从 Desktop 左侧进入「插件 → 添加插件」，在「包名或地址」填入安装包的**绝对路径**，点击「安装」，再选择「立即启用」。若宿主提示重启，退出并重新打开 Desktop。
 4. 从左侧栏打开 **Human**，选择宿主模型并完成首次设置。Desktop 使用应用自带的 Electron/Node 和 DSH 启动独立后台。以后在 Desktop 的插件管理中更新。
 
@@ -70,7 +70,7 @@ npx @deepseek-ai/dsh@0.2.0-rc.2 web
 停止要更新的 DSH 服务后执行（与下方 `.tgz` 方式二选一）：
 
 ```powershell
-npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add dsh-become-human-web@0.7.0-beta.44 --registry=https://registry.npmjs.org/
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add dsh-become-human-web@0.7.0-beta.45 --registry=https://registry.npmjs.org/
 ```
 
 安装后直接进入第 4 步启动与配置，无需重复安装本地包。首次发布时镜像可能延迟，示例指定 npm 官方仓库。
@@ -79,16 +79,16 @@ npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add dsh-become-human-web@0.
 
 ### 使用预构建包
 
-从 [v0.7.0-beta.44 Release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.44) 下载以下两个附件，并保存到同一目录：
+从 [v0.7.0-beta.45 Release](https://github.com/liangTc/dsh-become-human/releases/tag/v0.7.0-beta.45) 下载以下两个附件，并保存到同一目录：
 
-- [dsh-become-human-web-0.7.0-beta.44.tgz](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.44/dsh-become-human-web-0.7.0-beta.44.tgz)
-- [dsh-become-human-web-0.7.0-beta.44.tgz.sha256](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.44/dsh-become-human-web-0.7.0-beta.44.tgz.sha256)
+- [dsh-become-human-web-0.7.0-beta.45.tgz](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.45/dsh-become-human-web-0.7.0-beta.45.tgz)
+- [dsh-become-human-web-0.7.0-beta.45.tgz.sha256](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.45/dsh-become-human-web-0.7.0-beta.45.tgz.sha256)
 
 在该目录打开 PowerShell，校验后再安装：
 
 ```powershell
-$humanExpectedSha = ((Get-Content -LiteralPath './dsh-become-human-web-0.7.0-beta.44.tgz.sha256' -Raw).Trim() -split '\s+')[0]
-$humanActualSha = (Get-FileHash -LiteralPath './dsh-become-human-web-0.7.0-beta.44.tgz' -Algorithm SHA256).Hash
+$humanExpectedSha = ((Get-Content -LiteralPath './dsh-become-human-web-0.7.0-beta.45.tgz.sha256' -Raw).Trim() -split '\s+')[0]
+$humanActualSha = (Get-FileHash -LiteralPath './dsh-become-human-web-0.7.0-beta.45.tgz' -Algorithm SHA256).Hash
 if ($humanExpectedSha -notmatch '^[a-fA-F0-9]{64}$' -or $humanActualSha -ine $humanExpectedSha) {
   throw '安装包校验失败，请重新核对下载来源和文件。'
 }
@@ -121,7 +121,7 @@ npm run release:package
 在安装包所在目录执行，文件名替换为实际文件名：
 
 ```powershell
-npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./dsh-become-human-web-0.7.0-beta.44.tgz
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add ./dsh-become-human-web-0.7.0-beta.45.tgz
 ```
 
 这是 DSH 官方组合包安装路径，会更新 profile 的依赖与 bundle 列表。不要用普通 `npm install` 代替 profile 注册，也不要只复制 `manager.mjs`。[官方打包与安装说明](https://deepseek-harness.github.io/deepseek-harness/develop/basic/publish) 说明了 `.tgz`、本地目录和 profile 的区别。

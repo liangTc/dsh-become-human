@@ -40,6 +40,27 @@ function fixture(){
  const messages=(data)=>contextMessages(agent,'foreground','按本轮配置交流。',data);
  return {db,journal,domain,state,agent,id,owner,past,row,payload,messages,audits,ends,persona,values,setScope:value=>{scope=value;},scored:()=>scored};
 }
+await test('work excerpts in review retain their source and cannot invent a completed tool',f=>{
+ const input=f.owner('项目如何了？'),data=f.payload([input]);
+ data.workMemories=[{valid:true,sessionId:'fixture',role:'assistant',seq:7,time:123,text:'来源声称已经提交。',annotation:'尚待我确认。'},{valid:false,text:'已撤回的资料'}];
+ const packet=JSON.parse(reviewMessages(data,'对方提到已经提交。')[1].content[0].text);
+ assert.deepEqual(packet.recalledContext.workMemories,[{sessionId:'fixture',role:'assistant',seq:7,time:123,text:'来源声称已经提交。',ownerAnnotation:'尚待我确认。'}]);
+ assert.deepEqual(packet.currentExecution.completedTools,[]);
+ assert(!JSON.stringify(packet).includes('已撤回的资料'));
+});
+await test('a work excerpt revoked during review withholds the generated answer',async f=>{
+ const row={id:'excerpt',valid:true,version:1,sessionId:'fixture',seq:2,time:123,role:'user',text:'测试原话'};
+ f.agent.factory.workObservation={context:()=>[row],get:()=>row};
+ f.agent.factory.conversationReview=true;
+ const input=f.owner('项目如何了？'),messages=f.messages(f.payload([input]));
+ const request=rawChoiceDialogueRequest(async(_agent,_signal,options)=>{
+   if(options.purpose==='conversation-review')row.valid=false;
+   return {rid:randomUUID(),text:'测试原话'};
+ });
+ await assert.rejects(request(f.agent,new AbortController().signal,{messages,admittedIds:[input.id]}),
+   e=>e.code==='STALE_WORK_MEMORY'&&e.foregroundMaterialsChanged===true);
+ assert(f.ends.some(([,end])=>end.state==='validation-rejected'&&end.error==='STALE_WORK_MEMORY'));
+});
 await test('identity is supplied by arbitrary persona configuration',f=>{const input=f.owner('做个自我介绍'),frame=dialogueFrame(f.agent,f.payload([input]));assert.equal(frame.speakers.assistant.name,f.persona().profile.name);assert.equal(frame.speakers.owner.name,f.persona().profile.ownerName);assert.equal(frame.intent,undefined);});
 for(const requested of [true,false])await test('A clarification signal is retained only for '+(requested?'an actual saved-note lookup':'no ordinary chat lookup'),async f=>{const input=f.owner('你说的那份笔记呢？'),data=f.payload([input]);data.learningLookup={requested};const request=choiceDialogueRequest(async()=>({rid:randomUUID(),text:serialize({reply:'你指的是哪一份？',learningLookupDecision:'clarify'})}));const response=await request(f.agent,new AbortController().signal,{turn:1,epoch:1,lane:'foreground',admittedIds:[input.id],messages:f.messages(data)});assert.equal(response.learningLookupDecision,requested?'clarify':undefined);assert.equal(response.text,'你指的是哪一份？');});
 await test('a changed persona is reflected without a character-specific branch',f=>{const changed={...f.persona().profile,name:'人物-'+randomUUID(),ownerName:'来访者-'+randomUUID()};f.journal.put(f.id,'humanProfile',changed);assert.equal(dialogueFrame(f.agent,f.payload([f.owner('你好')])).speakers.assistant.name,changed.name);});

@@ -45,11 +45,23 @@ await test('A misplaced descriptive field can be recovered without changing iden
   assert.deepEqual(result.normalizedFields,['question']);
   assert(!Object.hasOwn(plan,'question'));
   assert.deepEqual(resolve({opportunityId,plan:{...plan,question},question}).plan,result.plan);
+  const repeated=resolve({opportunityId,decision:'execute',plan});
+  assert.deepEqual(repeated.plan,plan);assert.deepEqual(repeated.normalizedFields,['decision']);
+  f.register();
+  const work=taskFor(f,choiceOpportunity(f.f.behaviors.opportunities(f.agent,{}))),workId=work.checkpoint.opportunities[0].opportunityId;
+  const workPlan={decision:'execute',value:'保留结果',question:'整理当前资料索引',input:{value:'本周'}};
+  for(const payload of [{plan:{...workPlan,topicKey:null}},{plan:workPlan,topicKey:null}]){
+    const normalized=resolveBehaviorChoice(f.agent,work,{opportunityId:workId,...payload});
+    assert.deepEqual(normalized.plan,workPlan);assert.deepEqual(normalized.normalizedFields,['topicKey']);
+  }
+  assert.throws(()=>resolveBehaviorChoice(f.agent,work,{opportunityId:workId,plan:workPlan,topicKey:'other'}),e=>e.validationDiagnostic?.reason==='outside-selected-kind');
   for(const [payload,reason] of [
     [{opportunityId,plan:{...plan,question:'另一个方向'},question},'conflicting-plan-field'],
     [{opportunityId,plan,question:{}},'invalid-field-type'],
     [{opportunityId,plan,question,input:{}},'unexpected-top-level-fields'],
     [{opportunityId,plan:{question},decision:'execute'},'unexpected-top-level-fields'],
+    [{opportunityId,plan,decision:'wait'},'unexpected-top-level-fields'],
+    [{opportunityId:'absent',plan,decision:'execute'},'unknown-opportunity'],
     [{opportunityId:'absent',plan,question},'unknown-opportunity'],
   ])assert.throws(()=>resolve(payload),e=>e.validationDiagnostic?.reason===reason);
 });

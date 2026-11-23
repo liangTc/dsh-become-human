@@ -175,6 +175,32 @@ export function createHostCapabilities(ctx,{getHumanSessionId,home}={}){
     await assertAllowed(sessionId,false);assertCurrent(signal,expected);
     return {sessionId,messages,afterSeq,throughSeq,nextAfterSeq,hasMore,prefixDigest:observationDigest(sessionId,records,nextAfterSeq),resetRequired:false,historyTruncated,truncated:messages.some(row=>row.truncated===true)||messages.length<window.length,activatedAgent:false,source:'external-dsh-session',untrustedContent:true};
   }
+  async function hasWorkUpdates(input,signal,expected){
+    only(input,['cursors']);
+    if(!Array.isArray(input.cursors)||input.cursors.length>10)fail('INVALID_CAPABILITY_INPUT');
+    if(!settings.sessionReadEnabled)fail('CAPABILITY_DISABLED');
+    const visible=new Set((await visibleSessions(signal,expected)).map(row=>row.sessionId));
+    for(const cursor of input.cursors){
+      only(cursor,['sessionId','afterSeq']);
+      const id=identifier(cursor.sessionId),after=number(cursor.afterSeq,-1,Number.MAX_SAFE_INTEGER);
+      await assertAllowed(id,false);assertCurrent(signal,expected);
+      if(!visible.has(id))continue;
+      let view;
+      try{view=await hostRead(()=>inspectSession(id,signal));}
+      catch(error){
+        assertCurrent(signal,expected);
+        if(['DSH_SESSION_NOT_FOUND','DSH_SESSION_NOT_VISIBLE','DSH_SESSION_READ_UNAVAILABLE'].includes(error.code))continue;
+        throw error;
+      }
+      assertCurrent(signal,expected);
+      if(view?.meta?.id!==id||!ordinaryHostSession(view.meta)||!Array.isArray(view.events))continue;
+      if(!view.events.some(event=>event.seq>after&&visibleChatEvent(event)))continue;
+      const stillVisible=(await visibleSessions(signal,expected)).some(row=>row.sessionId===id);
+      await assertAllowed(id,false);assertCurrent(signal,expected);
+      if(stillVisible)return {hasNewMessages:true};
+    }
+    return {hasNewMessages:false};
+  }
   async function sessionWrite(operation,input,context,signal,expected){
     only(input,operation==='dsh-session-prompt'?['sessionId','text']:['sessionId','expectedTurn','expectedTurnStartSeq']);const sessionId=identifier(input.sessionId);
     if(operation==='dsh-session-prompt'&&(typeof input.text!=='string'||!input.text.trim()||input.text.length>12000))fail('INVALID_CAPABILITY_INPUT');
@@ -224,6 +250,7 @@ export function createHostCapabilities(ctx,{getHumanSessionId,home}={}){
       if(closed)fail('CAPABILITY_BRIDGE_CLOSED');const scoped=scopeSignal(signal),expected=fingerprint;
       try{assertCurrent(scoped.signal,expected);
         if(operation==='dsh-session-list')return await sessionList(input,scoped.signal,expected);
+        if(operation==='dsh-work-update-hint')return await hasWorkUpdates(input,scoped.signal,expected);
         if(operation==='dsh-session-read')return await sessionRead(input,scoped.signal,expected);
         if(operation==='dsh-session-observe')return await sessionObserve(input,scoped.signal,expected);
         if(['dsh-session-prompt','dsh-session-cancel'].includes(operation))return await sessionWrite(operation,input,context,scoped.signal,expected);

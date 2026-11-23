@@ -6,8 +6,8 @@ import {learningTaskScope} from './learning-selection-review.mjs';
 function localTimestamp(time,offset){if(!Number.isFinite(time))return null;const minutes=Math.abs(offset);return new Date(time+offset*60000).toISOString().slice(0,19).replace('T',' ')+' UTC'+(offset<0?'-':'+')+String(Math.floor(minutes/60)).padStart(2,'0')+':'+String(minutes%60).padStart(2,'0');}
 export function clock(agent){const now=Date.now(),offset=agent.factory.autonomy.settings(agent.id).timeZoneOffsetMinutes;return {now,timeZoneOffsetMinutes:offset,localTime:localTimestamp(now,offset)};}
 export const learningSemanticPolicy='逐条区分定义、一般规则、条件成立时的结果、单个示例和尚不确定的推断。每条 claim 自身必须保留证据的适用条件、示例范围及可能性；不能只在 summary 中补范围。source.evidence 中的 scopeHints 仅是词面提示，不能替代阅读相邻原文。示例出现某个响应头、数值或结果，不证明所有同类情况都必须如此；may、can、可能等不得改为必然。优先回答 task.question 所需的一条最小结论，不堆砌旁枝。title、summary、relevance、question、share 不得偷加未被 claims 支持的新事实或预设；它们也必须保留相同条件和不确定性。特别是 relevance 只说明已有结论的用途和限制，不添加资料其他段落的新知识。无法确定含义时返回 insufficient，不用常识补齐。';
-export function selectionMessages(agent,task,persona){
-  if(task.kind==='behavior-choice')return behaviorSelectionMessages(agent,task,persona);
+export function selectionMessages(agent,task,persona,hint){
+  if(task.kind==='behavior-choice')return behaviorSelectionMessages(agent,task,persona,hint);
   if(task.kind==='behavior')return contextMessages(agent,'selection','为已选中的行为补齐执行计划。只返回 JSON：{"decision":"execute","question":"candidate.question原文","value":"预期价值","input":{}}。input 必须符合行为 inputSchema；fixedInput 有值时原样保留。不能执行时返回 {"decision":"wait","reason":"原因"}。不改变行为或权限。',{persona,candidate:task.checkpoint.candidate,behavior:agent.factory.behaviors.definition(agent,task.checkpoint.behaviorId),fixedInput:task.checkpoint.behaviorInput??null,experience:agent.factory.experience?.context(agent.id)??null},task);
   const b=agent.factory.autonomy.budget(agent.id),budget={windowStart:b.windowStart,windowEnd:b.windowEnd,quotaEnabled:b.quotaEnabled,tokenLimit:b.tokenLimit,requestLimit:b.requestLimit,reservedTokens:b.reservedTokens,requests:b.requests};
   const learning=['research','learn-ai'].includes(task.kind);

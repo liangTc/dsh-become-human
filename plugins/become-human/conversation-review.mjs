@@ -76,6 +76,11 @@ export function reviewMessages(data,reply,{protocolRepair}={}){
   // does. Otherwise a historical correction placed later in the packet can be
   // mistaken for a correction of the owner's newer statement.
   const {currentInput,draft,replyUnits,...evidence}=packet;
+  const excerpts=(data.workMemories??[]).filter(row=>row.valid===true);
+  if(excerpts.length){
+    evidence.recalledContext.workMemories=excerpts.map(({role,text,time,seq,sessionId,annotation})=>({role,text,time,seq,sessionId,...(annotation?{ownerAnnotation:annotation}:{})}));
+    evidence.recalledContext.workMemoryScope='已获准引用的外部工作会话原话。role 是外部发言者，批注属于主人。原文支持转述工作进展；独立验收、Human 亲自执行或本轮重新查询都需要另外的回执。';
+  }
   const orderedPacket={...evidence,dialogueOrder:{currentInputIsLatestTurn:true,historyAndRecalledContext:'Earlier speech and evidence, not later corrections of currentInput. Resolve the entity and scenario from currentInput before applying old corrections.'},currentInput,draft,replyUnits};
   const messages=[{role:'system',content:[{type:'text',text:conversationReviewPolicy}]},{role:'user',content:[{type:'text',text:JSON.stringify(orderedPacket)}]}],bytes=Buffer.byteLength(JSON.stringify(messages));
   Object.defineProperty(messages,'contextReport',{value:{version:1,kind:'conversation-review',lane:'conversation-review',time:Date.now(),estimatedInput:bytes,required:bytes,inputBytes:bytes,budget:null,scope:'current-draft-and-same-admitted-speech-evidence',localInputLimit:false},enumerable:false});

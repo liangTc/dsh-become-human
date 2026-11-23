@@ -1,4 +1,5 @@
 import {createHash,randomUUID} from 'node:crypto';
+import {assertCurrentWorkMemories} from './work-observation.mjs';
 import {contextMessages,personaPolicy,contextPolicy} from './context.mjs';
 import {plain,validateCapabilityInput} from './capability-schema.mjs';
 import {dialogueCapabilityView} from './capability-discovery.mjs';
@@ -93,7 +94,7 @@ export async function capabilityDialogue(agent,signal,{turn,epoch,lane='foregrou
   const initialReader=tools?.registry?.get('read-learning-note');
   let usedLearningMaterial=!!initial.data.learningConversation?.note||!!initial.data.learningLookup?.currentOffers?.length;
   let learningReference=initial.data.learningConversation?.reference??null;
-  const observedNotes=new Map();
+  const observedNotes=new Map(),workRefs=new Map();
   const memoryResults=[];
   const assertMaterialsCurrent=()=>{
     try{
@@ -116,11 +117,12 @@ export async function capabilityDialogue(agent,signal,{turn,epoch,lane='foregrou
     signal.throwIfAborted();journal.assertAdmitted(id);
     if(agent.desired().desired!=='running'||agent.desired().epoch!==epoch)fail('STALE_RESULT');
     if(domain.persona(id).version!==personaVersion)fail('STALE_PERSONA');
+    assertCurrentWorkMemories(agent,workRefs.values());
     assertMaterialsCurrent();
   };
   valid();
   const hasTools=!!tools&&typeof tools.contextCatalog==='function',hasBoard=boardDialogueAvailable(agent.factory.cognition)&&admittedIds.length>0;
-  const requestOptions={turn,epoch,lane,admittedIds,assertMaterialsCurrent};
+  const requestOptions={turn,epoch,lane,admittedIds,assertMaterialsCurrent,workRefs};
   if(!hasTools&&!hasBoard){const response=await request(agent,signal,{...requestOptions,messages});valid();return response;}
   const configured=hasTools?tools.configuration(id).limits?.maxToolCallsPerTurn:undefined;
   const maxCalls=Number.isSafeInteger(configured)?Math.max(1,Math.min(4,configured)):2;

@@ -1,20 +1,20 @@
 # Become Human · DSH Web / Desktop 插件
 
-**0.7.0-beta.44 测试版，持续开发中。** Become Human 为 DSH 添加一个拥有持久人格、记忆和独立后台的数字人。每个 Human 只有一个持久主会话，可同时绑定一个 IM 渠道。扩展能够注册事件、行为、定时任务和管理页面。学习作为行为包按需启用。
+**0.7.0-beta.45 测试版，持续开发中。** Become Human 为 DSH 添加一个拥有持久人格、记忆和独立后台的数字人。每个 Human 只有一个持久主会话，可同时绑定一个 IM 渠道。扩展能够注册事件、行为、定时任务和管理页面。学习作为行为包按需启用。
 
-本版适配官方 Windows DSH Desktop `0.2.2-rc.3`、`0.2.2-rc.5`，以及 DSH Web `0.2.0-rc.2`。本版修复重复审批、插件停用后资料仍参与复核，以及 DSH 会话重新授权后旧工作记忆提前恢复的问题。[发行说明](https://github.com/liangTc/dsh-become-human/blob/v0.7.0-beta.44/docs/RELEASE_BETA44.md)
+本版适配官方 Windows DSH Desktop `0.2.2-rc.3`、`0.2.2-rc.5`，以及 DSH Web `0.2.0-rc.2`。工作观察能提示授权来源有新消息，生成与复核共用同一批有效摘录，提出协助前可以核对旧阻塞是否已有结果。[发行说明](https://github.com/liangTc/dsh-become-human/blob/v0.7.0-beta.45/docs/RELEASE_BETA45.md)
 
 ## 安装
 
-**Desktop**：在左侧「插件 → 添加插件」中输入下载的 `.tgz` 的绝对路径，安装并启用，按提示重启。打开侧栏 Human，选择已有模型并完成人物设置。[下载安装包](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.44/dsh-become-human-web-0.7.0-beta.44.tgz)
+**Desktop**：在左侧「插件 → 添加插件」中输入下载的 `.tgz` 的绝对路径，安装并启用，按提示重启。打开侧栏 Human，选择已有模型并完成人物设置。[下载安装包](https://github.com/liangTc/dsh-become-human/releases/download/v0.7.0-beta.45/dsh-become-human-web-0.7.0-beta.45.tgz)
 
 **Web**：使用 Node.js 24 或更高版本，在要使用的 `web` profile 环境运行以下命令。
 
 ```powershell
-npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add dsh-become-human-web@0.7.0-beta.44 --registry=https://registry.npmjs.org/
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add dsh-become-human-web@0.7.0-beta.45 --registry=https://registry.npmjs.org/
 ```
 
-安装包包含管理插件和独立运行模块。Desktop 与 Web 分别保存会话和 IM 绑定。完全退出 Desktop 会停止其启动的后台，下次打开后恢复会话。[安装与升级](https://github.com/liangTc/dsh-become-human/blob/v0.7.0-beta.44/docs/INSTALLATION.md)
+安装包包含管理插件和独立运行模块。Desktop 与 Web 分别保存会话和 IM 绑定。完全退出 Desktop 会停止其启动的后台，下次打开后恢复会话。[安装与升级](https://github.com/liangTc/dsh-become-human/blob/v0.7.0-beta.45/docs/INSTALLATION.md)
 
 安装后启动 DSH，进入 Human，按“选择已有模型 → 人物与额度 → 创建并启动”完成首次设置。路径、私有 profile 和内部空闲端口自动准备，无需另装后台或手工编辑 YAML。模型凭据通过 DSH 的 apiKeyEnv 引用解析；向导不接收明文密钥。详见 [安装与升级](https://github.com/liangTc/dsh-become-human/blob/main/docs/INSTALLATION.md)。单独安装内部 runtime 不属于支持方式。
 

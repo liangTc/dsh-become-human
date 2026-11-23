@@ -11,12 +11,20 @@ for(const [name,failure,category]of [
  ['rate limit',{status:429},'rate-limit'],
  ['permission',{status:403},'permission'],
  ['provider outage',{status:503},'provider-unavailable'],
+ ['adapter reports upstream outage only in its error string',{message:'502 status code (no body)'},'provider-unavailable'],
  ['context',{message:'maximum context length exceeded'},'context'],
  ['timeout',{message:'connection timed out'},'timeout'],
  ['network',{message:'fetch failed'},'network'],
  ['incomplete stream',{message:'Stream ended without finish_reason'},'incomplete-stream'],
  ['missing upstream evidence',{},'unknown']
 ])check(name,()=>assert.equal(modelFailureDiagnostic(failure).category,category));
+check('only whole no-body adapter diagnostics supply a missing HTTP status',()=>{
+ const outage=modelFailureDiagnostic({message:'502 status code (no body)'});
+ assert.equal(outage.httpStatus,502);assert.equal(transientModelFailure(outage),true);
+ const denied=modelFailureDiagnostic({status:403,message:'502 status code (no body)'});
+ assert.equal(denied.httpStatus,403);assert.equal(transientModelFailure(denied),false);
+ assert.equal(modelFailureDiagnostic({message:'A conversation mentioned 502 status code (no body)'}).httpStatus,undefined);
+});
 check('empty and validation are distinct',()=>{assert.equal(modelFailureDiagnostic({},'EMPTY_MODEL_OUTPUT').category,'empty');assert.equal(modelFailureDiagnostic({},'INVALID_TASK_OUTPUT').category,'validation');});
 check('secrets paths and URLs removed',()=>{const text=safeProviderMessage('Model unavailable sk-abcdefghijklmnop authorization: Bearer-secret api_key="credential123" https://host.test/?token=abc C:\\Users\\private\\config');for(const value of ['abcdefghijklmnop','Bearer-secret','credential123','host.test','private'])assert(!text.includes(value));});
 check('request dumps hidden',()=>assert(!safeProviderMessage('HTTP error messages: [{secret conversation}]').includes('conversation')));

@@ -1,6 +1,7 @@
 import {randomUUID,createHash} from 'node:crypto';
 import {contextMessages,personaPolicy,contextPolicy} from './context.mjs';
 import {reviewConversationReply} from './conversation-review.mjs';
+import {assertCurrentWorkMemories} from './work-observation.mjs';
 import {reviewAvailability,canDegradeReview,recordReviewUnavailable,recordReviewSkipped,recordReviewRecovered} from './conversation-review-recovery.mjs';
 import {leakedDialogueHeader} from './dialogue-frame.mjs';
 import {requestedCapability} from './capability-dialogue.mjs';
@@ -28,14 +29,20 @@ export const choiceDialoguePolicy='\n最终回复可用JSON对象：reply为实�
 export function choiceDialogueRequest(send){
   return async function choiceRequest(agent,signal,options){
     const f=agent.factory,j=f.journal,id=agent.id;
+    const workRefs=options.workRefs??new Map();
     const request=async(agent,signal,next)=>{
-      next.assertMaterialsCurrent?.();
-      const response=await send(agent,signal,next);
-      try{next.assertMaterialsCurrent?.();}catch(error){
+      for(const ref of next.messages?.contextReport?.workMemoryRefs??[])workRefs.set(ref.id+'@'+ref.version,ref);
+      const assertMaterialsCurrent=()=>{
+        next.assertMaterialsCurrent?.();
+        assertCurrentWorkMemories(agent,workRefs.values());
+      };
+      assertMaterialsCurrent();
+      const response=await send(agent,signal,{...next,assertMaterialsCurrent});
+      try{assertMaterialsCurrent();}catch(error){
         j.endAttempt(response.rid,{state:'validation-rejected',usage:response.usage,usageConfidence:response.usage?'reported':'unknown',error:error.code??error.message,textChars:response.text.length,reasoningChars:response.reasoningChars});
         throw error;
       }
-      return response;
+      return workRefs.size?{...response,workMemoryRefs:[...workRefs.values()]}:response;
     };
     try{
       let data;try{data=JSON.parse(textOf(options.messages?.[1]));}catch{}
